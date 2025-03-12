@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe solicitud Ingreso</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Configuración de colores personalizados en Tailwind */
+        .bg-crema { background-color: #fbfbf0; }
+        .bg-melocoton { background-color: #fdf1e6; }
+        .text-dorado { color: #cc9000; }
+        .border-dorado { border-color: #cc9000; }
+        .text-azul-oscuro { color: #011c3d; }
+        .bg-blanco-puro { background-color: #fdfdfd; }
+        /* Estilos adicionales para imágenes */
+        .qr-img { cursor: pointer; }
+        /* Limitar el ancho máximo */
+        .max-width-container {
+            max-width: 1200px; /* Ajusta este valor según tus necesidades */
+            margin: 0 auto; /* Centra el contenido */
+        }
+        /* Estilos para el modal tipo carnet */
+        .carnet-modal {
+            width: 700px; /* Aumentamos el ancho */
+            height: 400px; /* Aumentamos la altura */
+            border-radius: 20px; /* Bordes más redondeados */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); /* Sombra más pronunciada */
+            background: linear-gradient(135deg, #fdfdfd, #fbfbf0);
+            border: 3px solid #cc9000; /* Borde más grueso */
+        }
+        .carnet-header {
+            background: #cc9000;
+            color: white;
+            padding: 15px;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            text-align: center;
+            font-size: 24px; /* Texto más grande */
+            font-weight: bold;
+        }
+        .carnet-body {
+            padding: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .carnet-photo {
+            width: 150px; /* Foto más grande */
+            height: 150px;
+            border-radius: 15px; /* Bordes más redondeados */
+            border: 3px solid #cc9000; /* Borde más grueso */
+            object-fit: cover;
+        }
+        .carnet-details {
+            flex: 1;
+            margin-left: 30px; /* Más espacio entre la foto y los detalles */
+        }
+        .carnet-details p {
+            margin: 10px 0; /* Más espacio entre los detalles */
+            font-size: 18px; /* Texto más grande */
+            color: #011c3d;
+        }
+        .carnet-qr {
+            width: 220px;
+            height: 220px;
+            border-radius: 15px; 
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body class="bg-crema font-sans text-azul-oscuro min-h-screen p-8">
+    <!-- Contenedor principal con máximo ancho -->
+    <div class="max-width-container">
+
+        <!-- Encabezado -->
+        <header class="text-center mb-8">
+            <img src="{{logo}}" alt="Logo" class="mx-auto w-24 h-24 object-contain">
+            <h1 class="text-3xl font-bold text-azul-oscuro mt-4">Informe de Solicitud</h1>
+            <p class="text-sm text-azul-oscuro/70">Sistema Gestor de Ingreso Contratistas</p>
+            <p class="text-sm text-azul-oscuro/70">Documento generado el día: {{fecha}}</p>
+        </header>
+
+        <!-- Sección de detalles -->
+        <section class="bg-blanco-puro rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-azul-oscuro border-b-2 border-dorado pb-2 mb-4">Detalles de la Solicitud</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <p><strong class="text-dorado">ID de la solicitud:</strong> {{solicitud.id}}</p>
+                <p><strong class="text-dorado">Empresa:</strong> {{solicitud.empresa}}</p>
+                <p><strong class="text-dorado">NIT:</strong> {{solicitud.nit}}</p>
+                <p><strong class="text-dorado">Lugar:</strong> {{solicitud.lugar}}</p>
+                <p><strong class="text-dorado">Labor:</strong> {{solicitud.labor}}</p>
+                <p><strong class="text-dorado">Contratista:</strong> {{contractorName}}</p>
+                <p><strong class="text-dorado">Interventor:</strong> {{interventorName}}</p>
+                <p><strong class="text-dorado">Fechas:</strong> {{solicitud.inicio_obra}} - {{solicitud.fin_obra}}</p>
+            </div>
+        </section>
+
+        <!-- Sección de colaboradores -->
+        <section class="bg-blanco-puro rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-azul-oscuro border-b-2 border-dorado pb-2 mb-4">Colaboradores</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-melocoton text-azul-oscuro">
+                            <th class="p-3 font-semibold border-b border-dorado">ID Colaborador</th>
+                            <th class="p-3 font-semibold border-b border-dorado">Cédula</th>
+                            <th class="p-3 font-semibold border-b border-dorado">Nombre</th>
+                            <th class="p-3 font-semibold border-b border-dorado">Fotos</th>
+                            <th class="p-3 font-semibold border-b border-dorado">Código QR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each colaboradores}}
+                        <tr class="hover:bg-melocoton/50 transition-colors">
+                            <td class="p-3 border-b border-dorado/20">{{id}}</td>
+                            <td class="p-3 border-b border-dorado/20">{{cedula}}</td>
+                            <td class="p-3 border-b border-dorado/20">{{nombre}}</td>
+                            <td class="p-3 border-b border-dorado/20">
+                                {{#if foto}}
+                                    <img src="{{fotoBase64}}" alt="Foto del colaborador" class="w-24 h-24 object-cover rounded-lg border border-dorado/50">
+                                {{else}}
+                                    <span class="text-red-500">❌ Sin foto</span>
+                                {{/if}}
+                                <br>
+                                {{#if cedulaFoto}}
+                                    <img src="{{cedulaFotoBase64}}" alt="Foto de la cédula" class="w-24 h-24 object-cover rounded-lg border border-dorado/50 mt-2">
+                                {{else}}
+                                    <span class="text-red-500">❌ Sin cédula</span>
+                                {{/if}}
+                            </td>
+                            <td class="p-3 border-b border-dorado/20">
+                                {{#if qrBase64}}
+                                    <img src="{{qrBase64}}" alt="QR del colaborador" class="qr-img w-24 h-24 object-contain rounded-lg border border-dorado/50" data-id="{{id}}" data-nombre="{{nombre}}" data-foto="{{fotoBase64}}">
+                                {{else}}
+                                    <span class="text-red-500">❌ Sin QR</span>
+                                {{/if}}
+                            </td>
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Modal -->
+        <div id="qrModal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
+            <div class="carnet-modal">
+                <div class="carnet-header"> 
+                </div>
+                <div class="carnet-body">
+                    <img id="modalFoto" class="carnet-photo" src="" alt="Foto del colaborador">
+                    <div class="carnet-details">
+                        <p><strong>Nombre:</strong> <span id="modalNombre"></span></p>
+                        <p><strong>ID Colaborador:</strong> <span id="modalId"></span></p>
+                        <p><strong>Cédula:</strong> <span id="modalCedula"></span></p>
+                    </div>
+                    <img id="modalQr" class="carnet-qr" src="" alt="QR del colaborador">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function openModal(qrSrc, nombre, fotoSrc, id, cedula) {
+            const modal = document.getElementById('qrModal');
+            const modalQr = document.getElementById('modalQr');
+            const modalFoto = document.getElementById('modalFoto');
+            const modalNombre = document.getElementById('modalNombre');
+            const modalId = document.getElementById('modalId');
+            const modalCedula = document.getElementById('modalCedula');
+
+            modalQr.src = qrSrc;
+            modalFoto.src = fotoSrc || '';
+            modalNombre.textContent = nombre;
+            modalId.textContent = id;
+            modalCedula.textContent = cedula;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('qrModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        document.querySelectorAll('.qr-img').forEach(img => {
+            img.addEventListener('click', () => {
+                const qrSrc = img.src;
+                const nombre = img.getAttribute('data-nombre');
+                const fotoSrc = img.getAttribute('data-foto');
+                const id = img.getAttribute('data-id');
+                const cedula = img.closest('tr').querySelector('td:nth-child(2)').textContent;
+                openModal(qrSrc, nombre, fotoSrc, id, cedula);
+            });
+        });
+
+        document.getElementById('qrModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeModal();
+        });
+    </script>
+</body>
+</html>

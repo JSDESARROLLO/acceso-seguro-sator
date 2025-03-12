@@ -1,0 +1,45 @@
+# Archivos y carpetas del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Configuración de entorno y archivos sensibles
+.env
+*.env.*
+config.php
+config/*.php
+
+# Dependencias y paquetes
+vendor/
+composer.lock
+node_modules/
+
+# Caché y logs
+*.log
+logs/
+cache/
+/tmp/
+
+# Bases de datos locales
+*.sql
+*.sqlite
+
+# Archivos de usuario generados
+uploads/
+
+# Configuración de editores y entornos de desarrollo
+.vscode/
+.idea/
+*.iml
+
+# Archivos de control de versiones y backups
+*.bak
+*.swp
+*.swo
+
+# Archivos específicos de Handsontable
+handsontable.min.js
+handsontable.min.css
+
+# Archivos de exportación/importación
+*.csv
+*.xlsx

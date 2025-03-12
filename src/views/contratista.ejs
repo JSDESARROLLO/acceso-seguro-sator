@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitud de Contratistas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'ga-gold': '#CC9000',
+            'ga-navy': '#011C3D',
+            'ga-cream': '#FDF1E6',
+            'ga-light': '#FBFBF0',
+            'ga-white': '#FDFDFD'
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="/css/contratista.css">
+  <style>
+    .btn-primary {
+      background-color: #CC9000;
+      color: #FDFDFD;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      transition: background-color 0.2s;
+    }
+    .btn-primary:hover {
+      background-color: #011C3D;
+    }
+    .btn-secondary {
+      background-color: #011C3D;
+      color: #FDFDFD;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      transition: background-color 0.2s;
+    }
+    .btn-secondary:hover {
+      background-color: #CC9000;
+    }
+    .input-primary {
+      border: 1px solid #FDF1E6;
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+    }
+    .input-primary:focus {
+      border-color: #CC9000;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(204, 144, 0, 0.2);
+    }
+    .card-hover {
+      transition: all 0.2s;
+    }
+    .card-hover:hover {
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      border-color: #CC9000;
+    }
+
+    nav{
+      background-color: #CC9000;
+    }
+  </style>
+</head>
+<body class="font-sans bg-ga-light">
+  <!-- Barra de navegación -->
+  <nav class="flex justify-between items-center   text-ga-white p-4">
+    <a class="text-lg font-semibold" href="#">Vista Contratista ST</a>
+    <a class="text-lg hover:text-ga-gold transition-colors duration-200" href="/logout">Cerrar sesión</a>
+  </nav>
+
+  <!-- Contenedor principal -->
+  <div class="min-h-screen flex flex-col md:flex-row bg-ga-cream" id="contentMayor">
+    <!-- Formulario -->
+    <div class="flex-1 bg-ga-white p-6 md:w-1/2 overflow-auto shadow-lg" id="contratistaFormulario">
+      <h1 class="text-center text-2xl font-bold mb-6 text-ga-navy">Solicitud de Ingreso</h1>
+      <form id="formulario" method="POST" enctype="multipart/form-data" class="space-y-6">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label for="empresa" class="block text-sm font-semibold text-gray-700">Empresa</label>
+            <input type="text" name="empresa" id="empresa" class="mt-1 p-2 border border-gray-300 rounded-md w-full" value="<%= empresa %>" required readonly>
+          </div>
+          <div>
+            <label for="nit" class="block text-sm font-semibold text-gray-700">NIT</label>
+            <input type="text" name="nit" id="nit" class="mt-1 p-2 border border-gray-300 rounded-md w-full" value="<%= nit %>" required readonly>
+          </div>
+          <div class="relative">
+            <label for="lugar" class="block text-sm font-semibold text-gray-700">Lugar</label>
+            <input type="text" name="lugar" id="lugar" class="mt-1 p-2 border border-gray-300 rounded-md w-full" placeholder="Escribe para buscar..." required autocomplete="off">
+            <ul id="lugares-list" class="absolute w-full bg-white border border-gray-300 rounded-md mt-1 max-h-40 overflow-y-auto hidden"></ul>
+            <p id="error-lugar" class="text-red-500 text-sm hidden">Debes seleccionar un lugar válido.</p>
+          </div>
+          <div>
+            <label for="labor" class="block text-sm font-semibold text-gray-700">Labor</label>
+            <input type="text" name="labor" id="labor" class="mt-1 p-2 border border-gray-300 rounded-md w-full" required>
+          </div>
+          <div>
+            <label for="interventor_id" class="block text-sm font-semibold text-gray-700">Interventor</label>
+            <select name="interventor_id" id="interventor_id" class="mt-1 p-2 border border-gray-300 rounded-md w-full" required>
+              <option value="" disabled selected>Seleccione un interventor</option>
+              <% interventores.forEach(interventor => { %>
+                <option value="<%= interventor.id %>"><%= interventor.username %></option>
+              <% }); %>
+            </select>
+          </div>
+        </div>
+
+        <!-- Modal Colaboradores Deshabilitados -->
+        <div id="modalDisabledCollaborators" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
+          <div class="bg-ga-white w-11/12 sm:w-96 rounded-lg shadow-lg overflow-hidden">
+            <div class="px-6 py-4 flex justify-between items-center bg-ga-navy text-ga-white">
+              <h5 class="text-xl font-semibold">Colaboradores Deshabilitados</h5>
+              <button type="button" class="hover:text-ga-gold" onclick="closeDisabledModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="px-6 py-4 max-h-96 overflow-y-auto" id="disabled-collaborators-list">
+              <!-- Lista de colaboradores deshabilitados se cargará aquí -->
+            </div>
+            <div class="px-6 py-3 flex justify-end border-t border-ga-cream bg-ga-light">
+              <button type="button" class="bg-ga-gold text-ga-white py-2 px-4 rounded-md hover:bg-ga-navy" onclick="closeDisabledModal()">Cerrar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Colaboradores -->
+        <div>
+          <div class="text-lg font-semibold mb-3">Datos de Colaboradores</div>
+          <div id="personas-container">
+            <!-- Los colaboradores se agregarán aquí dinámicamente -->
+          </div>
+          <button type="button" id="add-person" class="mt-4 bg-ga-gold hover:bg-ga-navy text-ga-white font-bold py-2 px-4 rounded transition-colors duration-200 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            Agregar Colaborador
+          </button>
+          <button type="button" id="show-disabled-collaborators" class="mt-4 ml-4 bg-ga-navy hover:bg-ga-gold text-ga-white font-bold py-2 px-4 rounded transition-colors duration-200" disabled>
+            Colaboradores Deshabilitados
+          </button>
+          <p class="text-sm text-gray-600 mt-2">* Debe agregar al menos un colaborador</p>
+        </div>
+
+        <!-- Seguridad Social -->
+        <div>
+          <div class="text-lg font-semibold mb-3">Seguridad Social de Trabajadores</div>
+          <div id="arl-container">
+            <label for="arl" class="block text-sm font-semibold text-gray-700">Documento ARL</label>
+            <div class="flex items-center space-x-2">
+              <div class="flex-grow">
+                <label for="arl" class="cursor-pointer flex items-center justify-center p-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                  <input type="file" name="arl" id="arl" class="absolute w-0 h-0" accept=".pdf,.doc,.docx">
+                  <span id="arl-filename" class="text-gray-500">Ningún archivo seleccionado</span>
+                </label>
+              </div>
+              <button type="button" id="change-arl" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
+                Cambiar
+              </button>
+            </div>
+            <div id="arl-preview" class="mt-2 p-2 border border-gray-300 rounded-md"></div>
+          </div>
+          <div id="pasocial-container" class="mt-4">
+            <label for="pasocial" class="block text-sm font-semibold text-gray-700">Planilla de Pago Seguridad Social</label>
+            <div class="flex items-center space-x-2">
+              <div class="flex-grow">
+                <label for="pasocial" class="cursor-pointer flex items-center justify-center p-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                  <input type="file" name="pasocial" id="pasocial" class="absolute w-0 h-0" accept=".pdf,.doc,.docx">
+                  <span id="pasocial-filename" class="text-gray-500">Ningún archivo seleccionado</span>
+                </label>
+              </div>
+              <button type="button" id="change-pasocial" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
+                Cambiar
+              </button>
+            </div>
+            <div id="pasocial-preview" class="mt-2 p-2 border border-gray-300 rounded-md"></div>
+          </div>
+        </div>
+
+        <!-- Fechas de Obra -->
+        <div>
+          <div class="text-lg font-semibold mb-3">Fechas de Obra</div>
+          <label for="inicio_obra" class="block text-sm font-semibold text-gray-700">Inicio de Obra</label>
+          <input type="date" name="inicio_obra" id="inicio-obra" class="p-2 border border-gray-300 rounded-md w-full" required>
+          <label for="fin_obra" class="block text-sm font-semibold text-gray-700 mt-4">Fin de Obra</label>
+          <input type="date" name="fin_obra" id="fin-obra" class="p-2 border border-gray-300 rounded-md w-full" required>
+          <label for="dias_trabajo" class="block text-sm font-semibold text-gray-700 mt-4">Días Solicitados para Trabajar</label>
+          <input type="text" name="dias_trabajo" id="dias" class="p-2 border border-ga-cream rounded-md w-full bg-ga-cream" readonly>
+        </div>
+
+        <div class="text-center">
+          <button type="submit" id="submitButton" class="bg-ga-gold text-ga-white p-2 rounded-md hover:bg-ga-navy">Enviar Solicitud</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Listado de solicitudes -->
+    <div class="flex-1 bg-gray-50 p-6 overflow-auto" id="personasListado">
+      <div class="text-lg font-semibold mb-6">Solicitudes Realizadas</div>
+      <div class="space-y-4">
+        <% solicitudes.forEach(solicitud => { %>
+          <div class="p-4 bg-white rounded-md shadow-md">
+            <p>Empresa: <%= solicitud.empresa %></p>
+            <p>ID: <%= solicitud.id %></p>
+            <p>Inicio de Obra: <%= solicitud.inicio_obra %></p>
+            <p>Fin de Obra: <%= solicitud.fin_obra %></p>
+            <p>NIT: <%= solicitud.nit %></p>
+            <p>Lugar: <%= solicitud.lugar %></p>
+            <p>Labor: <%= solicitud.labor %></p>
+            <p>Interventor: <%= solicitud.interventor %></p>
+            <p>Estado: <span class="<%= getEstadoClass(solicitud.estado_actual) %>"><%= solicitud.estado_actual %></span></p>
+            <p>Comentario: <span class="text-muted text-sm"><%= solicitud.comentario %></span></p>
+            <div class="mt-4 flex space-x-2">
+              <% const doc = solicitud_url_download.find(d => d.solicitud_id === solicitud.id); %>
+              <% if (doc) { %>
+                <a href="<%= doc.url %>" target="_blank" class="bg-ga-gold text-ga-white py-2 px-4 rounded-md hover:bg-ga-navy text-xs">Descargar Documentos</a>
+              <% } else { %>
+                <p class="text-gray-600 text-sm">Podrá descargar sus archivos en cuanto sean habilitados por SST.</p>
+              <% } %>
+              <button type="button" onclick="window.renovarSolicitud('<%= solicitud.id %>')" class="bg-ga-gold text-ga-white py-2 px-4 rounded-md hover:bg-ga-navy text-xs">
+                Renovar Solicitud
+              </button>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal QR -->
+  <div id="modalVerQR" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
+    <div class="bg-white w-11/12 sm:w-96 rounded-lg shadow-lg overflow-hidden">
+      <div class="px-6 py-4 flex justify-between items-center border-b border-gray-200">
+        <h5 class="text-xl font-semibold text-gray-800">Ver Código QR</h5>
+        <button type="button" class="text-gray-500 hover:text-gray-800" onclick="closeModal()">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="px-6 py-4 text-center" id="qr-container"></div>
+      <div class="px-6 py-3 flex justify-end border-t border-gray-200">
+        <button type="button" class="bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600" onclick="closeModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loader -->
+  <div id="loader" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+    <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 border-opacity-75"></div>
+    <p class="ml-4 text-white text-lg">Procesando archivos...</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+</body>
+</html>
+
+<% function getEstadoClass(estado) {
+  if (estado === 'aprobado por sst' || estado === 'pendiente ingreso') return 'text-yellow-500 font-semibold';
+  if (estado === 'en labor') return 'text-blue-500 font-semibold';
+  if (estado === 'labor detenida') return 'text-gray-500 font-semibold';
+  if (estado === 'pendiente ingreso - vencido') return 'text-red-500 font-semibold';
+  if (estado === 'en labor - vencida') return 'text-red-600 font-semibold';
+  if (estado === 'negada') return 'text-red-700 font-semibold';
+  return 'text-green-500 font-semibold';
+} %>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('formulario');
+    const addPersonBtn = document.getElementById('add-person');
+    const personasContainer = document.getElementById('personas-container');
+    const submitButton = document.getElementById('submitButton');
+    const showDisabledBtn = document.getElementById('show-disabled-collaborators');
+    const modalDisabled = document.getElementById('modalDisabledCollaborators');
+    const disabledList = document.getElementById('disabled-collaborators-list');
+    const lugarInput = document.getElementById('lugar');
+    const lugaresList = document.getElementById('lugares-list');
+    const errorLugar = document.getElementById('error-lugar');
+    let esRenovacion = false;
+    let lugarValido = false;
+    let solicitudActualId = null;
+
+    // Lista de lugares desde el servidor
+    const lugares = <%- JSON.stringify(lugares) %>;
+
+    // Establecer texto inicial del botón
+    submitButton.textContent = 'Enviar Solicitud';
+
+    // Plantilla para nuevo colaborador (sin cambios)
+    const collaboratorTemplate = `
+      <div class="person-group mb-4 relative p-4 border border-ga-cream rounded-lg">
+        <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        <div class="mb-4">
+          <input type="number" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+          <input type="text" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+          <input type="hidden" name="estado[]" value="true">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-ga-navy mb-2">Foto del colaborador</label>
+            <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+          </div>
+          <div>
+            <label class="block text-ga-navy mb-2">Foto de la cédula</label>
+            <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Funciones existentes (sin cambios)
+    const addCollaborator = () => {
+      const newPerson = document.createElement('div');
+      newPerson.innerHTML = collaboratorTemplate;
+      personasContainer.appendChild(newPerson.firstElementChild);
+      updateRemoveButtons();
+    };
+
+    const updateRemoveButtons = () => {
+      const persons = personasContainer.querySelectorAll('.person-group');
+      persons.forEach(person => {
+        const removeBtn = person.querySelector('.remove-person');
+        if (removeBtn) {
+          if (persons.length === 1) {
+            removeBtn.classList.add('hidden');
+          } else {
+            removeBtn.classList.remove('hidden');
+          }
+        }
+      });
+    };
+
+    // Autocompletado para el campo "Lugar"
+    lugarInput.addEventListener('input', function() {
+      const value = this.value.trim().toLowerCase();
+      lugaresList.innerHTML = '';
+
+      if (!esRenovacion && value.length > 0) {
+        const filteredLugares = lugares.filter(lugar => 
+          lugar.nombre_lugar.toLowerCase().includes(value)
+        );
+
+        if (filteredLugares.length > 0) {
+          filteredLugares.forEach(lugar => {
+            const li = document.createElement('li');
+            li.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+            li.dataset.value = lugar.nombre_lugar;
+            li.textContent = lugar.nombre_lugar;
+            li.addEventListener('click', () => {
+              lugarInput.value = lugar.nombre_lugar;
+              lugarValido = true;
+              lugaresList.classList.add('hidden');
+              errorLugar.classList.add('hidden');
+            });
+            lugaresList.appendChild(li);
+          });
+          lugaresList.classList.remove('hidden');
+        } else {
+          lugaresList.classList.add('hidden');
+          lugarValido = false;
+          errorLugar.classList.remove('hidden');
+        }
+      } else {
+        lugaresList.classList.add('hidden');
+        lugarValido = esRenovacion; // Si es renovación, lugar ya es válido
+      }
+    });
+
+    // Ocultar la lista si se hace clic fuera
+    document.addEventListener('click', (e) => {
+      if (!lugarInput.contains(e.target) && !lugaresList.contains(e.target)) {
+        lugaresList.classList.add('hidden');
+        lugarValido = esRenovacion || lugares.some(lugar => lugar.nombre_lugar === lugarInput.value.trim());
+        if (!lugarValido && !esRenovacion) {
+          errorLugar.classList.remove('hidden');
+        } else {
+          errorLugar.classList.add('hidden');
+        }
+      }
+    });
+
+    // Modificar renovarSolicitud para habilitar el botón
+    window.renovarSolicitud = async function(solicitudId) {
+  try {
+    const response = await fetch(`/obtener-datos-solicitud/${solicitudId}`);
+    if (!response.ok) {
+      throw new Error('Error al obtener datos de la solicitud');
+    }
+    
+    const data = await response.json();
+    console.log('Datos recibidos:', data);
+    
+    if (data.solicitud && data.colaboradores) {
+      esRenovacion = true;
+      lugarValido = true;
+      solicitudActualId = solicitudId;
+      
+      // Campos existentes que ya están deshabilitados
+      document.getElementById('empresa').value = data.solicitud.empresa || '';
+      document.getElementById('nit').value = data.solicitud.nit || '';
+      document.getElementById('lugar').value = data.solicitud.lugar || '';
+      document.getElementById('labor').value = data.solicitud.labor || '';
+      document.getElementById('interventor_id').value = data.solicitud.interventor_id || '';
+      
+      document.getElementById('lugar').setAttribute('readonly', true);
+      document.getElementById('lugar').classList.add('bg-gray-100');
+      document.getElementById('labor').setAttribute('readonly', true);
+      document.getElementById('labor').classList.add('bg-gray-100');
+      document.getElementById('interventor_id').setAttribute('disabled', true);
+
+      // Formatear las fechas
+      const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toISOString().split('T')[0];
+      };
+      
+      // Asignar valores a los campos de fecha y deshabilitarlos
+      document.getElementById('inicio-obra').value = formatDate(data.solicitud.inicio_obra);
+      document.getElementById('fin-obra').value = formatDate(data.solicitud.fin_obra);
+      document.getElementById('dias').value = data.solicitud.dias_trabajo || '';
+
+      // Deshabilitar los campos de fecha
+      document.getElementById('inicio-obra').setAttribute('readonly', true);
+      document.getElementById('inicio-obra').classList.add('bg-gray-100');
+      document.getElementById('fin-obra').setAttribute('readonly', true);
+      document.getElementById('fin-obra').classList.add('bg-gray-100');
+
+      // Opcional: también podrías deshabilitar el campo de días si no debe cambiar
+      document.getElementById('dias').setAttribute('readonly', true);
+      document.getElementById('dias').classList.add('bg-gray-100');
+
+      submitButton.textContent = 'Guardar Cambios';
+      
+      // Resto del código sigue igual...
+      showDisabledBtn.removeAttribute('disabled');
+      
+      const arlPreview = document.getElementById('arl-preview');
+      const pasocialPreview = document.getElementById('pasocial-preview');
+      
+      if (data.solicitud.arl_documento) {
+        arlPreview.innerHTML = `
+          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+            <span class="text-sm">Documento ARL actual</span>
+            <div class="flex space-x-2">
+              <a href="${data.solicitud.arl_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+            </div>
+          </div>
+        `;
+      }
+
+      if (data.solicitud.pasocial_documento) {
+        pasocialPreview.innerHTML = `
+          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+            <span class="text-sm">Planilla Social actual</span>
+            <div class="flex space-x-2">
+              <a href="${data.solicitud.pasocial_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+            </div>
+          </div>
+        `;
+      }
+
+      personasContainer.innerHTML = '';
+      
+      if (data.colaboradores && data.colaboradores.length > 0) {
+        data.colaboradores.forEach(colaborador => {
+          const colaboradorDiv = document.createElement('div');
+          colaboradorDiv.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
+          colaboradorDiv.dataset.colaboradorId = colaborador.id;
+          colaboradorDiv.innerHTML = `
+            <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
+            <div class="mb-4">
+              <input type="text" value="${colaborador.nombre}" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+              <input type="number" value="${colaborador.cedula}" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+              <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
+              <input type="hidden" name="estado[]" value="true">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-ga-navy mb-2">Foto actual del colaborador</label>
+                ${colaborador.foto ? `
+                  <div class="mb-2">
+                    <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
+                    <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
+                  </div>
+                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
+                <label class="block text-ga-navy mb-2">Actualizar foto (opcional)</label>
+                <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+              </div>
+              <div>
+                <label class="block text-ga-navy mb-2">Cédula actual del colaborador</label>
+                ${colaborador.cedulaFoto ? `
+                  <div class="mb-2">
+                    <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
+                    <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
+                  </div>
+                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
+                <label class="block text-ga-navy mb-2">Actualizar cédula (opcional)</label>
+                <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+              </div>
+            </div>
+          `;
+          personasContainer.appendChild(colaboradorDiv);
+        });
+        
+        updateRemoveButtons();
+      }
+
+      document.getElementById('contratistaFormulario').scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    console.error('Error al renovar solicitud:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'Error al cargar los datos de la solicitud'
+    });
+  }
+};
+    // Mostrar modal de colaboradores deshabilitados
+    showDisabledBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch(`/obtener-colaboradores-deshabilitados/${solicitudActualId}`);
+        if (!response.ok) {
+          throw new Error('Error al obtener colaboradores deshabilitados');
+        }
+        
+        const disabledCollaborators = await response.json();
+        disabledList.innerHTML = '';
+
+        if (disabledCollaborators.length === 0) {
+          disabledList.innerHTML = '<p class="text-ga-navy">No hay colaboradores deshabilitados.</p>';
+        } else {
+          disabledCollaborators.forEach(colab => {
+            const item = document.createElement('div');
+            item.className = 'flex justify-between items-center p-2 border-b border-ga-cream';
+            item.innerHTML = `
+              <span class="text-ga-navy">${colab.nombre} (Cédula: ${colab.cedula})</span>
+              <button type="button" class="bg-ga-gold text-ga-white py-1 px-2 rounded-md hover:bg-ga-navy" onclick="rehabilitarColaborador(${colab.id})">Rehabilitar</button>
+            `;
+            disabledList.appendChild(item);
+          });
+        }
+
+        modalDisabled.classList.remove('hidden');
+      } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'No se pudieron cargar los colaboradores deshabilitados'
+        });
+      }
+    });
+
+    // Cerrar modal
+    window.closeDisabledModal = function() {
+      modalDisabled.classList.add('hidden');
+    };
+
+    // Rehabilitar colaborador con verificación de contraseña
+    window.rehabilitarColaborador = async function(colaboradorId) {
+      const { value: password } = await Swal.fire({
+        title: 'Ingrese su contraseña',
+        input: 'password',
+        inputLabel: 'Se requiere verificación para rehabilitar al colaborador',
+        inputPlaceholder: 'Contraseña',
+        showCancelButton: true,
+        confirmButtonText: 'Verificar',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+          if (!value) {
+            return '¡Debe ingresar una contraseña!';
+          }
+        }
+      });
+
+      if (password) {
+        try {
+          const response = await fetch(`/rehabilitar-colaborador/${colaboradorId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ password })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al rehabilitar el colaborador');
+          }
+
+          Swal.fire({
+            icon: 'success',
+            title: 'Éxito',
+            text: 'Colaborador rehabilitado correctamente'
+          });
+
+          // Recargar la lista de deshabilitados
+          showDisabledBtn.click();
+        } catch (error) {
+          console.error('Error:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message || 'No se pudo rehabilitar el colaborador'
+          });
+        }
+      }
+    };
+
+    // Confirmar eliminación de colaborador
+    window.confirmarEliminarColaborador = function(button) {
+      const persons = personasContainer.querySelectorAll('.person-group');
+      if (persons.length <= 1) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Debe mantener al menos un colaborador'
+        });
+        return;
+      }
+
+      Swal.fire({
+        title: '¿Está seguro?',
+        text: 'Esta acción desactivará el colaborador de la solicitud',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Sí, desactivar',
+        cancelButtonText: 'Cancelar'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          const personGroup = button.closest('.person-group');
+          const colaboradorId = personGroup.querySelector('input[name="colaborador_id[]"]')?.value;
+
+          if (colaboradorId) {
+            fetch(`/actualizar-estado-colaborador/${colaboradorId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ estado: false })
+            })
+            .then(response => {
+              if (response.ok) {
+                personGroup.remove();
+                validateCollaborators();
+                Swal.fire({
+                  icon: 'success',
+                  title: 'Éxito',
+                  text: 'Colaborador desactivado correctamente'
+                });
+              } else {
+                throw new Error('Error al actualizar el estado del colaborador');
+              }
+            })
+            .catch(error => {
+              console.error('Error:', error);
+              Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo desactivar el colaborador'
+              });
+            });
+          } else {
+            personGroup.remove();
+            validateCollaborators();
+          }
+        }
+      });
+    };
+
+    const validateCollaborators = () => {
+      const persons = personasContainer.querySelectorAll('.person-group');
+      if (persons.length === 0) {
+        addCollaborator();
+      }
+      updateRemoveButtons();
+    };
+
+    validateCollaborators();
+    addPersonBtn.addEventListener('click', addCollaborator);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+      const fechaFin = new Date(document.getElementById('fin-obra').value);
+      
+      if (!fechaInicio || !fechaFin || isNaN(fechaInicio) || isNaN(fechaFin)) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Por favor seleccione fechas válidas'
+        });
+        return;
+      }
+
+      if (fechaFin < fechaInicio) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
+        });
+        return;
+      }
+
+      if (personasContainer.children.length === 0) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Debe agregar al menos un colaborador'
+        });
+        return;
+      }
+
+      const requiredFields = form.querySelectorAll('[required]');
+      let hasEmptyFields = false;
+      requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+          hasEmptyFields = true;
+          field.classList.add('border-red-500');
+        } else {
+          field.classList.remove('border-red-500');
+        }
+      });
+
+      if (hasEmptyFields) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Por favor complete todos los campos requeridos'
+        });
+        return;
+      }
+
+      if (!lugarValido && !esRenovacion) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Por favor seleccione un lugar válido de la lista'
+        });
+        return;
+      }
+
+      const formData = new FormData(form);
+
+      try {
+        Swal.fire({
+          title: 'Procesando...',
+          text: 'Por favor espere mientras se procesa su solicitud',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
+        
+        console.log('Enviando solicitud a:', url);
+        console.log('FormData:', Object.fromEntries(formData));
+
+        const response = await fetch(url, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error('Error al procesar la solicitud');
+        }
+
+        const result = await response.json();
+        console.log('Respuesta del servidor:', result);
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'Éxito',
+          text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente',
+          confirmButtonText: 'Aceptar'
+        });
+
+        window.location.reload();
+      } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un error al procesar la solicitud. Por favor intente nuevamente.'
+        });
+      }
+    });
+
+    function calcularDias() {
+      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+      const fechaFin = new Date(document.getElementById('fin-obra').value);
+      const diasInput = document.getElementById('dias');
+
+      if (fechaInicio && fechaFin && !isNaN(fechaInicio) && !isNaN(fechaFin)) {
+        const diferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (diferencia < 1) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
+          });
+          document.getElementById('fin-obra').value = document.getElementById('inicio-obra').value;
+          diasInput.value = '1';
+        } else {
+          diasInput.value = diferencia;
+        }
+      } else {
+        diasInput.value = '';
+      }
+    }
+
+    document.getElementById('inicio-obra').addEventListener('change', function() {
+      const finObraInput = document.getElementById('fin-obra');
+      if (!finObraInput.value) {
+        finObraInput.value = this.value;
+      }
+      calcularDias();
+    });
+
+    document.getElementById('fin-obra').addEventListener('change', function() {
+      const inicioObraInput = document.getElementById('inicio-obra');
+      if (!inicioObraInput.value) {
+        inicioObraInput.value = this.value;
+      }
+      calcularDias();
+    });
+
+    document.getElementById('arl').addEventListener('change', function() {
+      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
+      document.getElementById('arl-filename').textContent = filename;
+    });
+
+    document.getElementById('pasocial').addEventListener('change', function() {
+      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
+      document.getElementById('pasocial-filename').textContent = filename;
+    });
+  });
+</script>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso a Capacitación - Gestión de Ingreso Contratistas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div class="sm:mx-auto sm:w-full sm:max-w-md">
+            <img class="mx-auto h-12 w-auto" src="/img/logo-ga.jpg" alt="Logo">
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                Acceso a Capacitación
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Ingresa el código de la capacitación
+            </p>
+        </div>
+
+        <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+            <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+                <form id="accessForm" class="space-y-6">
+                    <input type="hidden" id="capacitacionId" name="capacitacionId">
+                    <div>
+                        <label for="codigo" class="block text-sm font-medium text-gray-700">
+                            Ingrese el código de 4 caracteres
+                        </label>
+                        <div class="mt-1">
+                            <input type="text" 
+                                   id="codigo" 
+                                   name="codigo" 
+                                   required 
+                                   maxlength="4"
+                                   placeholder="XXXX"
+                                   class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-center text-2xl tracking-widest">
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">El código debe tener 4 caracteres</p>
+                    </div>
+
+                    <div>
+                        <button type="submit" 
+                                class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Acceder
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Obtener el ID de la capacitación de la URL si existe
+        const urlParams = new URLSearchParams(window.location.search);
+        const capacitacionId = urlParams.get('id');
+        if (capacitacionId) {
+            document.getElementById('capacitacionId').value = capacitacionId;
+        }
+
+        document.getElementById('codigo').addEventListener('input', function(e) {
+            this.value = this.value.toUpperCase();
+        });
+
+        document.getElementById('accessForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const codigo = document.getElementById('codigo').value;
+            const capacitacionId = document.getElementById('capacitacionId').value || null;
+            
+            if (codigo.length !== 4) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Código Inválido',
+                    text: 'El código debe tener exactamente 6 caracteres',
+                    confirmButtonColor: '#4F46E5'
+                });
+                return;
+            }
+
+            try {
+                const response = await fetch('/capacitacion/validar-acceso', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        codigo,
+                        ...(capacitacionId && { capacitacionId })
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.location.href = data.redirect;
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Error al validar el código',
+                        confirmButtonColor: '#4F46E5'
+                    });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al procesar la solicitud',
+                    confirmButtonColor: '#4F46E5'
+                });
+            }
+        });
+    </script>
+</body>
+</html> 

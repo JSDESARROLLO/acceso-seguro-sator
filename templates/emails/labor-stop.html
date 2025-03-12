@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            background-color: #2c3e50;
+            color: white;
+        }
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        .header img {
+            max-width: 75px;
+            height: auto;
+        }
+        .content {
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background-color: #2c3e50;
+            color: white;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #e74c3c;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .status {
+            background-color: #e74c3c;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-container">
+                <img src="https://gestion-ingreso-contratistas-ga.vercel.app/img/coa-logo.jpeg" alt="Logo COA">
+           
+            </div>
+            <h1>Notificación de Detención de Labor</h1>
+        </div>
+        
+        <div class="content">
+            <h2>Estimado Contratista de {{empresa}},</h2>
+            
+            <p>Le informamos que la labor asociada a su solicitud ha sido <strong>detenida</strong>.</p>
+            
+            <div class="status">
+                <h3>Estado de la Solicitud: Labor Detenida</h3>
+                <p>ID de Solicitud: {{solicitudId}}</p>
+                <p>Fecha: {{fecha}}</p>
+            </div>
+            
+            <p>Puede acceder al sistema</p>
+            
+            <div style="text-align: center;">
+                <a href="https://gestion-ingreso-contratistas-ga.vercel.app/vista-contratista" class="button">
+                    Acceder al Sistema
+                </a>
+            </div>
+            
+            <p>Si tiene alguna pregunta o necesita asistencia, comuniquese con el interventor.</p>
+        </div>
+        
+        <div class="footer">
+            <p>Este es un correo automático, por favor no responder.</p>
+            <p>&copy; <span id="currentYear">2025</span> COA - Todos los derechos reservados.</p>
+        </div>
+    </div>
+ 
+</body>
+</html> 

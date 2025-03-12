@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title><%= title %></title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <nav class="bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-white">Sistema de Capacitaciones</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav> 
+    <div class="min-h-screen bg-gray-100">
+        <div class="py-10">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 bg-white border-b border-gray-200">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-6"><%= capacitacion.nombre %></h2>
+                        
+                        <div class="mb-6">
+                            <p class="text-gray-600">Puntaje mínimo para aprobar: <%= capacitacion.puntaje_minimo_aprobacion %></p>
+                            <p class="text-gray-600">Puntos por pregunta: <%= capacitacion.puntos_por_pregunta %></p>
+                        </div>
+
+                        <form id="capacitacionForm" class="space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <label for="colaborador_id" class="block text-sm font-medium text-gray-700 mb-1">ID del Colaborador</label>
+                                    <input type="text" 
+                                           id="colaborador_id"
+                                           name="colaborador_id" 
+                                           value="<%= query.colaborador_id || '' %>"
+                                           required
+                                           placeholder="Ingrese el ID del colaborador"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label for="solicitud_id" class="block text-sm font-medium text-gray-700 mb-1">ID de la Solicitud</label>
+                                    <input type="text" 
+                                           id="solicitud_id"
+                                           name="solicitud_id" 
+                                           value="<%= query.solicitud_id || '' %>"
+                                           required
+                                           placeholder="Ingrese el ID de la solicitud"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                </div>
+                            </div>
+
+                            <div class="space-y-6">
+                                <% if (capacitacion.preguntas.length === 0) { %>
+                                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                                        <div class="flex">
+                                            <div class="ml-3">
+                                                <p class="text-sm text-yellow-700">
+                                                    Esta capacitación no tiene preguntas configuradas. Por favor, contacte al administrador.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                                <% capacitacion.preguntas.forEach((pregunta, index) => { %>
+                                    <div class="bg-white p-6 rounded-lg shadow">
+                                        <h3 class="text-lg font-medium text-gray-900 mb-4">Pregunta <%= index + 1 %></h3>
+                                        <p class="text-gray-700 mb-4"><%= pregunta.texto %></p>
+                                        
+                                        <% if (pregunta.multimedia) { %>
+                                            <div class="mb-4">
+                                                <% if (pregunta.multimedia.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/)) { %>
+                                                    <img src="<%= pregunta.multimedia %>" alt="Imagen de la pregunta" class="max-w-full h-auto rounded-lg shadow-md">
+                                                <% } else if (pregunta.multimedia.toLowerCase().match(/\.(mp4|webm|ogg)$/)) { %>
+                                                    <video src="<%= pregunta.multimedia %>" controls class="max-w-full h-auto rounded-lg shadow-md">
+                                                        Tu navegador no soporta el elemento de video.
+                                                    </video>
+                                                <% } %>
+                                            </div>
+                                        <% } %>
+
+                                        <div class="space-y-2">
+                                            <% (pregunta.opciones || []).forEach((opcion, opcionIndex) => { %>
+                                                <div class="flex items-center p-2 hover:bg-gray-50 rounded-md">
+                                                    <input type="radio" 
+                                                           id="pregunta<%= index %>_opcion<%= opcionIndex %>" 
+                                                           name="respuesta<%= index %>" 
+                                                           value="<%= opcionIndex %>"
+                                                           required
+                                                           class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300">
+                                                    <label for="pregunta<%= index %>_opcion<%= opcionIndex %>" 
+                                                           class="ml-3 block text-sm font-medium text-gray-700 cursor-pointer w-full">
+                                                        <%= opcion %>
+                                                    </label>
+                                                </div>
+                                            <% }); %>
+                                        </div>
+                                    </div>
+                                <% }); %>
+                            </div>
+
+                        
+                            <div class="flex justify-end">
+                                <button type="submit" 
+                                        class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                        <%= capacitacion.preguntas.length === 0 ? 'disabled' : '' %>>
+                                    Enviar Respuestas
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('capacitacionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const respuestas = [];
+            const numPreguntas = parseInt('<%= capacitacion.preguntas.length %>');
+            const colaborador_id = formData.get('colaborador_id');
+            const solicitud_id = formData.get('solicitud_id');
+    
+            // Check if there are no questions
+            if (numPreguntas === 0) {
+                await Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin preguntas',
+                    text: 'Esta capacitación no tiene preguntas configuradas. Por favor, contacte al administrador.',
+                });
+                return;
+            }
+    
+            if (!colaborador_id || !solicitud_id) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Se requiere el ID del colaborador y de la solicitud para responder la capacitación',
+                });
+                return;
+            }
+
+            for (let i = 0; i < numPreguntas; i++) {
+                const respuesta = formData.get(`respuesta${i}`);
+                respuestas.push(respuesta !== null ? parseInt(respuesta) : null);
+            }
+
+            try {
+                const response = await fetch('/capacitacion/responder', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        codigo_seguridad: '<%= capacitacion.codigo_seguridad %>',
+                        respuestas,
+                        colaborador_id,
+                        solicitud_id
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                if (data.estado === 'APROBADO') {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: '¡Felicitaciones!',
+                        text: `Has aprobado la capacitación con ${data.puntaje_obtenido} puntos`,
+                        confirmButtonText: 'Aceptar'
+                    });
+                } else {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'No aprobado',
+                        text: `No has alcanzado el puntaje mínimo requerido. Tu puntaje: ${data.puntaje_obtenido}`,
+                        confirmButtonText: 'Intentar nuevamente'
+                    });
+                }
+
+                window.location.href = '/capacitacion/acceso';
+            } catch (error) {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: error.message || 'Ha ocurrido un error al procesar las respuestas',
+                    confirmButtonText: 'Aceptar'
+                });
+            }
+        });
+    </script>
+</body>
+</html> 

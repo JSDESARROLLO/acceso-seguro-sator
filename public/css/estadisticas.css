@@ -1,0 +1,16 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+  }
+  
+  .container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  canvas {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+  }
+  

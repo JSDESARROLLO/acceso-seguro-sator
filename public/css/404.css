@@ -1,0 +1,112 @@
+body {
+    margin: 0;
+    font-family: 'Arial', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #f4f4f4; /* Fondo suave y claro */
+    color: #333; /* Texto oscuro para buen contraste */
+  }
+  
+  .container {
+    text-align: center;
+    max-width: 600px;
+    padding: 30px;
+    border-radius: 15px;
+    background: #fff; /* Fondo blanco para la caja principal */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); /* Sombra sutil para darle profundidad */
+  }
+  
+  .logo-card {
+    margin-bottom: 30px; /* Espacio entre el logo y el formulario */
+  }
+  
+  
+  .logo { 
+    width: 150px; 
+    display: block;
+    background-color: white; /* Fondo blanco para resaltar el logo */
+    border-radius: 10px;
+    padding: 5px; /* Espacio alrededor del logo */
+  }
+  
+  h1 {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2.5em; /* Tamaño adecuado para el encabezado */
+    color: #333; /* Texto oscuro para buena legibilidad */
+    margin: 0;
+    font-weight: bold;
+  }
+  
+  p {
+    font-size: 18px;
+    margin: 20px 0;
+    color: #666; /* Color más suave para el texto */
+  }
+  
+  .form-group {
+    margin: 15px 0;
+  }
+  
+  label {
+    font-size: 16px;
+    color: #333; /* Etiquetas de formulario en color oscuro */
+    display: block;
+    margin-bottom: 5px;
+  }
+  
+  input {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: 2px solid #ddd;
+    margin-bottom: 20px;
+    background-color: #fafafa; /* Fondo suave para los campos de texto */
+  }
+  
+  input:focus {
+    border-color: #aaa; /* Color más oscuro cuando el campo está enfocado */
+    outline: none;
+    background-color: #fff; /* Fondo blanco al estar enfocado */
+  }
+  
+  button {
+    display: inline-block;
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    color: #fff;
+    background: #333; /* Fondo oscuro para el botón */
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.3s ease;
+  }
+
+  .container-logo{
+    display: flex;
+  }
+  
+  button:hover {
+    background: #555; /* Color más claro al pasar el ratón */
+  }
+  
+  .register {
+    font-size: 16px;
+    color: #333; /* Color oscuro para el texto del enlace */
+    margin-top: 10px;
+  }
+  
+  .register a {
+    color: #666; /* Color más suave para el enlace */
+    text-decoration: underline;
+  }
+  
+  .register a:hover {
+    color: #444; /* Color más oscuro cuando se pasa el ratón */
+  }
+  

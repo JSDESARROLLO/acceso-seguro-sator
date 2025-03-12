@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Capacitaciones</title>
+    <style>
+        .container { display: flex; }
+        .aside { width: 20%; }
+        .content { width: 80%; }
+        /* Apply overflow-x directly to the table */
+        .scrollable-table { overflow-x: auto; display: block; }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body>
+    <%- include('../partials/header') %>
+
+    <div class="min-h-screen bg-gray-100">
+        <div class="py-10">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 bg-white border-b border-gray-200">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">Listado de Capacitaciones</h2>
+                     
+                            <a href="/capacitacion/creador" 
+                               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Crear Nueva Capacitación
+                            </a>
+                   
+                    </div>
+
+                    <div class="flex flex-col">
+                        <div class="py-2 align-middle inline-block min-w-full">
+                            <div class="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
+                                <table class="min-w-full divide-y divide-gray-200 scrollable-table">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Nombre
+                                            </th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Código de Acceso
+                                            </th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Puntaje Mínimo
+                                            </th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Vigencia (meses)
+                                            </th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Intentos
+                                            </th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Aprobados
+                                            </th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                URL de Acceso
+                                            </th>
+                                            <th scope="col" class="relative px-6 py-3">
+                                                <span class="sr-only">Acciones</span>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <% capacitaciones.forEach(function(capacitacion) { %>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm font-medium text-gray-900">
+                                                        <%= capacitacion.nombre %>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm font-medium text-gray-900">
+                                                        <%= capacitacion.codigo_seguridad %>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">
+                                                        <%= capacitacion.puntaje_minimo_aprobacion %>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">
+                                                        <%= capacitacion.vigencia_meses %>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">
+                                                        <%= capacitacion.intentos || 0 %>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">
+                                                        <%= capacitacion.aprobados || 0 %>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">
+                                                        <% const baseUrl = process.env.DOMAIN_URL || 'http://localhost:3500'; %>
+                                                        <% const url = `${baseUrl}/capacitacion/acceso?id=${capacitacion.id}`; %>
+                                                        <a href="<%= url %>" 
+                                                           class="text-indigo-600 hover:text-indigo-900 url-link" 
+                                                           onclick="copyUrl(event, '<%= url %>')"
+                                                           target="_blank">
+                                                            <%= url %>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                     
+                                                        <a href="/capacitacion/editar/<%= capacitacion.id %>" class="text-indigo-600 hover:text-indigo-900 mr-4">
+                                                            Editar
+                                                        </a>
+                                                        <button onclick="eliminarCapacitacion('<%= capacitacion.id %>', '<%= capacitacion.nombre %>')" 
+                                                                class="text-red-600 hover:text-red-900 mr-4">
+                                                            Eliminar
+                                                        </button>
+                                                     
+                                                    <a href="/capacitacion/acceso?id=<%= capacitacion.id %>" 
+                                                       class="text-green-600 hover:text-green-900">
+                                                        Responder
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <% }); %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <%- include('../partials/footer') %>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        function copyUrl(event, url) {
+            event.preventDefault();
+            navigator.clipboard.writeText(url).then(() => {
+                const message = document.createElement('div');
+                message.textContent = 'URL copiada';
+                message.style.position = 'fixed';
+                message.style.background = '#4CAF50';
+                message.style.color = 'white';
+                message.style.padding = '10px';
+                message.style.borderRadius = '4px';
+                message.style.zIndex = '1000';
+                message.style.left = event.pageX + 'px';
+                message.style.top = event.pageY + 'px';
+                
+                document.body.appendChild(message);
+                setTimeout(() => message.remove(), 2000);
+            }).catch(err => console.error('Error al copiar URL:', err));
+        }
+
+        async function eliminarCapacitacion(id, nombre) {
+            const result = await Swal.fire({
+                title: '¿Estás seguro?',
+                html: `
+                    <p>Vas a eliminar la capacitación:</p>
+                    <p class="font-bold text-red-600">${nombre}</p>
+                    <p class="mt-2">Esta acción eliminará:</p>
+                    <ul class="text-left list-disc pl-5 mt-2">
+                        <li>Todas las preguntas</li>
+                        <li>Los archivos multimedia asociados</li>
+                        <li>Todos los resultados de los participantes</li>
+                    </ul>
+                    <p class="mt-2 text-red-600 font-bold">Esta acción no se puede deshacer</p>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const response = await fetch(`/capacitacion/eliminar/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: '¡Eliminado!',
+                            text: 'La capacitación ha sido eliminada exitosamente',
+                            confirmButtonColor: '#4F46E5'
+                        });
+                        window.location.reload();
+                    } else {
+                        throw new Error(data.error || 'Error al eliminar la capacitación');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: error.message || 'Error al eliminar la capacitación',
+                        confirmButtonColor: '#4F46E5'
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

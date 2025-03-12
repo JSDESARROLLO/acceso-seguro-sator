@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <!-- Cargar Bootstrap 4 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .interventor{
+      padding-left: 20px;
+    }
+    .c-sesion{
+      padding-right: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Barra de navegación -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <a class="navbar-brand interventor" href="#">Interventor GA</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ml-auto">
+        <li class="nav-item active"> 
+        </li>
+        <li class="nav-item">
+          <a class="navbar-brand c-sesion" href="/logout">Cerrar sesión</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container mt-5">
+    <h1 class="text-center mb-4"> Solicitud Ingreso Contratistas  </h1>
+<!-- Formulario de filtros -->
+<form id="filtrosForm" class="mb-4">
+  <div class="row">
+    <div class="col-md-3">
+      <label for="filtroId">ID Solicitud</label>
+      <input type="text" class="form-control" id="filtroId" placeholder="ID">
+    </div>
+    <div class="col-md-3">
+      <label for="filtroFechaInicio">Fecha Inicio</label>
+      <input type="date" class="form-control" id="filtroFechaInicio">
+    </div>
+    <div class="col-md-3">
+      <label for="filtroFechaFin">Fecha Fin</label>
+      <input type="date" class="form-control" id="filtroFechaFin">
+    </div>
+    <div class="col-md-3">
+      <label for="filtroNit">NIT</label>
+      <input type="text" class="form-control" id="filtroNit" placeholder="NIT">
+    </div>
+  </div>
+  <div class="row mt-2">
+    <div class="col-md-6">
+      <label for="filtroEmpresa">Empresa</label>
+      <input type="text" class="form-control" id="filtroEmpresa" placeholder="Empresa">
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+      <button type="button" class="btn btn-primary w-100" id="filtrarBtn">Filtrar</button>
+    </div>
+  </div>
+</form>  
+
+<!-- Tabla de acciones -->
+<div class="table-responsive">
+  <table class="table table-bordered table-striped table-hover shadow-sm rounded" id="tablaSolicitudes">
+    <thead class="thead-dark">
+      <tr>
+        <th>Id</th>
+        <th>Empresa</th>
+        <th>NIT</th>
+        <th>Inicio de Obra</th>
+        <th>Fin de Obra</th>
+        <th>Lugar</th>
+        <th>Labor</th>
+        <th>Estado de la Solicitud</th>
+        <th>Vigencia</th>
+        <th>Acción</th>
+        <th>Ver QR</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (acciones.length > 0) { %>
+        <% acciones.forEach(accion => { %>
+          <tr>
+            <td class="solicitud-id"><%= accion.solicitud_id %></td>
+            <td><%= accion.empresa %></td>
+            <td><%= accion.nit %></td>
+            <td><%= accion.inicio_obra %></td>
+            <td><%= accion.fin_obra %></td>
+            <td><%= accion.lugar %></td>
+            <td><%= accion.labor %></td>
+            <td><%= accion.solicitud_estado %></td>
+            <td><%= accion.estado_vigencia %></td>
+            <td>
+              <% if (accion.puede_aprobar === 'Aprobar') { %>
+                <button class="btn btn-success btn-sm" id="aprobarBtn-<%= accion.solicitud_id %>">Aprobar</button>
+              <% } else { %>
+                <span class="badge bg-danger">No disponible</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (accion.puede_ver_qr === 'Ver QR') { %>
+                <button class="btn btn-info btn-sm" id="verQR-<%= accion.solicitud_id %>">Ver QR</button>
+              <% } else { %>
+                <span class="badge bg-danger">No disponible</span>
+              <% } %>
+            </td>
+          </tr>
+        <% }); %>
+      <% } else { %>
+        <tr>
+          <td colspan="11" class="text-center">No hay acciones para revisar.</td>
+        </tr>
+      <% } %>
+    </tbody>
+    </table>
+    
+    </div>
+  </div>
+
+  <!-- Modal para Ver QR -->
+<div class="modal fade" id="modalVerQR" tabindex="-1" role="dialog" aria-labelledby="modalVerQRLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content shadow-lg rounded">
+          <div class="modal-header">
+              <h5 class="modal-title" id="modalVerQRLabel">Ver QR</h5>
+              <button type="button" class="close" data-bs-dismiss="modal" aria-label="Cerrar">
+                  <span aria-hidden="true">&times;</span>
+              </button>
+          </div>
+          <div class="modal-body text-center">
+              <div id="qr-container">
+                  <!-- El QR se mostrará aquí -->
+              </div>
+          </div>
+          <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          </div>
+      </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Scripts de Bootstrap -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- Bootstrap Icons -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
+<!-- Bootstrap JS Bundle (incluye Popper.js) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script> 
+ 
+  document.addEventListener('DOMContentLoaded', function () {
+  // Evento para aprobar solicitud
+  const aprobarBtns = document.querySelectorAll('[id^="aprobarBtn-"]');
+  aprobarBtns.forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const solicitudId = this.id.replace('aprobarBtn-', ''); // Extraer el solicitud_id
+
+      // Mostrar confirmación usando Swal
+      const confirmacion = await Swal.fire({
+        title: '¿Estás seguro?',
+        text: 'Esta acción aprobará la solicitud.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Sí, aprobar',
+        cancelButtonText: 'Cancelar',
+      });
+
+      if (!confirmacion.isConfirmed) return;
+
+      try {
+        const response = await fetch('/aprobar-solicitud-interventor', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ solicitudId }), // Enviar solicitudId en el cuerpo
+        });
+
+        if (response.ok) {
+          // Mostrar éxito con Swal
+          await Swal.fire({
+            title: '¡Éxito!',
+            text: 'La solicitud ha sido aprobada.',
+            icon: 'success',
+            confirmButtonColor: '#3085d6',
+          });
+
+          window.location.reload(); // Recargar la página para reflejar los cambios
+        } else {
+          // Mostrar error con Swal
+          Swal.fire({
+            title: 'Error',
+            text: 'Hubo un problema al aprobar la solicitud.',
+            icon: 'error',
+            confirmButtonColor: '#d33',
+          });
+        }
+      } catch (error) {
+        console.error('Error al hacer la solicitud:', error);
+
+        // Mostrar error genérico con Swal
+        Swal.fire({
+          title: 'Error',
+          text: 'Ocurrió un error al realizar la solicitud.',
+          icon: 'error',
+          confirmButtonColor: '#d33',
+        });
+      }
+    });
+  });
+});
+
+
+  const verQRBtns = document.querySelectorAll('[id^="verQR-"]');
+
+verQRBtns.forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const solicitudId = this.id.replace('verQR-', ''); // Extraer el solicitud_id
+
+    try {
+      const response = await fetch(`/generar-qr/${solicitudId}`);
+      if (response.ok) {
+        const qrData = await response.json(); // Asegurarse de recibir JSON
+        const qrContainer = document.getElementById('qr-container');
+        qrContainer.innerHTML = `<img src="${qrData.qrUrl}" alt="QR Code" class="img-fluid">`;
+        $('#modalVerQR').modal('show');
+      } else {
+        // Usar SweetAlert en lugar de alert
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'No se pudo obtener el QR para esta solicitud',
+        });
+      }
+    } catch (error) {
+      console.error('Error al obtener el QR:', error);
+      // Usar SweetAlert en lugar de alert
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Hubo un error al obtener el QR.',
+      });
+    }
+  });
+});
+     
+
+  document.getElementById('filtrarBtn').addEventListener('click', function () {
+    let filtroId = document.getElementById('filtroId').value.toLowerCase();
+    let filtroFechaInicio = document.getElementById('filtroFechaInicio').value;
+    let filtroFechaFin = document.getElementById('filtroFechaFin').value;
+    let filtroNit = document.getElementById('filtroNit').value.toLowerCase();
+    let filtroEmpresa = document.getElementById('filtroEmpresa').value.toLowerCase();
+
+    let filas = document.querySelectorAll('#tablaSolicitudes tbody tr');
+
+    filas.forEach(function (fila) {
+      let id = fila.querySelector('.solicitud-id').textContent.toLowerCase();
+      let empresa = fila.cells[1].textContent.toLowerCase(); // Columna Empresa
+      let nit = fila.cells[2].textContent.toLowerCase(); // Columna NIT
+      let inicioObra = new Date(fila.cells[3].textContent); // Columna Inicio de Obra
+      let finObra = new Date(fila.cells[4].textContent); // Columna Fin de Obra
+      let lugar = fila.cells[5].textContent.toLowerCase(); // Columna Lugar
+      let labor = fila.cells[6].textContent.toLowerCase(); // Columna Labor
+      let estado = fila.cells[7].textContent.toLowerCase(); // Columna Estado
+      let vigencia = fila.cells[8].textContent.toLowerCase(); // Columna Vigencia
+
+      let mostrarFila = true;
+
+      // Filtro por ID
+      if (filtroId && !id.includes(filtroId)) {
+        mostrarFila = false;
+      }
+
+      // Filtro por fechas
+      if (filtroFechaInicio && inicioObra < new Date(filtroFechaInicio)) {
+        mostrarFila = false;
+      }
+      if (filtroFechaFin && finObra > new Date(filtroFechaFin)) {
+        mostrarFila = false;
+      }
+
+      // Filtro por NIT
+      if (filtroNit && !nit.includes(filtroNit)) {
+        mostrarFila = false;
+      }
+
+      // Filtro por Empresa
+      if (filtroEmpresa && !empresa.includes(filtroEmpresa)) {
+        mostrarFila = false;
+      }
+
+      // Mostrar u ocultar fila según el filtro
+      fila.style.display = mostrarFila ? '' : 'none';
+    });
+  });
+
+
+  </script>
+</body>
+</html>

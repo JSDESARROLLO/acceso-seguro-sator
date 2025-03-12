@@ -1,0 +1,300 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen bg-gray-100">
+    <div class="py-10">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 bg-white border-b border-gray-200">
+                    <h2 class="text-2xl font-bold mb-6">Crear Capacitación</h2>
+                    
+                    <form id="capacitacionForm" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nombre de la Capacitación</label>
+                            <input type="text" name="nombre" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Vigencia (meses)</label>
+                            <input type="number" name="vigencia_meses" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Puntos por Pregunta</label>
+                            <input type="number" name="puntos_por_pregunta" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Puntaje Mínimo Aprobación</label>
+                            <input type="number" name="puntaje_minimo_aprobacion" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+
+                        <div id="preguntas" class="space-y-6">
+                            <!-- Las preguntas se agregarán aquí dinámicamente -->
+                        </div>
+
+                        <button type="button" onclick="agregarPregunta()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Agregar Pregunta
+                        </button>
+
+                        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                            Guardar Capacitación
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+let preguntaCount = 0;
+
+function agregarPregunta() {
+    const preguntasDiv = document.getElementById('preguntas');
+    const nuevaPregunta = document.createElement('div');
+    nuevaPregunta.className = 'pregunta border p-4 rounded-lg';
+    
+    nuevaPregunta.innerHTML = `
+        <div class="space-y-4">
+            <div class="flex justify-between items-center">
+                <label class="block text-sm font-medium text-gray-700">Pregunta ${preguntaCount + 1}</label>
+                <button type="button" onclick="eliminarPregunta(this)" class="text-red-600 hover:text-red-800">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div>
+                <input type="text" name="preguntas[${preguntaCount}][texto]" required 
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Imagen o Video</label>
+                <input type="file" 
+                       name="preguntas[${preguntaCount}][multimedia]" 
+                       accept="image/*,video/*" 
+                       class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                <p class="mt-1 text-sm text-gray-500">Formatos permitidos: imágenes (jpg, png, gif) y videos (mp4, webm)</p>
+            </div>
+
+            <div class="opciones space-y-2" data-pregunta-index="${preguntaCount}">
+                <div class="flex items-center gap-2 opcion-container">
+                    <input type="radio" name="preguntas[${preguntaCount}][respuesta_correcta]" value="0" required class="mr-2">
+                    <input type="text" name="preguntas[${preguntaCount}][opciones][]" 
+                        placeholder="Opción 1" required 
+                        class="inline-block w-64 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <button type="button" onclick="eliminarOpcion(this)" class="text-red-600 hover:text-red-800 hidden">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2 opcion-container">
+                    <input type="radio" name="preguntas[${preguntaCount}][respuesta_correcta]" value="1" required class="mr-2">
+                    <input type="text" name="preguntas[${preguntaCount}][opciones][]" 
+                        placeholder="Opción 2" required 
+                        class="inline-block w-64 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <button type="button" onclick="eliminarOpcion(this)" class="text-red-600 hover:text-red-800">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <button type="button" onclick="agregarOpcion(${preguntaCount})" 
+                class="mt-2 inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                + Agregar Opción
+            </button>
+        </div>
+    `;
+    preguntasDiv.appendChild(nuevaPregunta);
+    preguntaCount++;
+}
+
+function agregarOpcion(preguntaIndex) {
+    const opcionesDiv = document.querySelector(`[data-pregunta-index="${preguntaIndex}"]`);
+    const numOpciones = opcionesDiv.querySelectorAll('.opcion-container').length;
+    
+    const nuevaOpcion = document.createElement('div');
+    nuevaOpcion.className = 'flex items-center gap-2 opcion-container';
+    nuevaOpcion.innerHTML = `
+        <input type="radio" name="preguntas[${preguntaIndex}][respuesta_correcta]" value="${numOpciones}" required class="mr-2">
+        <input type="text" name="preguntas[${preguntaIndex}][opciones][]" 
+            placeholder="Opción ${numOpciones + 1}" required 
+            class="inline-block w-64 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+        <button type="button" onclick="eliminarOpcion(this)" class="text-red-600 hover:text-red-800">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    `;
+    opcionesDiv.appendChild(nuevaOpcion);
+    
+    // Mostrar todos los botones de eliminar si hay más de 2 opciones
+    if (numOpciones + 1 > 2) {
+        opcionesDiv.querySelectorAll('.opcion-container button').forEach(btn => btn.classList.remove('hidden'));
+    }
+}
+
+function eliminarOpcion(button) {
+    const opcionesDiv = button.closest('.opciones');
+    const opcionContainer = button.closest('.opcion-container');
+    const numOpciones = opcionesDiv.querySelectorAll('.opcion-container').length;
+    
+    if (numOpciones > 2) {
+        opcionContainer.remove();
+        // Actualizar los valores y placeholders de las opciones restantes
+        opcionesDiv.querySelectorAll('.opcion-container').forEach((container, index) => {
+            const radio = container.querySelector('input[type="radio"]');
+            const input = container.querySelector('input[type="text"]');
+            radio.value = index;
+            input.placeholder = `Opción ${index + 1}`;
+        });
+        
+        // Ocultar botones de eliminar si solo quedan 2 opciones
+        if (numOpciones - 1 <= 2) {
+            opcionesDiv.querySelectorAll('.opcion-container button').forEach(btn => btn.classList.add('hidden'));
+        }
+    }
+}
+
+function eliminarPregunta(button) {
+    const pregunta = button.closest('.pregunta');
+    pregunta.remove();
+    actualizarNumeracionPreguntas();
+}
+
+function actualizarNumeracionPreguntas() {
+    const preguntas = document.querySelectorAll('.pregunta');
+    preguntas.forEach((pregunta, index) => {
+        const label = pregunta.querySelector('label');
+        label.textContent = `Pregunta ${index + 1}`;
+    });
+    preguntaCount = preguntas.length;
+}
+
+document.getElementById('capacitacionForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const preguntas = [];
+
+    // Mostrar indicador de carga
+    Swal.fire({
+        title: 'Guardando capacitación...',
+        text: 'Esto puede tomar unos momentos si hay archivos multimedia',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    // Procesar cada pregunta
+    const preguntaDivs = document.querySelectorAll('.pregunta');
+    for (let i = 0; i < preguntaDivs.length; i++) {
+        const preguntaDiv = preguntaDivs[i];
+        const pregunta = {
+            texto: formData.get(`preguntas[${i}][texto]`),
+            opciones: [],
+            respuesta_correcta: parseInt(formData.get(`preguntas[${i}][respuesta_correcta]`)),
+            multimedia: null
+        };
+
+        // Obtener todas las opciones de la pregunta
+        const opcionesInputs = preguntaDiv.querySelectorAll('input[name^="preguntas['+i+'][opciones]"]');
+        opcionesInputs.forEach(input => {
+            pregunta.opciones.push(input.value);
+        });
+
+        // Procesar archivo multimedia
+        const multimediaFile = formData.get(`preguntas[${i}][multimedia]`);
+        if(multimediaFile && multimediaFile.size > 0) {
+            const formDataMultimedia = new FormData();
+            formDataMultimedia.append('file', multimediaFile);
+            
+            try {
+                const response = await fetch('/capacitacion/upload', {
+                    method: 'POST',
+                    body: formDataMultimedia
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Error al subir el archivo multimedia');
+                }
+                
+                const data = await response.json();
+                pregunta.multimedia = data.url;
+            } catch (error) {
+                console.error('Error al subir archivo multimedia:', error);
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: `Error al subir archivo multimedia de la pregunta ${i + 1}`,
+                });
+                return;
+            }
+        }
+
+        preguntas.push(pregunta);
+    }
+
+    // Validar que haya al menos una pregunta
+    if (preguntas.length === 0) {
+        await Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Debe agregar al menos una pregunta',
+        });
+        return;
+    }
+
+    // Crear objeto con todos los datos
+    const capacitacionData = {
+        nombre: formData.get('nombre'),
+        vigencia_meses: parseInt(formData.get('vigencia_meses')),
+        puntos_por_pregunta: parseInt(formData.get('puntos_por_pregunta')),
+        puntaje_minimo_aprobacion: parseInt(formData.get('puntaje_minimo_aprobacion')),
+        puntaje_maximo: preguntas.length * parseInt(formData.get('puntos_por_pregunta')),
+        preguntas: preguntas
+    };
+
+    try {
+        const response = await fetch('/capacitacion/crear', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(capacitacionData)
+        });
+
+        const result = await response.json();
+        if(result.message) {
+            // Mostrar el código de seguridad y la URL
+            await Swal.fire({
+                icon: 'success',
+                title: '¡Capacitación creada exitosamente!',
+                html: `
+                    <div class="text-left">
+                        <p class="mb-2"><strong>Código de seguridad:</strong> ${result.codigo_seguridad}</p>
+                        <p class="mb-4"><strong>URL de acceso:</strong> ${result.url_acceso}</p>
+                        <p class="text-sm text-gray-600">Comparte esta información con los colaboradores que necesiten realizar la capacitación.</p>
+                    </div>
+                `,
+                confirmButtonColor: '#4F46E5'
+            });
+            window.location.href = '/capacitacion/listado';
+        }
+    } catch (error) {
+        console.error('Error al guardar la capacitación:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al guardar la capacitación',
+            confirmButtonColor: '#4F46E5'
+        });
+    }
+});
+</script>
+
+<%- include('../partials/footer') %> 

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seguridad</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"> 
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+
+    <style>
+        video{
+            display: flex;
+            justify-content: center;
+        }
+
+        .ocultar{
+            
+            display: none;
+        }
+    </style>
+
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Seguridad</h1>
+    
+        <!-- Buscador y Botón Escanear QR -->
+        <div class="mb-4 d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <input type="text" id="buscarId" class="form-control me-3 w-50 w-md-25" placeholder="Buscar por ID">
+                <button class="btn btn-primary" onclick="buscar()">Buscar</button>
+            </div>
+            <button class="btn btn-secondary ocultar" onclick="escanearQR()">Escanear QR</button>
+        </div>
+    
+        <!-- Tabla Responsiva -->
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered table-hover shadow-sm rounded">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Empresa</th>
+                        <th>NIT</th>
+                        <th>Estado</th>
+                        <th>Ver Detalles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% solicitud.forEach((sol) => { %>
+                        <tr>
+                            <td><%= sol.id %></td>
+                            <td><%= sol.empresa %></td>
+                            <td><%= sol.nit %></td>
+                            <td>
+                                <span 
+                                    class="badge 
+                                    <%= sol.estado_actual.includes('pendiente ingreso') ? 'bg-warning' 
+                                    : sol.estado_actual.includes('vencida') ? 'bg-danger' 
+                                    : sol.estado_actual === 'en labor' ? 'bg-info'
+                                    : sol.estado_actual === 'labor detenida' ? 'bg-secondary' 
+                                    : 'bg-success' %>">
+                                    <%= sol.estado_actual %>
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-info btn-sm" onclick="verDetalles(<%= sol.id %>)">
+                                    <i class="bi bi-eye"></i> Ver Detalles
+                                </button>
+                            </td>
+                        </tr>
+                    <% }); %> 
+                </tbody>
+            </table>
+            
+        </div>
+    </div>
+    
+
+    <!-- Modal para Ver Detalles -->
+<div class="modal fade" id="detallesModal" tabindex="-1" aria-labelledby="detallesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detallesModalLabel">Detalles de la Solicitud</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Información General -->
+                <div class="row">
+                    <div class="col-12 col-md-6">
+                        <p><strong>Id:</strong> <span id="detalleId"></span></p>
+                        <p><strong>Empresa:</strong> <span id="detalleEmpresa"></span></p>
+                        <p><strong>Lugar:</strong> <span id="detalleLugar"></span></p>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <p><strong>Labor:</strong> <span id="detalleLabor"></span></p>
+                        <p><strong>Inicio de Obra:</strong> <span id="detalleInicio"></span></p>
+                        <p><strong>Fin de Obra:</strong> <span id="detalleFin"></span></p>
+                        <p><strong>Estado:</strong> <span id="detalleEstado"></span></p>
+                    </div>
+                </div>
+
+                <!-- Colaboradores -->
+                <h5 class="mt-4">Colaboradores</h5>
+                <div id="detalleColaboradores" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
+                    <!-- Los colaboradores se generarán aquí dinámicamente -->
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="registrarIngresoBtn">Registrar Ingreso</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+ 
+    <script>
+ document.addEventListener('DOMContentLoaded', () => {
+    const modalData = <%- JSON.stringify(typeof modalData !== 'undefined' ? modalData : null) %>;
+
+    if (modalData) {
+        // Prellenar los detalles de la solicitud en el modal
+        document.getElementById('detalleEmpresa').textContent = modalData.empresa || 'N/A';
+        document.getElementById('detalleId').textContent = modalData.id || 'N/A';
+        document.getElementById('detalleLugar').textContent = modalData.lugar || 'N/A';
+        document.getElementById('detalleLabor').textContent = modalData.labor || 'N/A';
+
+        // Formatear fechas
+        const formatFecha = (fecha) => {
+            if (!fecha) return 'N/A';
+            const date = new Date(fecha);
+            return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+        };
+        document.getElementById('detalleInicio').textContent = formatFecha(modalData.inicio_obra);
+        document.getElementById('detalleFin').textContent = formatFecha(modalData.fin_obra);
+
+        // Actualizar estado dinámico
+        const estadoElement = document.getElementById('detalleEstado');
+        const estadoActual = modalData.estado || 'Desconocido';
+        estadoElement.textContent = modalData.estado; // Usar el estado calculado desde el servidor
+        estadoElement.className = 'badge'; // Reiniciar clases
+
+        // Aplicar clases dinámicas basado en estado_actual
+        if (modalData.estado.includes('pendiente ingreso')) {
+            estadoElement.classList.add('bg-warning');
+        } else if (modalData.estado.includes('vencida')) {
+            estadoElement.classList.add('bg-danger');
+        } else if (modalData.estado === 'en labor') {
+            estadoElement.classList.add('bg-info');
+        } else if (modalData.estado === 'labor detenida') {
+            estadoElement.classList.add('bg-secondary');
+        } else {
+            estadoElement.classList.add('bg-success');
+        }
+
+        // Mostrar colaboradores
+        const colaboradoresContainer = document.getElementById('detalleColaboradores');
+        colaboradoresContainer.innerHTML = ''; // Limpiar contenido previo
+
+        if (modalData.colaboradores && modalData.colaboradores.length > 0) {
+            modalData.colaboradores.forEach((col) => {
+                const colDiv = document.createElement('div');
+                colDiv.classList.add('col-md-4', 'mb-3');
+                colDiv.innerHTML = `
+                    <div class="card">
+                        <img src="${col.foto.replace(/\\/g, '/')}" class="card-img-top" alt="Foto de ${col.nombre}">
+                        <div class="card-body">
+                            <h6 class="card-title">${col.nombre}</h6>
+                            <p class="card-text">Cédula: ${col.cedula}</p>
+                        </div>
+                    </div>
+                `;
+                colaboradoresContainer.appendChild(colDiv);
+            });
+        } else {
+            colaboradoresContainer.innerHTML = '<p>No hay colaboradores disponibles.</p>';
+        }
+
+        // Configurar botón "Registrar Ingreso"
+        const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
+        const estadosNoPermitidos = [
+            'en labor',
+            'en labor - vencida',
+            'labor detenida',
+            'pendiente ingreso - vencido'
+        ];
+
+        if (estadosNoPermitidos.includes(modalData.estado)) {
+            registrarIngresoBtn.disabled = true;
+            registrarIngresoBtn.classList.add('btn-secondary');
+            registrarIngresoBtn.textContent = 'No disponible';
+        } else {
+            registrarIngresoBtn.disabled = false;
+            registrarIngresoBtn.classList.remove('btn-secondary');
+            registrarIngresoBtn.classList.add('btn-primary');
+            registrarIngresoBtn.textContent = 'Registrar Ingreso';
+
+            registrarIngresoBtn.onclick = async () => {
+                try {
+                    const registerResponse = await fetch(`/api/solicitudes/${modalData.id}/registrar-ingreso`, {
+                        method: 'PUT',
+                    });
+
+                    if (registerResponse.ok) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Ingreso registrado',
+                            text: 'El ingreso se ha registrado correctamente.',
+                        });
+                        registrarIngresoBtn.disabled = true;
+                        registrarIngresoBtn.textContent = 'Registrado';
+                    } else {
+                        const errorData = await registerResponse.json();
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: errorData.message || 'No se pudo registrar el ingreso.',
+                        });
+                    }
+                } catch (err) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Ocurrió un error al intentar registrar el ingreso.',
+                    });
+                }
+            };
+        }
+
+        // Mostrar el modal
+        const modal = new bootstrap.Modal(document.getElementById('detallesModal'));
+        modal.show();
+    }
+});
+
+async function verDetalles(id) {
+    try {
+        const response = await fetch(`/api/solicitudes/${id}`);
+        
+        if (!response.ok) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Solicitud no encontrada',
+                text: 'No se ha encontrado registro de esta solicitud.',
+            });
+            return;
+        }
+
+        const data = await response.json();
+
+        // Mostrar datos de la solicitud en el modal
+        document.getElementById('detalleId').textContent = data.id;
+        document.getElementById('detalleEmpresa').textContent = data.empresa;
+        document.getElementById('detalleLugar').textContent = data.lugar;
+        document.getElementById('detalleLabor').textContent = data.labor;
+        // Actualización de clases del estado dinámico
+  
+  
+        const estadoElement = document.getElementById('detalleEstado');
+        estadoElement.textContent = data.estado_actual; // Usar el estado calculado desde el servidor
+        estadoElement.className = 'badge '; // Reiniciar clases
+
+        // Aplicar clases dinámicas basado en estado_actual
+        if (data.estado_actual.includes('pendiente ingreso')) {
+            estadoElement.classList.add('bg-warning');
+        } else if (data.estado_actual.includes('vencida')) {
+            estadoElement.classList.add('bg-danger');
+        } else if (data.estado_actual === 'en labor') {
+            estadoElement.classList.add('bg-info');
+        } else if (data.estado_actual === 'labor detenida') {
+            estadoElement.classList.add('bg-secondary');
+        } else {
+            estadoElement.classList.add('bg-success');
+        }
+
+
+        // Formatear fechas
+        const formatFecha = (fecha) => {
+            const date = new Date(fecha);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        };
+        document.getElementById('detalleInicio').textContent = formatFecha(data.inicio_obra);
+        document.getElementById('detalleFin').textContent = formatFecha(data.fin_obra);
+
+        // Mostrar colaboradores
+        const colaboradoresContainer = document.getElementById('detalleColaboradores');
+        colaboradoresContainer.innerHTML = ''; // Limpiar contenido previo
+
+        if (data.colaboradores && data.colaboradores.length > 0) {
+            data.colaboradores.forEach((col) => {
+                const colDiv = document.createElement('div');
+                colDiv.classList.add('col-md-4', 'mb-3');
+                colDiv.innerHTML = `
+                    <div class="card">
+                        <img src="${col.foto.replace(/\\/g, '/')}" class="card-img-top" alt="Foto de ${col.nombre}">
+                        <div class="card-body">
+                            <h6 class="card-title">${col.nombre}</h6>
+                            <p class="card-text">Cédula: ${col.cedula}</p>
+                        </div>
+                    </div>
+                `;
+                colaboradoresContainer.appendChild(colDiv);
+            });
+        } else {
+            colaboradoresContainer.innerHTML = '<p>No hay colaboradores disponibles.</p>';
+        }
+
+        // Configurar botón "Registrar Ingreso"
+        const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
+        const estadosNoPermitidos = [
+            'en labor',
+            'en labor - vencida',
+            'labor detenida',
+            'pendiente ingreso - vencido'
+        ];
+
+        if (estadosNoPermitidos.includes(data.estado)) {
+            registrarIngresoBtn.disabled = true;
+            registrarIngresoBtn.classList.add('btn-secondary');
+            registrarIngresoBtn.textContent = 'No disponible';
+        } else {
+            registrarIngresoBtn.disabled = false;
+            registrarIngresoBtn.classList.remove('btn-secondary');
+            registrarIngresoBtn.classList.add('btn-primary');
+            registrarIngresoBtn.textContent = 'Registrar Ingreso';
+
+            registrarIngresoBtn.onclick = async () => {
+                try {
+                    const registerResponse = await fetch(`/api/solicitudes/${id}/registrar-ingreso`, {
+                        method: 'PUT',
+                    });
+
+                    if (registerResponse.ok) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Ingreso registrado',
+                            text: 'El ingreso se ha registrado correctamente.',
+                        });
+                        registrarIngresoBtn.disabled = true;
+                        registrarIngresoBtn.textContent = 'Registrado';
+                    } else {
+                        const errorData = await registerResponse.json();
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: errorData.message || 'No se pudo registrar el ingreso.',
+                        });
+                    }
+                } catch (err) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Ocurrió un error al intentar registrar el ingreso.',
+                    });
+                }
+            };
+        }
+
+        // Mostrar el modal
+        const modal = new bootstrap.Modal(document.getElementById('detallesModal'));
+        modal.show();
+    } catch (error) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Ocurrió un error al obtener los detalles de la solicitud.',
+        });
+        console.error(error);
+    }
+}
+
+
+        function buscar() {
+            const id = document.getElementById('buscarId').value;
+            if (id) {
+                verDetalles(id);
+            } else {
+                alert('Por favor, ingrese un ID válido.');
+            }
+        } 
+
+        
+function escanearQR() {
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = 0;
+    overlay.style.left = 0;
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.background = 'rgba(0, 0, 0, 0.8)';
+    overlay.style.zIndex = 1000;
+
+    overlay.innerHTML = `
+        <div style="
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: auto;
+            height: auto;
+            aspect-ratio: 3/4;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #000;
+        ">
+            <video id="cameraVideo" style="width: 100%; height: 100%;" playsinline></video>
+            <div style="
+                position: absolute;
+                bottom: 10px;
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                padding: 0 10px;
+            ">
+                <button id="closeCamera" style="
+                    background: red;
+                    color: white;
+                    border: none;
+                    padding: 5px 10px;
+                    border-radius: 5px;
+                ">Cerrar</button>
+                <button id="switchCamera" style="
+                    background: blue;
+                    color: white;
+                    border: none;
+                    padding: 5px 10px;
+                    border-radius: 5px;
+                ">Cambiar cámara</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    let currentFacingMode = 'environment';
+    let stream = null;
+
+    const startCamera = async (facingMode) => {
+        try {
+            if (stream) {
+                stream.getTracks().forEach((track) => track.stop());
+            }
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
+            video.srcObject = stream;
+            video.play();
+            scanQRCode();
+        } catch (err) {
+            alert('Error al acceder a la cámara: ' + err.message);
+            document.body.removeChild(overlay);
+        }
+    };
+
+    const scanQRCode = () => {
+        const scan = () => {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+                if (code) {
+                    const qrUrl = code.data;
+                    const id = qrUrl.split('/').pop(); // Obtener el ID del final de la URL
+                    stopCamera();
+                    verDetalles(id);
+                    return;
+                }
+            }
+            requestAnimationFrame(scan);
+        };
+        scan();
+    };
+
+    const stopCamera = () => {
+        if (stream) {
+            stream.getTracks().forEach((track) => track.stop());
+        }
+        document.body.removeChild(overlay);
+    };
+
+    startCamera(currentFacingMode);
+
+    document.getElementById('closeCamera').onclick = stopCamera;
+
+    document.getElementById('switchCamera').onclick = () => {
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+        startCamera(currentFacingMode);
+    };
+} 
+</script>
+</body>
+</html>

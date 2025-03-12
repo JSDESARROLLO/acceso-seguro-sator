@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+
+  <style>
+    .vencido { color: #ff0000; }  
+
+    nav{
+      display: flex;
+      gap: 20px;
+
+    }
+  </style>
+</head>
+<body>
+  <nav class="flex   items-center bg-gray-800 text-white p-4" id="nav">
+    <a class="text-lg font-semibold" href="#">Vista SST -   <a href="/capacitacion/listado">Gestionar Capacitaciones</a>      </a>
+  
+    <a class="text-lg" href="/logout">Cerrar sesión</a>
+  </nav>
+
+  <div class="container mt-5">
+    <h1>Solicitudes</h1>
+    <div class="mb-3">
+      <label for="filtroId" class="form-label">Filtrar por ID:</label>
+      <input type="text" class="form-control" id="filtroId" placeholder="Ingrese el ID de la solicitud">
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Empresa</th>
+            <th>NIT</th>
+            <th>Inicio de Obra</th>
+            <th>Fin de Obra</th>
+            <th>Días Solicitados</th>
+            <th>Lugar</th>
+            <th>Labor</th>
+            <th>Interventor</th>
+            <th>Documentos</th>
+            <th>Colaboradores</th> <!-- Nueva columna -->
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tablaSolicitudes">
+          <% solicitud.forEach(solicitud => { %>
+              <tr class="solicitud-item" data-id="<%= solicitud.id %>">
+                  <td><%= solicitud.id %></td>
+                  <td><%= solicitud.empresa %></td>
+                  <td><%= solicitud.nit %></td>
+                  <td><%= solicitud.inicio_obra %></td>
+                  <td><%= solicitud.fin_obra %></td>
+                  <td><%= solicitud.dias_trabajo %></td>
+                  <td><%= solicitud.lugar %></td>
+                  <td><%= solicitud.labor %></td>
+                  <td><%= solicitud.interventor %></td>
+                  <td>
+                    <% const doc = solicitud_url_download.find(d => d.solicitud_id === solicitud.id); %>
+                    <% if (doc) { %>
+                      <button class="btn btn-success btn-sm descargar-btn" data-url="<%= doc.url %>">Descargar Documentos</button>
+                    <% } else { %>
+                      <button class="btn btn-info btn-sm generar-btn" data-id="<%= solicitud.id %>">Generar Documentos</button>
+                    <% } %>
+                  </td>
+                  <td>
+                    <button class="btn btn-info btn-sm" onclick="verColaboradores('<%= solicitud.id %>')">Ver Colaboradores</button>
+                  </td>
+                  <td>
+                    <% if (solicitud.estado === 'pendiente') { %>
+                      <form action="/aprobar-solicitud/<%= solicitud.id %>" method="POST" style="display:inline;">
+                        <button type="submit" class="btn btn-success btn-sm" id="aprobarBtn-<%= solicitud.id %>">Aprobar</button>
+                      </form>
+                      <button class="btn btn-danger btn-sm" data-toggle="modal" data-target="#modalNegar" data-id="<%= solicitud.id %>" data-empresa="<%= solicitud.empresa %>" data-nit="<%= solicitud.nit %>">
+                        Negar
+                      </button>
+                    <% } else { %>
+                      <span class="badge <%= ['negada'].includes(solicitud.estado) ? 'badge-danger' : 'badge-success' %>">
+                        <%= ['negada'].includes(solicitud.estado) ? 'Negada' : 'Aprobado' %>
+                      </span>
+                    <% } %>
+                  </td>
+              </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal para Negar Solicitud -->
+  <div class="modal fade" id="modalNegar" tabindex="-1" role="dialog" aria-labelledby="modalNegarLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalNegarLabel">Negar Solicitud</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="negarForm">
+            <div class="form-group">
+              <label for="empresa">Empresa:</label>
+              <input type="text" class="form-control" id="empresa" disabled>
+            </div>
+            <div class="form-group">
+              <label for="nit">NIT:</label>
+              <input type="text" class="form-control" id="nit" disabled>
+            </div>
+            <div class="form-group">
+              <label for="comentario">Comentario:</label>
+              <textarea class="form-control" id="comentario" name="comentario" rows="4"></textarea>
+            </div>
+            <button type="submit" class="btn btn-danger">Negar Solicitud</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Ver Colaboradores -->
+  <div class="modal fade" id="colaboradoresModal" tabindex="-1" role="dialog" aria-labelledby="colaboradoresModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="colaboradoresModalLabel">Colaboradores de la Solicitud</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p><strong>ID de la Solicitud:</strong> <span id="colaboradoresId"></span></p>
+          <p><strong>Empresa:</strong> <span id="colaboradoresEmpresa"></span></p>
+          <p><strong>Contratista:</strong> <span id="colaboradoresContratista"></span></p>
+          <div class="mb-3">
+            <label for="filtroEstado" class="form-label">Filtrar por Estado:</label>
+            <select class="form-select" id="filtroEstado">
+              <option value="todos">Todos</option>
+              <option value="habilitados">Habilitados</option>
+              <option value="inhabilitados">Inhabilitados</option>
+            </select>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Cédula</th>
+                  <th>Estado</th>
+                  <th>Curso SISO</th>
+                  <th>Plantilla SS</th>
+                  <th>Definir Plantilla SS</th>
+                  <th>Historial</th>
+                </tr>
+              </thead>
+              <tbody id="tablaColaboradores"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+  <!-- Modal para Definir Plantilla SS -->
+  <div class="modal fade" id="definirPlantillaModal" tabindex="-1" role="dialog" aria-labelledby="definirPlantillaModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="definirPlantillaModalLabel">Definir Plantilla de Seguridad Social</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="plantillaForm">
+            <input type="hidden" id="colaboradorId">
+            <input type="hidden" id="solicitudId">
+            <input type="hidden" id="plantillaId">
+            <div class="mb-3">
+              <label for="fechaInicio" class="form-label">Fecha de Inicio:</label>
+              <input type="date" class="form-control" id="fechaInicio" required>
+            </div>
+            <div class="mb-3">
+              <label for="fechaFin" class="form-label">Fecha de Fin:</label>
+              <input type="date" class="form-control" id="fechaFin" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Historial de Cursos -->
+  <div class="modal fade" id="historialModal" tabindex="-1" role="dialog" aria-labelledby="historialModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="historialModalLabel">Historial de Cursos</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <table class="table table-bordered">
+            <thead>
+              <tr>
+                <th>Curso</th>
+                <th>Estado</th>
+                <th>Puntaje</th>
+                <th>Fecha de Vencimiento</th>
+              </tr>
+            </thead>
+            <tbody id="tablaHistorial"></tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+  <script>
+    // Filtrar por ID
+    $('#filtroId').on('input', function() {
+      var idFiltro = $(this).val().toLowerCase();
+      $('#tablaSolicitudes .solicitud-item').each(function() {
+        var solicitudId = $(this).data('id').toString();
+        if (solicitudId.indexOf(idFiltro) !== -1) {
+          $(this).show();
+        } else {
+          $(this).hide();
+        }
+      });
+    });
+
+    // Modal para negar solicitud
+    $('#modalNegar').on('show.bs.modal', function(event) {
+      var button = $(event.relatedTarget);
+      var id = button.data('id');
+      var empresa = button.data('empresa');
+      var nit = button.data('nit');
+      var modal = $(this);
+      modal.find('#empresa').val(empresa);
+      modal.find('#nit').val(nit);
+      modal.find('#negarForm').attr('action', '/negar-solicitud/' + id);
+    });
+
+    // Descargar archivo
+    function descargarArchivo(url) {
+      Swal.fire({
+        title: 'Descargando...',
+        text: 'Por favor espera mientras se descarga el documento.',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+      });
+      window.open(url, '_blank');
+      Swal.close();
+    }
+
+    // Generar documentos
+    function generarDocumento(id) {
+      Swal.fire({
+        title: 'Generando...',
+        text: 'Por favor espera mientras se genera el documento.',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+      });
+      fetch(`/descargar-solicitud/${id}`)
+        .then(response => response.ok ? response.json() : Promise.reject('Error en la respuesta'))
+        .then(data => {
+          if (data.success) {
+            window.open(data.url, '_blank');
+            Swal.fire({ icon: 'success', title: 'Éxito', text: data.message || 'Documento generado correctamente' });
+            const btnContainer = document.querySelector(`tr[data-id="${id}"] td:nth-child(10)`);
+            if (btnContainer) {
+              btnContainer.innerHTML = `<button class="btn btn-success btn-sm descargar-btn" data-url="${data.url}">Descargar Documentos</button>`;
+              btnContainer.querySelector('.descargar-btn').addEventListener('click', function() { descargarArchivo(data.url); });
+            }
+          } else {
+            throw new Error(data.error || 'Error al generar el documento');
+          }
+        })
+        .catch(error => {
+          Swal.fire({ icon: 'error', title: 'Error', text: error.message || 'No se pudo generar el documento.' });
+          console.error('Error al generar:', error);
+        });
+    }
+
+    $('.descargar-btn').on('click', function() {
+      const url = $(this).data('url');
+      descargarArchivo(url);
+    });
+
+    $('.generar-btn').on('click', function() {
+      const id = $(this).data('id');
+      generarDocumento(id);
+    });
+
+    // Ver Colaboradores
+    async function verColaboradores(solicitudId) {
+    try {
+      const response = await fetch(`/api/sst/colaboradores/${solicitudId}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Error al obtener colaboradores');
+
+      // Depuración: Verifica los datos recibidos del backend
+      console.log('Datos recibidos del backend:', data);
+
+      // Rellenar información del modal
+      $('#colaboradoresId').text(data.id);
+      $('#colaboradoresEmpresa').text(data.empresa);
+      $('#colaboradoresContratista').text(data.contratista || 'N/A');
+
+      // Llenar la tabla de colaboradores
+      const tbody = $('#tablaColaboradores');
+      tbody.empty();
+
+      data.colaboradores.forEach(col => {
+        // Plantilla SS: Vigente, Vencido o No definida
+        const plantillaSS = col.plantillaSS 
+          ? (new Date(col.plantillaSS.fecha_fin) > new Date() ? 'Vigente' : 'Vencido') 
+          : 'No definida';
+
+        // Curso SISO: Usa "No" si es null o undefined
+        const cursoSisoEstado = col.cursoSiso || 'No';
+        const cursoSisoClass = cursoSisoEstado === 'Vencido' ? 'vencido' : '';
+
+        // Agregar fila a la tabla
+        tbody.append(`
+          <tr data-estado="${col.estado ? 'habilitado' : 'inhabilitado'}">
+            <td>${col.id}</td>
+            <td>${col.nombre}</td>
+            <td>${col.cedula}</td>
+            <td>${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
+            <td class="${cursoSisoClass}">${cursoSisoEstado}</td>
+            <td>${plantillaSS}</td>
+            <td><button class="btn btn-primary btn-sm" onclick="definirPlantilla(${col.id}, ${solicitudId})">Definir</button></td>
+            <td><button class="btn btn-info btn-sm" onclick="verHistorial(${col.id})">Ver</button></td>
+          </tr>
+        `);
+      });
+
+      // Filtro por estado (Habilitados/Inhabilitados)
+      $('#filtroEstado').off('change').on('change', function() {
+        const filtro = $(this).val();
+        $('#tablaColaboradores tr').each(function() {
+          const estado = $(this).data('estado');
+          if (filtro === 'todos' || 
+              (filtro === 'habilitados' && estado === 'habilitado') || 
+              (filtro === 'inhabilitados' && estado === 'inhabilitado')) {
+            $(this).show();
+          } else {
+            $(this).hide();
+          }
+        });
+      });
+
+      // Mostrar el modal
+      $('#colaboradoresModal').modal('show');
+    } catch (error) {
+      Swal.fire({ 
+        icon: 'error', 
+        title: 'Error', 
+        text: error.message || 'No se pudieron cargar los colaboradores.' 
+      });
+    }
+  }
+    // Definir Plantilla SS
+
+async function definirPlantilla(colaboradorId, solicitudId) {
+      $('#colaboradorId').val(colaboradorId);
+      $('#solicitudId').val(solicitudId);
+      $('#plantillaId').val('');
+      $('#fechaInicio').val('').removeClass('vencido');
+      $('#fechaFin').val('').removeClass('vencido');
+
+      try {
+        const response = await fetch(`/api/sst/plantilla-ss/${colaboradorId}`);
+        const data = await response.json();
+        console.log('Datos recibidos de la plantilla:', data); // Depuración
+
+        if (response.ok && data.plantilla) {
+          $('#plantillaId').val(data.plantilla.id);
+          $('#fechaInicio').val(data.plantilla.fecha_inicio);
+          $('#fechaFin').val(data.plantilla.fecha_fin);
+
+          const fechaFin = new Date(data.plantilla.fecha_fin);
+          const hoy = new Date();
+          if (fechaFin <= hoy) {
+            $('#fechaFin').addClass('vencido');
+          }
+        }
+      } catch (error) {
+        console.error('Error al cargar plantilla existente:', error);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar la plantilla existente.' });
+      }
+
+      $('#definirPlantillaModal').modal('show');
+    }
+
+    $('#plantillaForm').on('submit', async function(e) {
+      e.preventDefault();
+      const colaboradorId = $('#colaboradorId').val();
+      const solicitudId = $('#solicitudId').val();
+      const plantillaId = $('#plantillaId').val();
+      const fechaInicio = $('#fechaInicio').val();
+      const fechaFin = $('#fechaFin').val();
+
+      const method = plantillaId ? 'PUT' : 'POST';
+      const url = plantillaId ? `/api/sst/plantilla-ss/${plantillaId}` : '/api/sst/plantilla-ss';
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ colaboradorId, solicitudId, fechaInicio, fechaFin })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          Swal.fire({ icon: 'success', title: 'Éxito', text: 'Plantilla guardada correctamente.' });
+          $('#definirPlantillaModal').modal('hide');
+          verColaboradores(solicitudId); // Refrescar la tabla
+        } else {
+          throw new Error(data.message || 'Error al guardar la plantilla.');
+        }
+      } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+      }
+    });
+    
+    // Ver Historial de Cursos
+    async function verHistorial(colaboradorId) {
+      try {
+        const response = await fetch(`/api/sst/historial-cursos/${colaboradorId}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Error al obtener historial');
+
+        const tbody = $('#tablaHistorial');
+        tbody.empty();
+        data.historial.forEach(h => {
+          tbody.append(`
+            <tr>
+              <td>${h.nombre}</td>
+              <td>${h.estado}</td>
+              <td>${h.puntaje_obtenido}</td>
+              <td>${new Date(h.fecha_vencimiento).toLocaleDateString()}</td>
+            </tr>
+          `);
+        });
+
+        $('#historialModal').modal('show');
+      } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: error.message || 'No se pudo cargar el historial.' });
+      }
+    }
+  </script>
+</body>
+</html>

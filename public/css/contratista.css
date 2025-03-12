@@ -1,0 +1,24 @@
+#contentMayor {
+  display: flex;
+  justify-content: center; 
+}
+
+#contratistaFormulario{
+  height: 80vh;
+  overflow-y: scroll;
+}
+
+body > div > form,
+#personasListado {
+  height: 90vh;
+}
+
+.person-group {
+  position: relative;
+}
+
+.remove-person {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}

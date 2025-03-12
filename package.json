@@ -1,0 +1,56 @@
+{
+  "name": "coa-control-system",
+  "version": "1.0.0",
+  "description": "Sistema de control para Fortox",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/lib-storage": "^3.758.0",
+    "@supabase/supabase-js": "^2.47.12",
+    "@tailwindcss/forms": "^0.5.10",
+    "archiver": "^7.0.1",
+    "axios": "^1.7.9",
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "env": "^0.0.2",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.1",
+    "express-handlebars": "^8.0.1",
+    "formik": "^2.4.6",
+    "fs": "^0.0.1-security",
+    "fs-extra": "^11.2.0",
+    "get-stream": "^9.0.1",
+    "handlebars": "^4.7.8",
+    "html-pdf": "^3.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "moment-timezone": "^0.5.47",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.11.5",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^6.10.0",
+    "path": "^0.12.7",
+    "pdfkit": "^0.16.0",
+    "puppeteer": "^24.2.0",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.33.5",
+    "yup": "^1.6.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "Carlos Muñoz",
+  "license": "ISC"
+}

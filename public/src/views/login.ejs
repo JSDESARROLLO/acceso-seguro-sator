@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/index.css">
+  </head>
+  <body>
+    <div class="container">
+      <div class="login-card">
+        <div class="logo-card">
+          <img src="/img/logo-ga.jpg" alt="Logo" class="logo">
+          <h1>Iniciar Sesión</h1>
+        </div>
+        <div>
+          <form action="/login" method="POST">
+            <div class="form-group">
+              <label for="username">Usuario</label>
+              <input id="username" type="text" name="username" placeholder="Ingrese su usuario" required>
+            </div>
+            <div class="form-group">
+              <label for="password">Contraseña</label>
+              <input id="password" type="password" name="password" placeholder="Ingrese su contraseña" required>
+            </div>
+            <button type="submit">Ingresar</button>
+          </form>
+        </div>
+        <p class="register">
+          ¿No tienes cuenta? 
+          <a href="/register">Regístrate</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

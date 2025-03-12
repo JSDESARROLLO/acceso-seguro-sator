@@ -1,0 +1,661 @@
+/* Estilo general del contenedor */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  background-color: #f9f9f9;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Títulos principales */
+h1, h3 {
+  text-align: center;
+  font-family: Arial, sans-serif;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.logo {
+  display: block;
+  margin: 0 auto 20px;
+  max-width: 150px;
+}
+
+/* Estilo del formulario */
+form#novedadForm {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  gap: 10px;
+}
+
+input, select, textarea, button {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+input, select {
+  width: calc(50% - 10px);
+}
+
+textarea {
+  width: 100%;
+  height: 80px;
+  resize: none;
+}
+
+.double-textarea {
+  display: flex;
+  gap: 10px;
+}
+
+.double-textarea textarea {
+  width: calc(50% - 5px);
+}
+
+/* Botones */
+button[type="submit"] {
+  display: block;
+  margin: 0 auto;
+  background-color: #007BFF;
+  color: white;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button[type="submit"]:hover {
+  background-color: #0056b3;
+}
+
+/* Contenedor de destinatarios */
+.destinatarios-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.destinatarios-placeholder {
+  font-style: italic;
+  color: #999;
+}
+
+/* Tabla de novedades */
+#listaNovedades {
+  width: 100%;
+  /* border-collapse: collapse; */
+  /* margin-top: 20px;  */ 
+  margin: 50px; 
+}
+
+
+
+
+#listaNovedades thead th {
+  background-color: #f2f2f2;
+  border-bottom: 2px solid #ddd;
+  padding: 5px;
+  text-align: left; 
+}
+
+
+#listaNovedades tbody td {
+  border-bottom: 1px solid #ddd;
+  padding: 10px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Muestra '...' cuando el texto se desborda */
+  white-space: nowrap; /* Evita que el texto se envuelva en varias líneas */
+}
+
+
+#listaNovedades    {  
+  border-collapse:inherit;
+}
+
+/* Modal */
+#modalEnviar {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+#modalEnviar.hidden {
+  display: none;
+}
+
+.modal h3 {
+  margin-top: 0;
+}
+
+.modal ul {
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.modal ul li {
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+/* Overlay */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.loading-msg {
+  color: white;
+  font-size: 18px;
+  font-family: Arial, sans-serif;
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  margin-top: 20px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: #777;
+}
+
+
+/* Estilos para el overlay */
+#loadingOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Fondo semitransparente */
+  z-index: 9999; /* Asegura que esté encima de todo */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#loadingOverlay.hidden {
+  display: none; /* Oculta el overlay cuando no se necesita */
+}
+
+/* Contenedor del mensaje de carga */
+.loading-msg {
+  color: white;
+  font-size: 1.5rem;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Animación del círculo */
+.loading-msg::before {
+  content: '';
+  width: 50px;
+  height: 50px;
+  border: 5px solid white;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+/* Animación de giro */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* Estilo general para el modal */
+#modalConfirmacion {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+/* Ocultar por defecto */
+#modalConfirmacion.hidden {
+  display: none;
+}
+
+/* Contenedor principal del modal */
+.modal-container {
+  background: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.3s ease-in-out;
+}
+
+/* Header del modal */
+.modal-header {
+  background: #003366;
+  color: #fff;
+  padding: 1em;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.5em;
+  cursor: pointer;
+}
+
+/* Cuerpo del modal */
+.modal-body {
+  padding: 1.5em;
+  line-height: 1.6;
+  color: #333;
+}
+
+.modal-body ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.modal-body li {
+  margin: 0.5em 0;
+  font-size: 1em;
+}
+
+/* Footer del modal */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1em;
+  gap: 1em;
+  background: #f9f9f9;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.btn-cancel {
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  padding: 0.7em 1.5em;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-confirm {
+  background: #27ae60;
+  color: #fff;
+  border: none;
+  padding: 0.7em 1.5em;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  background: #c0392b;
+}
+
+.btn-confirm:hover {
+  background: #218c53;
+}
+
+/* Animación */
+@keyframes slideIn {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+
+
+
+ 
+/* From Uiverse.io by vinodjangid07 */ 
+
+
+.content-sendEmail-card { 
+margin-left: 10px;
+padding: 70px;
+width: 1000px;
+min-height: 550px;
+height: fit-content;
+background-color: rgb(255, 250, 250);
+border-radius: 10px;
+border: 1px solid rgb(206, 206, 206);
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+justify-content: space-between; 
+gap: 15px;
+position: relative;
+font-family: Arial, Helvetica, sans-serif;
+box-shadow: 0px 10px 10px rgba(0, 0, 0, 0.066);
+}
+.content-optiopns{
+  margin: 10px;
+}
+.opcionFiltro{
+  background-color: #fff;
+  margin-right: 5px;
+  border-radius: 0;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+
+
+}
+
+
+.opcionFiltro.selected {
+  color: #007BFF;  /* Color al seleccionar el filtro */
+  font-weight: bold;  /* Hacerlo más destacado */
+}
+
+.opcionFiltro:hover{
+  color: #007BFF;
+}
+
+.opcionFiltro.two{
+  border-right: 1px solid black;
+}
+
+.content-sendEmail-heading { 
+width: 100%;
+justify-content: space-between;
+display: flex;
+color: rgb(34, 34, 34);
+font-weight: 800;
+}
+.content-sendEmail-para {
+font-size: 18px;
+font-weight: 400;
+color: rgb(51, 51, 51);
+}
+.button-wrapper {
+width: 100%;
+height: auto;
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 20px;
+}
+.content-sendEmail-button {
+width: 50%;
+padding: 8px 0;
+border: none;
+border-radius: 5px;
+cursor: pointer;
+}
+.accept {
+background-color: rgb(34, 34, 34);
+color: white;
+}
+.reject {
+background-color: #ececec;
+color: rgb(34, 34, 34);
+}
+.accept:hover {
+background-color: rgb(0, 0, 0);
+}
+.reject:hover {
+background-color: #ddd;
+}
+.exit-button {
+position: absolute;
+top: 17px;
+right: 17px;
+width: 20px;
+height: 20px;
+display: flex;
+align-items: center;
+justify-content: center;
+background-color: transparent;
+border: none;
+border-radius: 5px;
+cursor: pointer;
+}
+.exit-button:hover {
+background-color: #ddd;
+color: white;
+}
+.svgIconCross {
+height: 10px;
+}
+
+.logos{
+width: 70px;
+height: 40px;
+}
+
+.title-span{
+font-size: 25px;
+}
+.logo-fortox{
+height: 60px;
+}
+
+.content-novedad-gestion{
+  width: 100%;
+display: flex;
+}
+
+.gestion p,
+.novedad p {
+font-size: 14px;
+word-wrap: break-word;
+padding-right: 7px;
+
+}
+.novedad{
+border-right: 1px solid black;
+}
+
+.novedad,
+.gestion{
+width: 50%;
+padding-left: 15px;
+}
+
+.title-gn{
+color: rgb(34, 34, 34);
+font-weight: 800;
+font-size: 20px;
+}
+
+.comentario-puesto{
+
+max-width: 220px; 
+padding: 8px;
+border-radius: 12px;
+border: 1.5px solid lightgrey;
+outline: none;
+transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+box-shadow: 0px 0px 20px -18px;
+}
+
+.comentario-puesto:hover {
+border: 2px solid lightgrey;
+box-shadow: 0px 0px 20px -17px;
+}
+
+.comentario-puesto:active {
+transform: scale(0.95);
+}
+
+.comentario-puesto:focus {
+border: 2px solid grey;
+} 
+
+
+.list-destinatarios ul li{
+border-bottom: 1px solid rgb(34, 34, 34);
+padding-bottom: 4px;
+cursor: pointer;
+
+list-style: none;
+}
+
+list-destinatarios .title-gn{
+font-size: 12px;
+}
+
+
+.list-destinatarios ul {
+display: flex;
+flex-direction: column;
+overflow-y: scroll;
+gap: 20px;
+
+padding: 0 30px;
+}
+
+.list-destinatarios {
+margin-left: 40px;
+width: 350px;
+background-color: rgb(255, 250, 250);
+border-radius: 10px;
+border: 1px solid rgb(206, 206, 206);
+display: flex;
+flex-direction: column;
+align-items: flex-start; 
+font-family: Arial, Helvetica, sans-serif;
+box-shadow: 0px 10px 10px rgba(0, 0, 0, 0.066);
+height: 520px;
+padding: 20px 20px;
+
+}
+
+
+.content-img{
+display: flex;
+justify-content: center;
+gap: 8px;
+width: 100%;
+
+}
+
+.emal-img{
+border-radius: 5px;
+max-height: 240px;
+
+width: 240px;
+}
+
+.content-two{
+display: flex; 
+width: 100%;
+
+}
+
+.content-two .content1{
+width: 50%; 
+}
+ 
+
+
+
+.body-content {
+  opacity: 0;
+  visibility: hidden;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  justify-content: center;
+  align-items: center; 
+  z-index: 100; /* Por encima del fondo oscuro */
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Fondo oscuro semitransparente */
+  opacity: 0;
+  visibility: hidden;
+  z-index: 99; /* Por debajo del modal */
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+
+  
+
+.group p{ 
+  margin-right: 50px;
+}
+
+.predio{
+  display: flex;  
+  align-items: center;
+}
+
+.predio span{ 
+  padding-left: 3px;
+}
+
+.predio input{
+  margin-left: 10px;
+}
+
+.enviar{
+  cursor: pointer;
+}
+
+ 
