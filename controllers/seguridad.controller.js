@@ -232,14 +232,30 @@ controller.qrAccesosModal = async (req, res) => {
 
         const { id: userId, username } = decoded;
 
-        // Paso 1: Obtener datos del colaborador por su ID
+        // Paso 1: Obtener datos del colaborador por su ID, incluyendo Curso SISO y Plantilla SS
         const [colaborador] = await connection.execute(
             `
-            SELECT id, solicitud_id, cedula, nombre, foto, cedulaFoto, estado
-            FROM colaboradores 
-            WHERE id = ?
+            SELECT 
+                c.id, c.solicitud_id, c.cedula, c.nombre, c.foto, c.cedulaFoto, c.estado,
+                rc.estado AS curso_siso_estado, rc.fecha_vencimiento AS curso_siso_vencimiento,
+                pss.fecha_inicio AS plantilla_ss_inicio, pss.fecha_fin AS plantilla_ss_fin
+            FROM colaboradores c
+            LEFT JOIN (
+                SELECT rc.colaborador_id, rc.estado, rc.fecha_vencimiento
+                FROM resultados_capacitaciones rc
+                JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
+                WHERE cap.nombre = 'Curso SISO' AND rc.colaborador_id = ?
+                ORDER BY rc.created_at DESC LIMIT 1
+            ) rc ON c.id = rc.colaborador_id
+            LEFT JOIN (
+                SELECT colaborador_id, fecha_inicio, fecha_fin
+                FROM plantilla_seguridad_social
+                WHERE colaborador_id = ?
+                ORDER BY created_at DESC LIMIT 1
+            ) pss ON c.id = pss.colaborador_id
+            WHERE c.id = ?
             `,
-            [id]
+            [id, id, id]
         );
 
         if (!colaborador.length) {
@@ -319,8 +335,31 @@ controller.qrAccesosModal = async (req, res) => {
                 ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
                 : null);
 
-        // Solo incluir el colaborador específico
-        const colaboradores = [colaborador[0]];
+        // Procesar Curso SISO y Plantilla SS
+        let cursoSisoEstado = 'No';
+        if (colaborador[0].curso_siso_estado) {
+            if (colaborador[0].curso_siso_estado === 'APROBADO') {
+                const fechaVencimiento = new Date(colaborador[0].curso_siso_vencimiento);
+                const hoy = new Date();
+                cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
+            } else {
+                cursoSisoEstado = 'Perdido';
+            }
+        }
+
+        let plantillaSSEstado = 'No definida';
+        if (colaborador[0].plantilla_ss_fin) {
+            const fechaFin = new Date(colaborador[0].plantilla_ss_fin);
+            const hoy = new Date();
+            plantillaSSEstado = fechaFin > hoy ? 'Vigente' : 'Vencida';
+        }
+
+        // Solo incluir el colaborador específico con los datos procesados
+        const colaboradores = [{
+            ...colaborador[0],
+            cursoSiso: cursoSisoEstado,
+            plantillaSS: plantillaSSEstado
+        }];
 
         // Definir estados no permitidos para ingreso, entrada y salida
         const estadosNoPermitidosIngreso = [
@@ -347,7 +386,7 @@ controller.qrAccesosModal = async (req, res) => {
             }
         };
 
-        // Respuesta exacta como solicitaste
+        // Renderizar la vista
         res.render('seguridad', {
             solicitud,
             modalData: {
