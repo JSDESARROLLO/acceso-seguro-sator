@@ -556,22 +556,41 @@ router.put('/actualizar-estado-colaborador/:id', async (req, res) => {
         const colaboradorId = req.params.id;
         const { estado } = req.body;
 
+        // Validar que estado sea booleano
+        if (typeof estado !== 'boolean') {
+            return res.status(400).json({ success: false, message: 'El estado debe ser true o false' });
+        }
+
         // Actualizar el estado del colaborador
-        await connection.execute(
+        const [result] = await connection.execute(
             'UPDATE colaboradores SET estado = ? WHERE id = ?',
             [estado, colaboradorId]
         );
 
-        // Registrar el cambio en el historial
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'Colaborador no encontrado' });
+        }
+
+        // Registrar en el historial
         await connection.execute(
             'INSERT INTO historial_estados_colaboradores (colaborador_id, solicitud_id, estado) SELECT ?, solicitud_id, ? FROM colaboradores WHERE id = ?',
             [colaboradorId, estado, colaboradorId]
         );
 
-        res.json({ success: true, message: 'Estado del colaborador actualizado correctamente' });
+        // Devolver datos actualizados del colaborador
+        const [updatedColaborador] = await connection.execute(
+            'SELECT id, cedula, nombre, foto, cedulaFoto, estado FROM colaboradores WHERE id = ?',
+            [colaboradorId]
+        );
+
+        res.json({
+            success: true,
+            message: 'Estado actualizado correctamente',
+            colaborador: updatedColaborador[0]
+        });
     } catch (error) {
-        console.error('Error al actualizar estado del colaborador:', error);
-        res.status(500).json({ success: false, message: 'Error al actualizar el estado del colaborador' });
+        console.error('Error al actualizar estado:', error);
+        res.status(500).json({ success: false, message: 'Error al actualizar el estado' });
     }
 });
 
@@ -594,7 +613,123 @@ router.get('/obtener-colaboradores-inactivos/:solicitudId', async (req, res) => 
   }
 });
 
+// Agregar esta ruta para obtener todos los colaboradores (habilitados y deshabilitados)
+router.get('/obtener-colaboradores-todos/:solicitudId', async (req, res) => {
+  try {
+    const { solicitudId } = req.params;
 
+    // Obtener información de la solicitud
+    const [solicitudData] = await connection.execute(
+      'SELECT id, empresa, nit FROM solicitudes WHERE id = ?',
+      [solicitudId]
+    );
 
+    if (!solicitudData.length) {
+      return res.status(404).json({ success: false, message: 'Solicitud no encontrada' });
+    }
+
+    // Obtener TODOS los colaboradores sin filtrar por estado
+    const [colaboradores] = await connection.execute(`
+      SELECT 
+        id, 
+        cedula, 
+        nombre, 
+        foto, 
+        cedulaFoto, 
+        estado
+      FROM colaboradores 
+      WHERE solicitud_id = ?
+    `, [solicitudId]);
+
+    // Convertir valores booleanos
+    const colaboradoresFormateados = colaboradores.map(col => ({
+      ...col,
+      estado: Boolean(col.estado)
+    }));
+
+    res.json({
+      success: true,
+      solicitud: solicitudData[0],
+      colaboradores: colaboradoresFormateados
+    });
+  } catch (error) {
+    console.error('Error al obtener colaboradores:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener colaboradores',
+      error: error.message
+    });
+  }
+});
+
+// Modificación de la ruta para incluir el tipo de registro (entrada/salida)
+router.get('/obtener-historial-colaborador/:colaboradorId', async (req, res) => {
+  try {
+    const { colaboradorId } = req.params;
+    
+    // Usar la tabla 'registros' e incluir el campo tipo
+    const [historial] = await connection.execute(`
+      SELECT 
+        c.nombre AS nombre_colaborador,
+        u.empresa,
+        u.nit,
+        r.tipo,
+        DATE_FORMAT(r.fecha_hora, '%d/%m/%Y %H:%i:%s') as fecha_hora,
+        r.estado_actual,
+        s.lugar,
+        DATE_FORMAT(r.created_at, '%d/%m/%Y %H:%i:%s') as registro_hecho,
+        us.username AS usuario_registro
+      FROM registros r
+      JOIN colaboradores c ON r.colaborador_id = c.id
+      JOIN solicitudes s ON r.solicitud_id = s.id
+      JOIN users u ON s.usuario_id = u.id
+      JOIN users us ON r.usuario_id = us.id
+      WHERE r.colaborador_id = ?
+      ORDER BY r.fecha_hora DESC
+    `, [colaboradorId]);
+    
+    res.json(historial);
+  } catch (error) {
+    console.error('Error al obtener historial del colaborador:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al obtener historial',
+      error: error.message
+    });
+  }
+});
+
+// Agregar esta ruta para obtener datos de un colaborador específico
+router.get('/obtener-colaborador/:colaboradorId', async (req, res) => {
+  try {
+    const { colaboradorId } = req.params;
+    
+    const [colaboradores] = await connection.execute(`
+      SELECT 
+        id, 
+        cedula, 
+        nombre, 
+        foto, 
+        cedulaFoto, 
+        estado,
+        solicitud_id
+      FROM colaboradores 
+      WHERE id = ?
+    `, [colaboradorId]);
+    
+    if (!colaboradores.length) {
+      return res.status(404).json({ success: false, message: 'Colaborador no encontrado' });
+    }
+    
+    res.json(colaboradores[0]);
+  } catch (error) {
+    console.error('Error al obtener datos del colaborador:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al obtener datos del colaborador',
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;

@@ -6,6 +6,8 @@
   <title><%= title %></title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
  
   <style>
     :root {
@@ -390,6 +392,7 @@
                   <% } %>
                   <td>
                     <button class="btn btn-info btn-sm" id="verDETALLES-<%= accion.solicitud_id %>">Ver</button>
+                    <button class="btn btn-primary btn-sm ver-colaboradores" data-solicitud-id="<%= accion.solicitud_id %>">Colaboradores</button>
                   </td>
                   <% if (username === "COA") { %>
                     <td>
@@ -606,6 +609,49 @@
         </div>
         <div class="modal-body text-center">
           <img id="fotoAmpliada" src="" alt="Foto Ampliada" class="img-fluid">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalColaboradores" tabindex="-1" role="dialog" aria-labelledby="modalColaboradoresLabel">
+    <div class="modal-dialog modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalColaboradoresLabel">Colaboradores de la Solicitud</h5>
+          <button type="button" class="close" data-bs-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">×</span></button>
+        </div>
+        <div class="modal-body">
+          <p><strong>ID de la Solicitud:</strong> <span id="modalSolicitudId"></span></p>
+          <p><strong>Empresa:</strong> <span id="modalEmpresa"></span></p>
+          <div class="mb-3">
+            <label for="filtroModalEstado" class="form-label">Filtrar por Estado:</label>
+            <select class="form-select" id="filtroModalEstado">
+              <option value="todos">Todos</option>
+              <option value="habilitados">Habilitados</option>
+              <option value="inhabilitados">Inhabilitados</option>
+            </select>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Cédula</th>
+                  <th>Estado</th>
+                  <th>Curso SISO</th>
+                  <th>Plantilla SS</th>
+                  <th>Acciones</th>
+                  <th>Historial</th>
+                </tr>
+              </thead>
+              <tbody id="tablaModalColaboradores"></tbody>
+            </table>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -843,7 +889,7 @@
         if (!result.isConfirmed) return;
 
         button.disabled = true;
-        button.innerHTML = 'Procesando...';
+        button.innerHTML = accion === 'detener' ? 'Detener Labor' : 'Reanudar Labor';
 
         const endpoint = accion === 'detener' ? `/solicitudes/${solicitudId}/detener-labor` : `/solicitudes/${solicitudId}/reanudar-labor`;
         const response = await fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' } });
@@ -1014,6 +1060,7 @@
               </td>` : ''}
             <td>
               <button class="btn btn-info btn-sm" id="verDETALLES-${accion.solicitud_id}">Ver</button>
+              <button class="btn btn-primary btn-sm ver-colaboradores" data-solicitud-id="${accion.solicitud_id}">Colaboradores</button>
             </td>
             ${username === "COA" ? `
               <td>
@@ -1079,6 +1126,9 @@
           });
         });
         // console.log('[DEBUG] Evento asignado a eliminar-solicitud:', btn.getAttribute('data-solicitud-id'));
+      });
+      document.querySelectorAll('.ver-colaboradores').forEach(btn => {
+        btn.addEventListener('click', () => manejarVerColaboradores(btn));
       });
     }
 
@@ -1174,6 +1224,252 @@
         cargarDatosTablas();
       });
     });
+
+    // Función para ver y gestionar colaboradores
+    function manejarVerColaboradores(btn) {
+      const solicitudId = btn.getAttribute('data-solicitud-id');
+      fetch(`/obtener-colaboradores-todos/${solicitudId}`)
+        .then(response => response.json())
+        .then(data => {
+          console.log("Datos de colaboradores:", data);
+          
+          // Actualizar información del modal
+          document.getElementById('modalSolicitudId').textContent = solicitudId;
+          document.getElementById('modalEmpresa').textContent = data.solicitud?.empresa || '';
+          
+          const tbody = document.getElementById('tablaModalColaboradores');
+          tbody.innerHTML = '';
+          
+          if (data.colaboradores && data.colaboradores.length > 0) {
+            data.colaboradores.forEach(col => {
+              // Estado de Curso SISO y Plantilla SS (pueden ser null en interventor)
+              const cursoSiso = col.cursoSiso || 'No definido';
+              const plantillaSS = col.plantillaSS ? 
+                (new Date(col.plantillaSS.fecha_fin) > new Date() ? 'Vigente' : 'Vencido') : 
+                'No definida';
+              
+              // Botón de acción para habilitar/deshabilitar
+              const accionBtn = col.estado ? 
+                `<button class="btn btn-danger btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="false">Deshabilitar</button>` :
+                `<button class="btn btn-success btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="true">Habilitar</button>`;
+              
+              const row = document.createElement('tr');
+              row.setAttribute('data-colaborador-id', col.id);
+              row.setAttribute('data-estado', col.estado ? 'habilitado' : 'inhabilitado');
+              row.innerHTML = `
+                <td>${col.id}</td>
+                <td>${col.nombre}</td>
+                <td>${col.cedula}</td>
+                <td class="estado-colaborador">${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
+                <td>${cursoSiso}</td>
+                <td>${plantillaSS}</td>
+                <td class="acciones-colaborador">${accionBtn}</td>
+                <td><button class="btn btn-info btn-sm ver-historial-colab" data-colaborador-id="${col.id}">Ver</button></td>
+              `;
+              
+              tbody.appendChild(row);
+            });
+          } else {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="8" class="text-center">No hay colaboradores para mostrar</td>
+              </tr>
+            `;
+          }
+          
+          // Mostrar el modal
+          $('#modalColaboradores').modal('show');
+          
+          // Asignar eventos a los botones
+          document.querySelectorAll('.accion-int-colaborador').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              const colaboradorId = this.getAttribute('data-colaborador-id');
+              const nuevoEstado = this.getAttribute('data-nuevo-estado') === 'true';
+              cambiarEstadoColaboradorInterventor(colaboradorId, nuevoEstado, e);
+            });
+          });
+          
+          document.querySelectorAll('.ver-historial-colab').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              const colaboradorId = this.getAttribute('data-colaborador-id');
+              verHistorialColaborador(colaboradorId);
+            });
+          });
+          
+          // Filtro por estado
+          document.getElementById('filtroModalEstado').addEventListener('change', aplicarFiltroModalEstado);
+        })
+        .catch(error => {
+          console.error('Error al obtener colaboradores:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudieron cargar los colaboradores: ' + error.message
+          });
+        });
+    }
+
+    // Función para aplicar filtro en el modal de colaboradores
+    function aplicarFiltroModalEstado() {
+      const filtro = document.getElementById('filtroModalEstado').value;
+      console.log("Aplicando filtro en modal:", filtro);
+      
+      const filas = document.querySelectorAll('#tablaModalColaboradores tr');
+      let contador = 0;
+      
+      filas.forEach(fila => {
+        const dataEstado = fila.getAttribute('data-estado');
+        if (!dataEstado) return; // Ignorar filas sin atributo de estado
+        
+        if (filtro === 'todos' || 
+            (filtro === 'habilitados' && dataEstado === 'habilitado') || 
+            (filtro === 'inhabilitados' && dataEstado === 'inhabilitado')) {
+          fila.style.display = '';
+          contador++;
+        } else {
+          fila.style.display = 'none';
+        }
+      });
+      
+      console.log(`Se muestran ${contador} filas de ${filas.length}`);
+    }
+
+    // Función para cambiar el estado de un colaborador (interventor)
+    async function cambiarEstadoColaboradorInterventor(colaboradorId, nuevoEstado, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      
+      try {
+        console.log(`Cambiando estado del colaborador ${colaboradorId} a ${nuevoEstado} (interventor)`);
+        
+        // Desactivar el botón
+        const boton = event.target;
+        boton.disabled = true;
+        boton.textContent = 'Procesando...';
+        
+        const response = await fetch(`/actualizar-estado-colaborador/${colaboradorId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ estado: nuevoEstado, usuario: username })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'Error al actualizar el estado');
+        }
+        
+        // Actualizar la fila en la tabla
+        const fila = document.querySelector(`tr[data-colaborador-id="${colaboradorId}"]`);
+        
+        if (fila) {
+          // Actualizar texto y atributos
+          fila.querySelector('.estado-colaborador').textContent = nuevoEstado ? 'Habilitado' : 'Inhabilitado';
+          fila.setAttribute('data-estado', nuevoEstado ? 'habilitado' : 'inhabilitado');
+          
+          // Actualizar botón
+          const nuevoBoton = nuevoEstado ? 
+            `<button class="btn btn-danger btn-sm accion-int-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="false">Deshabilitar</button>` :
+            `<button class="btn btn-success btn-sm accion-int-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="true">Habilitar</button>`;
+          
+          fila.querySelector('.acciones-colaborador').innerHTML = nuevoBoton;
+          
+          // Reactivar eventos para el nuevo botón
+          fila.querySelector('.accion-int-colaborador').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const colId = this.getAttribute('data-colaborador-id');
+            const newState = this.getAttribute('data-nuevo-estado') === 'true';
+            cambiarEstadoColaboradorInterventor(colId, newState, e);
+          });
+          
+          // Aplicar filtro actual
+          aplicarFiltroModalEstado();
+        }
+        
+        // Mensaje de éxito
+        Swal.fire({
+          icon: 'success',
+          title: 'Éxito',
+          text: `Colaborador ${nuevoEstado ? 'habilitado' : 'deshabilitado'} correctamente`,
+          timer: 1500,
+          showConfirmButton: false
+        });
+        
+      } catch (error) {
+        console.error('Error:', error);
+        
+        // Reactivar el botón
+        if (boton) {
+          boton.disabled = false;
+          boton.textContent = nuevoEstado ? 'Habilitar' : 'Deshabilitar';
+        }
+        
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: error.message
+        });
+      }
+    }
+
+    // Función para ver el historial de un colaborador
+    function verHistorialColaborador(colaboradorId) {
+      fetch(`/obtener-historial-colaborador/${colaboradorId}`)
+        .then(response => response.json())
+        .then(data => {
+          console.log('Historial del colaborador:', data);
+          
+          // Usar el modal de historial existente
+          const tableBody = document.getElementById('historialTableBody');
+          tableBody.innerHTML = '';
+          
+          if (data && data.length > 0) {
+            data.forEach(registro => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${registro.nombre_colaborador}</td>
+                <td>${registro.empresa}</td>
+                <td>${registro.nit}</td>
+                <td>${registro.tipo}</td>
+                <td>${registro.lugar}</td>
+                <td>${registro.usuario_registro}</td>
+                <td>${registro.registro_hecho}</td>
+                <td>${registro.fecha_hora}</td>
+                <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual}</span></td>
+              `;
+              tableBody.appendChild(row);
+            });
+          } else {
+            tableBody.innerHTML = '<tr><td colspan="9" class="text-center">No hay registros de ingresos o salidas para este colaborador</td></tr>';
+          }
+          
+          // Ocultar el modal de colaboradores y mostrar el de historial
+          $('#modalColaboradores').modal('hide');
+          $('#historialModal').modal('show');
+          
+          // Configurar el cierre del modal historial para volver al modal de colaboradores
+          $('#historialModal').on('hidden.bs.modal', function() {
+            $('#modalColaboradores').modal('show');
+          });
+        })
+        .catch(error => {
+          console.error('Error al obtener historial del colaborador:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo obtener el historial del colaborador'
+          });
+        });
+    }
   </script>
 </body>
 </html>

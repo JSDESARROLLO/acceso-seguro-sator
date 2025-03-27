@@ -23,6 +23,9 @@
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <link rel="stylesheet" href="/css/contratista.css">
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
   <style>
     .btn-primary {
       background-color: #CC9000;
@@ -64,6 +67,51 @@
 
     nav{
       background-color: #CC9000;
+    }
+
+    .form-select {
+      display: block;
+      width: 100%;
+      padding: .375rem .75rem;
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 1.5;
+      color: #212529;
+      background-color: #fff;
+      background-clip: padding-box;
+      border: 1px solid #ced4da;
+      border-radius: .25rem;
+      transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    }
+    
+    #modalDisabledCollaborators {
+      z-index: 1050;
+    }
+    
+    #historialColaboradorModal {
+      z-index: 1060;
+    }
+    
+    .badge-success {
+      background-color: #28a745;
+      color: white;
+    }
+    
+    .badge-danger {
+      background-color: #dc3545;
+      color: white;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: .25em .4em;
+      font-size: 75%;
+      font-weight: 700;
+      line-height: 1;
+      text-align: center;
+      white-space: nowrap;
+      vertical-align: baseline;
+      border-radius: .25rem;
     }
   </style>
 </head>
@@ -111,21 +159,47 @@
         </div>
 
         <!-- Modal Colaboradores Deshabilitados -->
-        <div id="modalDisabledCollaborators" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
-          <div class="bg-ga-white w-11/12 sm:w-96 rounded-lg shadow-lg overflow-hidden">
-            <div class="px-6 py-4 flex justify-between items-center bg-ga-navy text-ga-white">
-              <h5 class="text-xl font-semibold">Colaboradores Deshabilitados</h5>
-              <button type="button" class="hover:text-ga-gold" onclick="closeDisabledModal()">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div class="px-6 py-4 max-h-96 overflow-y-auto" id="disabled-collaborators-list">
-              <!-- Lista de colaboradores deshabilitados se cargará aquí -->
-            </div>
-            <div class="px-6 py-3 flex justify-end border-t border-ga-cream bg-ga-light">
-              <button type="button" class="bg-ga-gold text-ga-white py-2 px-4 rounded-md hover:bg-ga-navy" onclick="closeDisabledModal()">Cerrar</button>
+        <div id="modalDisabledCollaborators" class="modal fade" tabindex="-1" role="dialog">
+          <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Colaboradores de la Solicitud</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
+              <div class="modal-body">
+                <p><strong>ID de la Solicitud:</strong> <span id="colaboradoresId"></span></p>
+                <p><strong>Empresa:</strong> <span id="colaboradoresEmpresa"></span></p>
+                <div class="mb-3">
+                  <label for="filtroEstado" class="form-label">Filtrar por Estado:</label>
+                  <select class="form-select" id="filtroEstado">
+                    <option value="todos">Todos</option>
+                    <option value="habilitados">Habilitados</option>
+                    <option value="inhabilitados">Inhabilitados</option>
+                  </select>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-bordered">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Cédula</th>
+                        <th>Estado</th>
+                        <th>Curso SISO</th>
+                        <th>Plantilla SS</th>
+                        <th>Acciones</th>
+                        <th>Historial</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tablaColaboradores"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+              </div>
             </div>
           </div>
         </div>
@@ -142,7 +216,7 @@
             </svg>
             Agregar Colaborador
           </button>
-          <button type="button" id="show-disabled-collaborators" class="mt-4 ml-4 bg-ga-navy hover:bg-ga-gold text-ga-white font-bold py-2 px-4 rounded transition-colors duration-200" disabled>
+          <button type="button" id="show-disabled-collaborators" class="mt-4 ml-4 bg-ga-navy hover:bg-ga-gold text-ga-white font-bold py-2 px-4 rounded transition-colors duration-200 hidden">
             Colaboradores Deshabilitados
           </button>
           <p class="text-sm text-gray-600 mt-2">* Debe agregar al menos un colaborador</p>
@@ -160,9 +234,6 @@
                   <span id="arl-filename" class="text-gray-500">Ningún archivo seleccionado</span>
                 </label>
               </div>
-              <button type="button" id="change-arl" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
-                Cambiar
-              </button>
             </div>
             <div id="arl-preview" class="mt-2 p-2 border border-gray-300 rounded-md"></div>
           </div>
@@ -175,9 +246,6 @@
                   <span id="pasocial-filename" class="text-gray-500">Ningún archivo seleccionado</span>
                 </label>
               </div>
-              <button type="button" id="change-pasocial" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
-                Cambiar
-              </button>
             </div>
             <div id="pasocial-preview" class="mt-2 p-2 border border-gray-300 rounded-md"></div>
           </div>
@@ -257,224 +325,651 @@
     <p class="ml-4 text-white text-lg">Procesando archivos...</p>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
-</body>
-</html>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('formulario');
+      const addPersonBtn = document.getElementById('add-person');
+      const personasContainer = document.getElementById('personas-container');
+      const submitButton = document.getElementById('submitButton');
+      const showDisabledBtn = document.getElementById('show-disabled-collaborators');
+      const modalDisabled = document.getElementById('modalDisabledCollaborators');
+      const disabledList = document.getElementById('disabled-collaborators-list');
+      const lugarInput = document.getElementById('lugar');
+      const lugaresList = document.getElementById('lugares-list');
+      const errorLugar = document.getElementById('error-lugar');
+      let esRenovacion = false;
+      let lugarValido = false;
+      let solicitudActualId = null;
 
-<% function getEstadoClass(estado) {
-  if (estado === 'aprobado por sst' || estado === 'pendiente ingreso') return 'text-yellow-500 font-semibold';
-  if (estado === 'en labor') return 'text-blue-500 font-semibold';
-  if (estado === 'labor detenida') return 'text-gray-500 font-semibold';
-  if (estado === 'pendiente ingreso - vencido') return 'text-red-500 font-semibold';
-  if (estado === 'en labor - vencida') return 'text-red-600 font-semibold';
-  if (estado === 'negada') return 'text-red-700 font-semibold';
-  return 'text-green-500 font-semibold';
-} %>
+      // Lista de lugares desde el servidor
+      const lugares = <%- JSON.stringify(lugares) %>;
 
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('formulario');
-    const addPersonBtn = document.getElementById('add-person');
-    const personasContainer = document.getElementById('personas-container');
-    const submitButton = document.getElementById('submitButton');
-    const showDisabledBtn = document.getElementById('show-disabled-collaborators');
-    const modalDisabled = document.getElementById('modalDisabledCollaborators');
-    const disabledList = document.getElementById('disabled-collaborators-list');
-    const lugarInput = document.getElementById('lugar');
-    const lugaresList = document.getElementById('lugares-list');
-    const errorLugar = document.getElementById('error-lugar');
-    let esRenovacion = false;
-    let lugarValido = false;
-    let solicitudActualId = null;
+      // Establecer texto inicial del botón
+      submitButton.textContent = 'Enviar Solicitud';
 
-    // Lista de lugares desde el servidor
-    const lugares = <%- JSON.stringify(lugares) %>;
-
-    // Establecer texto inicial del botón
-    submitButton.textContent = 'Enviar Solicitud';
-
-    // Plantilla para nuevo colaborador (sin cambios)
-    const collaboratorTemplate = `
-      <div class="person-group mb-4 relative p-4 border border-ga-cream rounded-lg">
-        <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-          </svg>
-        </button>
-        <div class="mb-4">
-          <input type="number" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
-          <input type="text" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
-          <input type="hidden" name="estado[]" value="true">
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-ga-navy mb-2">Foto del colaborador</label>
-            <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+      // Plantilla para nuevo colaborador (sin cambios)
+      const collaboratorTemplate = `
+        <div class="person-group mb-4 relative p-4 border border-ga-cream rounded-lg">
+          <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          <div class="mb-4">
+            <input type="number" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+            <input type="text" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+            <input type="hidden" name="estado[]" value="true">
           </div>
-          <div>
-            <label class="block text-ga-navy mb-2">Foto de la cédula</label>
-            <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-ga-navy mb-2">Foto del colaborador</label>
+              <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+            </div>
+            <div>
+              <label class="block text-ga-navy mb-2">Foto de la cédula</label>
+              <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+            </div>
           </div>
         </div>
-      </div>
-    `;
+      `;
 
-    // Funciones existentes (sin cambios)
-    const addCollaborator = () => {
-      const newPerson = document.createElement('div');
-      newPerson.innerHTML = collaboratorTemplate;
-      personasContainer.appendChild(newPerson.firstElementChild);
-      updateRemoveButtons();
-    };
+      // Funciones existentes (sin cambios)
+      const addCollaborator = () => {
+        const newPerson = document.createElement('div');
+        newPerson.innerHTML = collaboratorTemplate;
+        personasContainer.appendChild(newPerson.firstElementChild);
+        updateRemoveButtons();
+      };
 
-    const updateRemoveButtons = () => {
-      const persons = personasContainer.querySelectorAll('.person-group');
-      persons.forEach(person => {
-        const removeBtn = person.querySelector('.remove-person');
-        if (removeBtn) {
-          if (persons.length === 1) {
-            removeBtn.classList.add('hidden');
-          } else {
-            removeBtn.classList.remove('hidden');
+      const updateRemoveButtons = () => {
+        const persons = personasContainer.querySelectorAll('.person-group');
+        persons.forEach(person => {
+          const removeBtn = person.querySelector('.remove-person');
+          if (removeBtn) {
+            if (persons.length === 1) {
+              removeBtn.classList.add('hidden');
+            } else {
+              removeBtn.classList.remove('hidden');
+            }
           }
+        });
+      };
+
+      // Autocompletado para el campo "Lugar"
+      lugarInput.addEventListener('input', function() {
+        const value = this.value.trim().toLowerCase();
+        lugaresList.innerHTML = '';
+
+        // Si estamos en modo renovación, mantener lugarValido como true
+        if (esRenovacion) {
+          lugarValido = true;
+          errorLugar.classList.add('hidden');
+          lugaresList.classList.add('hidden');
+          return;
         }
-      });
-    };
+        
+        if (value.length > 0) {
+          const filteredLugares = lugares.filter(lugar => 
+            lugar.nombre_lugar.toLowerCase().includes(value)
+          );
 
-    // Autocompletado para el campo "Lugar"
-    lugarInput.addEventListener('input', function() {
-      const value = this.value.trim().toLowerCase();
-      lugaresList.innerHTML = '';
-
-      if (!esRenovacion && value.length > 0) {
-        const filteredLugares = lugares.filter(lugar => 
-          lugar.nombre_lugar.toLowerCase().includes(value)
-        );
-
-        if (filteredLugares.length > 0) {
-          filteredLugares.forEach(lugar => {
-            const li = document.createElement('li');
-            li.className = 'p-2 hover:bg-gray-200 cursor-pointer';
-            li.dataset.value = lugar.nombre_lugar;
-            li.textContent = lugar.nombre_lugar;
-            li.addEventListener('click', () => {
-              lugarInput.value = lugar.nombre_lugar;
-              lugarValido = true;
-              lugaresList.classList.add('hidden');
-              errorLugar.classList.add('hidden');
+          if (filteredLugares.length > 0) {
+            filteredLugares.forEach(lugar => {
+              const li = document.createElement('li');
+              li.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+              li.dataset.value = lugar.nombre_lugar;
+              li.textContent = lugar.nombre_lugar;
+              li.addEventListener('click', () => {
+                lugarInput.value = lugar.nombre_lugar;
+                lugarValido = true;
+                lugaresList.classList.add('hidden');
+                errorLugar.classList.add('hidden');
+              });
+              lugaresList.appendChild(li);
             });
-            lugaresList.appendChild(li);
-          });
-          lugaresList.classList.remove('hidden');
+            lugaresList.classList.remove('hidden');
+          } else {
+            lugaresList.classList.add('hidden');
+            lugarValido = false;
+            errorLugar.classList.remove('hidden');
+          }
         } else {
           lugaresList.classList.add('hidden');
           lugarValido = false;
-          errorLugar.classList.remove('hidden');
-        }
-      } else {
-        lugaresList.classList.add('hidden');
-        lugarValido = esRenovacion; // Si es renovación, lugar ya es válido
-      }
-    });
-
-    // Ocultar la lista si se hace clic fuera
-    document.addEventListener('click', (e) => {
-      if (!lugarInput.contains(e.target) && !lugaresList.contains(e.target)) {
-        lugaresList.classList.add('hidden');
-        lugarValido = esRenovacion || lugares.some(lugar => lugar.nombre_lugar === lugarInput.value.trim());
-        if (!lugarValido && !esRenovacion) {
-          errorLugar.classList.remove('hidden');
-        } else {
           errorLugar.classList.add('hidden');
         }
-      }
-    });
+      });
 
-    // Modificar renovarSolicitud para habilitar el botón
-    window.renovarSolicitud = async function(solicitudId) {
-  try {
-    const response = await fetch(`/obtener-datos-solicitud/${solicitudId}`);
-    if (!response.ok) {
-      throw new Error('Error al obtener datos de la solicitud');
-    }
-    
-    const data = await response.json();
-    console.log('Datos recibidos:', data);
-    
-    if (data.solicitud && data.colaboradores) {
-      esRenovacion = true;
-      lugarValido = true;
-      solicitudActualId = solicitudId;
-      
-      // Campos existentes que ya están deshabilitados
-      document.getElementById('empresa').value = data.solicitud.empresa || '';
-      document.getElementById('nit').value = data.solicitud.nit || '';
-      document.getElementById('lugar').value = data.solicitud.lugar || '';
-      document.getElementById('labor').value = data.solicitud.labor || '';
-      document.getElementById('interventor_id').value = data.solicitud.interventor_id || '';
-      
-      document.getElementById('lugar').setAttribute('readonly', true);
-      document.getElementById('lugar').classList.add('bg-gray-100');
-      document.getElementById('labor').setAttribute('readonly', true);
-      document.getElementById('labor').classList.add('bg-gray-100');
-      document.getElementById('interventor_id').setAttribute('disabled', true);
+      // Modificar también el event listener de click fuera
+      document.addEventListener('click', (e) => {
+        if (!lugarInput.contains(e.target) && !lugaresList.contains(e.target)) {
+          lugaresList.classList.add('hidden');
+          if (esRenovacion) {
+            lugarValido = true;
+            errorLugar.classList.add('hidden');
+          } else {
+            lugarValido = lugares.some(lugar => lugar.nombre_lugar === lugarInput.value.trim());
+            if (!lugarValido) {
+              errorLugar.classList.remove('hidden');
+            } else {
+              errorLugar.classList.add('hidden');
+            }
+          }
+        }
+      });
 
-      // Formatear las fechas
-      const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toISOString().split('T')[0];
+      // En la función renovarSolicitud
+      window.renovarSolicitud = async function(solicitudId) {
+        try {
+          const response = await fetch(`/obtener-datos-solicitud/${solicitudId}`);
+          if (!response.ok) {
+            throw new Error('Error al obtener datos de la solicitud');
+          }
+          
+          const data = await response.json();
+          console.log('Datos recibidos:', data);
+          
+          if (data.solicitud && data.colaboradores) {
+            esRenovacion = true;
+            solicitudActualId = solicitudId;
+            
+            console.log("Estableciendo solicitudActualId:", solicitudId);
+            
+            // Mostrar y habilitar el botón de colaboradores deshabilitados
+            const btnColaboradores = document.getElementById('show-disabled-collaborators');
+            btnColaboradores.classList.remove('hidden');
+            btnColaboradores.style.display = 'inline-block';
+            btnColaboradores.disabled = false;
+            console.log("Botón mostrado:", btnColaboradores.style.display);
+            
+            // Campos existentes que ya están deshabilitados
+            document.getElementById('empresa').value = data.solicitud.empresa || '';
+            document.getElementById('nit').value = data.solicitud.nit || '';
+            
+            // Establecer el lugar y validarlo inmediatamente
+            const lugarInput = document.getElementById('lugar');
+            lugarInput.value = data.solicitud.lugar || '';
+            
+            // Marcar explícitamente como válido y ocultar el mensaje de error
+            lugarValido = true;
+            document.getElementById('error-lugar').classList.add('hidden');
+            
+            // Continuar con el establecimiento de otros campos
+            document.getElementById('labor').value = data.solicitud.labor || '';
+            document.getElementById('interventor_id').value = data.solicitud.interventor_id || '';
+            
+            // Continuar con el resto de atributos/estilos
+            lugarInput.setAttribute('readonly', true);
+            lugarInput.classList.add('bg-gray-100');
+            document.getElementById('labor').setAttribute('readonly', true);
+            document.getElementById('labor').classList.add('bg-gray-100');
+            document.getElementById('interventor_id').setAttribute('disabled', true);
+
+            // Formatear las fechas
+            const formatDate = (dateString) => {
+              const date = new Date(dateString);
+              return date.toISOString().split('T')[0];
+            };
+            
+            // Asignar valores a los campos de fecha y deshabilitarlos
+            document.getElementById('inicio-obra').value = formatDate(data.solicitud.inicio_obra);
+            document.getElementById('fin-obra').value = formatDate(data.solicitud.fin_obra);
+            document.getElementById('dias').value = data.solicitud.dias_trabajo || '';
+
+            // Deshabilitar los campos de fecha
+            document.getElementById('inicio-obra').setAttribute('readonly', true);
+            document.getElementById('inicio-obra').classList.add('bg-gray-100');
+            document.getElementById('fin-obra').setAttribute('readonly', true);
+            document.getElementById('fin-obra').classList.add('bg-gray-100');
+
+            // Opcional: también podrías deshabilitar el campo de días si no debe cambiar
+            document.getElementById('dias').setAttribute('readonly', true);
+            document.getElementById('dias').classList.add('bg-gray-100');
+
+            submitButton.textContent = 'Guardar Cambios';
+            
+            // Resto del código sigue igual...
+            showDisabledBtn.removeAttribute('disabled');
+            
+            const arlPreview = document.getElementById('arl-preview');
+            const pasocialPreview = document.getElementById('pasocial-preview');
+            
+            if (data.solicitud.arl_documento) {
+              arlPreview.innerHTML = `
+                <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                  <span class="text-sm">Documento ARL actual</span>
+                  <div class="flex space-x-2">
+                    <a href="${data.solicitud.arl_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+                  </div>
+                </div>
+              `;
+            }
+
+            if (data.solicitud.pasocial_documento) {
+              pasocialPreview.innerHTML = `
+                <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                  <span class="text-sm">Planilla Social actual</span>
+                  <div class="flex space-x-2">
+                    <a href="${data.solicitud.pasocial_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+                  </div>
+                </div>
+              `;
+            }
+
+            personasContainer.innerHTML = '';
+            
+            if (data.colaboradores && data.colaboradores.length > 0) {
+              data.colaboradores.forEach(colaborador => {
+                const colaboradorDiv = document.createElement('div');
+                colaboradorDiv.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
+                colaboradorDiv.dataset.colaboradorId = colaborador.id;
+                colaboradorDiv.innerHTML = `
+                  <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                  <div class="mb-4">
+                    <input type="text" value="${colaborador.nombre}" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+                    <input type="number" value="${colaborador.cedula}" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+                    <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
+                    <input type="hidden" name="estado[]" value="true">
+                  </div>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-ga-navy mb-2">Foto actual del colaborador</label>
+                      ${colaborador.foto ? `
+                        <div class="mb-2">
+                          <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
+                          <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
+                        </div>
+                      ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
+                      <label class="block text-ga-navy mb-2">Actualizar foto (opcional)</label>
+                      <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                    </div>
+                    <div>
+                      <label class="block text-ga-navy mb-2">Cédula actual del colaborador</label>
+                      ${colaborador.cedulaFoto ? `
+                        <div class="mb-2">
+                          <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
+                          <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
+                        </div>
+                      ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
+                      <label class="block text-ga-navy mb-2">Actualizar cédula (opcional)</label>
+                      <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                    </div>
+                  </div>
+                `;
+                personasContainer.appendChild(colaboradorDiv);
+              });
+              
+              updateRemoveButtons();
+            }
+
+            document.getElementById('contratistaFormulario').scrollIntoView({ behavior: 'smooth' });
+          }
+        } catch (error) {
+          console.error('Error al renovar solicitud:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al cargar los datos de la solicitud'
+          });
+        }
       };
-      
-      // Asignar valores a los campos de fecha y deshabilitarlos
-      document.getElementById('inicio-obra').value = formatDate(data.solicitud.inicio_obra);
-      document.getElementById('fin-obra').value = formatDate(data.solicitud.fin_obra);
-      document.getElementById('dias').value = data.solicitud.dias_trabajo || '';
 
-      // Deshabilitar los campos de fecha
-      document.getElementById('inicio-obra').setAttribute('readonly', true);
-      document.getElementById('inicio-obra').classList.add('bg-gray-100');
-      document.getElementById('fin-obra').setAttribute('readonly', true);
-      document.getElementById('fin-obra').classList.add('bg-gray-100');
+      // Reemplazar el event listener del botón show-disabled-collaborators con esta versión corregida
+      document.getElementById('show-disabled-collaborators').addEventListener('click', async function() {
+        try {
+          console.log("Botón colaboradores deshabilitados clickeado, ID:", solicitudActualId);
+          
+          if (!solicitudActualId) {
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'No se ha seleccionado ninguna solicitud'
+            });
+            return;
+          }
+          
+          // Mostrar loader o indicador de carga
+          Swal.fire({
+            title: 'Cargando colaboradores...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading() }
+          });
+          
+          const response = await fetch(`/obtener-colaboradores-todos/${solicitudActualId}`);
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al obtener colaboradores');
+          }
+          
+          const data = await response.json();
+          console.log("Datos recibidos:", data);
+          
+          // Cerrar el loader
+          Swal.close();
+          
+          // Actualizar información del modal
+          document.getElementById('colaboradoresId').textContent = solicitudActualId;
+          document.getElementById('colaboradoresEmpresa').textContent = data.solicitud?.empresa || '';
+          
+          // Limpiar la tabla
+          const tbody = document.getElementById('tablaColaboradores');
+          tbody.innerHTML = '';
+          
+          if (!data.colaboradores || data.colaboradores.length === 0) {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="8" class="text-center">No hay colaboradores para mostrar</td>
+              </tr>
+            `;
+          } else {
+            data.colaboradores.forEach(colaborador => {
+              const accionBtn = colaborador.estado ? 
+                `<button class="btn btn-danger btn-sm accion-colaborador" data-colaborador-id="${colaborador.id}" data-nuevo-estado="false">Deshabilitar</button>` :
+                `<button class="btn btn-success btn-sm accion-colaborador" data-colaborador-id="${colaborador.id}" data-nuevo-estado="true">Restaurar</button>`;
+              
+              const row = document.createElement('tr');
+              row.setAttribute('data-colaborador-id', colaborador.id);
+              row.setAttribute('data-estado', colaborador.estado ? 'habilitado' : 'inhabilitado');
+              row.innerHTML = `
+                <td>${colaborador.id}</td>
+                <td>${colaborador.nombre}</td>
+                <td>${colaborador.cedula}</td>
+                <td class="estado-colaborador">${colaborador.estado ? 'Habilitado' : 'Inhabilitado'}</td>
+                <td>No definido</td>
+                <td>No definida</td>
+                <td class="acciones-colaborador">${accionBtn}</td>
+                <td><button class="btn btn-info btn-sm ver-historial" data-colaborador-id="${colaborador.id}">Ver</button></td>
+              `;
+              
+              tbody.appendChild(row);
+            });
+          }
+          
+          // Aplicar filtro inicial (mostrar todos)
+          document.getElementById('filtroEstado').value = 'todos';
+          aplicarFiltroEstado();
+          
+          // Mostrar el modal
+          $('#modalDisabledCollaborators').modal('show');
+          
+          // Vincular el evento de cambio del filtro
+          document.getElementById('filtroEstado').addEventListener('change', aplicarFiltroEstado);
+          
+          // Asignar eventos a los botones usando delegación de eventos
+          $('#tablaColaboradores').off('click').on('click', '.accion-colaborador', function(event) {
+            const colaboradorId = parseInt($(this).data('colaborador-id'));
+            const nuevoEstado = $(this).data('nuevo-estado') === true;
+            cambiarEstadoColaborador(colaboradorId, nuevoEstado, event);
+          });
+          
+          $('#tablaColaboradores').on('click', '.ver-historial', function(event) {
+            event.preventDefault();
+            const colaboradorId = parseInt($(this).data('colaborador-id'));
+            verHistorial(colaboradorId);
+          });
+          
+        } catch (error) {
+          console.error("Error al cargar colaboradores:", error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message || 'Error al cargar colaboradores'
+          });
+        }
+      });
 
-      // Opcional: también podrías deshabilitar el campo de días si no debe cambiar
-      document.getElementById('dias').setAttribute('readonly', true);
-      document.getElementById('dias').classList.add('bg-gray-100');
-
-      submitButton.textContent = 'Guardar Cambios';
-      
-      // Resto del código sigue igual...
-      showDisabledBtn.removeAttribute('disabled');
-      
-      const arlPreview = document.getElementById('arl-preview');
-      const pasocialPreview = document.getElementById('pasocial-preview');
-      
-      if (data.solicitud.arl_documento) {
-        arlPreview.innerHTML = `
-          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-            <span class="text-sm">Documento ARL actual</span>
-            <div class="flex space-x-2">
-              <a href="${data.solicitud.arl_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
-            </div>
-          </div>
-        `;
+      // Función para filtrar las filas de la tabla según el estado seleccionado
+      function aplicarFiltroEstado() {
+        const filtro = document.getElementById('filtroEstado').value;
+        console.log("Aplicando filtro:", filtro);
+        
+        const filas = document.querySelectorAll('#tablaColaboradores tr');
+        let contador = 0;
+        
+        filas.forEach(fila => {
+          const dataEstado = fila.getAttribute('data-estado');
+          if (!dataEstado) return; // Ignorar filas sin atributo de estado
+          
+          if (filtro === 'todos' || 
+              (filtro === 'habilitados' && dataEstado === 'habilitado') || 
+              (filtro === 'inhabilitados' && dataEstado === 'inhabilitado')) {
+            fila.style.display = '';
+            contador++;
+          } else {
+            fila.style.display = 'none';
+          }
+        });
+        
+        console.log(`Se muestran ${contador} filas de ${filas.length}`);
       }
 
-      if (data.solicitud.pasocial_documento) {
-        pasocialPreview.innerHTML = `
-          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-            <span class="text-sm">Planilla Social actual</span>
-            <div class="flex space-x-2">
-              <a href="${data.solicitud.pasocial_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
-            </div>
-          </div>
-        `;
-      }
+      // Reemplazar la función verHistorial para manejar correctamente el foco
+      window.verHistorial = async function(colaboradorId) {
+        try {
+          console.log('Viendo historial del colaborador:', colaboradorId);
+          
+          const response = await fetch(`/obtener-historial-colaborador/${colaboradorId}`);
+          
+          if (!response.ok) {
+            throw new Error('Error al obtener el historial');
+          }
+          
+          const data = await response.json();
+          console.log('Historial recibido:', data);
+          
+          // Crear modal dinámicamente si no existe
+          let historialModal = document.getElementById('historialColaboradorModal');
+          
+          if (!historialModal) {
+            const modalHTML = `
+              <div class="modal fade" id="historialColaboradorModal" tabindex="-1" role="dialog">
+                <div class="modal-dialog modal-lg">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Historial de Ingresos y Salidas</h5>
+                      <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    </div>
+                    <div class="modal-body">
+                      <div class="table-responsive">
+                        <table class="table table-bordered">
+                          <thead>
+                            <tr>
+                              <th>Fecha/Hora</th>
+                              <th>Estado</th>
+                              <th>Tipo</th>
+                              <th>Lugar</th>
+                              <th>Usuario</th>
+                            </tr>
+                          </thead>
+                          <tbody id="historialColaboradorBody"></tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" id="cerrarHistorialBtn">Cerrar</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            historialModal = document.getElementById('historialColaboradorModal');
+            
+            // Agregamos un event listener específico para este botón
+            document.getElementById('cerrarHistorialBtn').addEventListener('click', function() {
+              // Asegurar que no quede ningún elemento con foco dentro del modal
+              document.activeElement.blur();
+              // Cerrar el modal
+              $('#historialColaboradorModal').modal('hide');
+            });
+          }
+          
+          // Llenar la tabla con los datos
+          const historialBody = document.getElementById('historialColaboradorBody');
+          historialBody.innerHTML = '';
+          
+          if (data && data.length > 0) {
+            data.forEach(registro => {
+              // Determinar el tipo de registro (entrada o salida)
+              const tipoRegistro = registro.tipo || 'N/A';
+              const tipoClass = tipoRegistro.toLowerCase() === 'entrada' ? 'success' : 'danger';
+              
+              historialBody.innerHTML += `
+                <tr>
+                  <td>${registro.fecha_hora || 'N/A'}</td>
+                  <td><span class="badge badge-${registro.estado_actual === 'Ingreso' ? 'success' : 'danger'}">${registro.estado_actual || 'N/A'}</span></td>
+                  <td><span class="badge badge-${tipoClass}">${tipoRegistro}</span></td>
+                  <td>${registro.lugar || 'N/A'}</td>
+                  <td>${registro.usuario_registro || 'N/A'}</td>
+                </tr>
+              `;
+            });
+          } else {
+            historialBody.innerHTML = '<tr><td colspan="5" class="text-center">No hay registros de ingresos o salidas para este colaborador</td></tr>';
+          }
+          
+          // Prevenir que los eventos se solapen
+          setTimeout(() => {
+            // Mostrar el modal
+            $('#historialColaboradorModal').modal({
+              backdrop: 'static',
+              keyboard: false,
+              focus: true
+            });
+          }, 100);
+          
+          // Manejar el evento hidden.bs.modal para asegurar que el foco se libere
+          $('#historialColaboradorModal').off('hidden.bs.modal').on('hidden.bs.modal', function() {
+            document.activeElement.blur();
+          });
+          
+        } catch (error) {
+          console.error('Error al obtener historial:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo obtener el historial: ' + error.message
+          });
+        }
+      };
 
-      personasContainer.innerHTML = '';
-      
-      if (data.colaboradores && data.colaboradores.length > 0) {
-        data.colaboradores.forEach(colaborador => {
+      // Reemplazar la función cambiarEstadoColaborador
+      window.cambiarEstadoColaborador = async function(colaboradorId, nuevoEstado, event) {
+        // Evitar propagación del evento
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        
+        try {
+          console.log(`Cambiando estado del colaborador ${colaboradorId} a ${nuevoEstado}`);
+          
+          // Desactivar el botón para evitar dobles clics
+          const boton = event && event.target ? event.target : document.querySelector(`button[data-colaborador-id="${colaboradorId}"]`);
+          if (boton) {
+            boton.disabled = true;
+            boton.textContent = 'Procesando...';
+          }
+          
+          const response = await fetch(`/actualizar-estado-colaborador/${colaboradorId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ estado: nuevoEstado })
+          });
+          
+          const data = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(data.message || 'Error al actualizar el estado');
+          }
+          
+          console.log('Respuesta del servidor:', data);
+          
+          // Actualizar la fila en la tabla del modal
+          const fila = document.querySelector(`tr[data-colaborador-id="${colaboradorId}"]`);
+          if (fila) {
+            // Actualizar texto y atributos
+            fila.querySelector('.estado-colaborador').textContent = nuevoEstado ? 'Habilitado' : 'Inhabilitado';
+            fila.setAttribute('data-estado', nuevoEstado ? 'habilitado' : 'inhabilitado');
+            
+            // Actualizar botón
+            const nuevoBoton = nuevoEstado ? 
+              `<button class="btn btn-danger btn-sm accion-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="false">Deshabilitar</button>` :
+              `<button class="btn btn-success btn-sm accion-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="true">Restaurar</button>`;
+            
+            fila.querySelector('.acciones-colaborador').innerHTML = nuevoBoton;
+            
+            // Aplicar filtro actual
+            aplicarFiltroEstado();
+          }
+          
+          // Actualizar el formulario principal según el estado
+          if (nuevoEstado) {
+            // Si habilitamos, agregar al formulario
+            await agregarColaboradorAlFormulario(colaboradorId);
+          } else {
+            // Si deshabilitamos, quitar del formulario
+            quitarColaboradorDelFormulario(colaboradorId);
+          }
+          
+          // Reactivar el botón original si existe
+          if (boton) {
+            boton.disabled = false;
+            boton.textContent = nuevoEstado ? 'Deshabilitar' : 'Restaurar';
+          }
+          
+          // Mostrar mensaje de éxito
+          Swal.fire({
+            icon: 'success',
+            title: 'Éxito',
+            text: `Colaborador ${nuevoEstado ? 'habilitado' : 'deshabilitado'} correctamente`,
+            timer: 1500,
+            showConfirmButton: false
+          });
+          
+        } catch (error) {
+          console.error('Error:', error);
+          // Reactivar el botón si existe
+          const boton = event && event.target ? event.target : document.querySelector(`button[data-colaborador-id="${colaboradorId}"]`);
+          if (boton) {
+            boton.disabled = false;
+            boton.textContent = nuevoEstado ? 'Deshabilitar' : 'Restaurar';
+          }
+          
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: error.message
+          });
+        }
+      };
+
+      // Agregar estas nuevas funciones para manejar los colaboradores en el formulario
+      async function agregarColaboradorAlFormulario(colaboradorId) {
+        if (!esRenovacion) return; // Solo aplicar en modo renovación
+        
+        try {
+          // Verificar que no exista ya en el formulario
+          const existente = document.querySelector(`.person-group[data-colaborador-id="${colaboradorId}"]`);
+          if (existente) return;
+          
+          // Obtener datos del colaborador
+          const response = await fetch(`/obtener-colaborador/${colaboradorId}`);
+          if (!response.ok) throw new Error("No se pudo obtener la información del colaborador");
+          
+          const colaborador = await response.json();
+          
+          // Crear el elemento del colaborador
           const colaboradorDiv = document.createElement('div');
           colaboradorDiv.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
           colaboradorDiv.dataset.colaboradorId = colaborador.id;
@@ -515,345 +1010,325 @@
               </div>
             </div>
           `;
+          
+          // Agregar al contenedor
+          const personasContainer = document.getElementById('personas-container');
           personasContainer.appendChild(colaboradorDiv);
-        });
-        
-        updateRemoveButtons();
-      }
-
-      document.getElementById('contratistaFormulario').scrollIntoView({ behavior: 'smooth' });
-    }
-  } catch (error) {
-    console.error('Error al renovar solicitud:', error);
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Error al cargar los datos de la solicitud'
-    });
-  }
-};
-    // Mostrar modal de colaboradores deshabilitados
-    showDisabledBtn.addEventListener('click', async () => {
-      try {
-        const response = await fetch(`/obtener-colaboradores-deshabilitados/${solicitudActualId}`);
-        if (!response.ok) {
-          throw new Error('Error al obtener colaboradores deshabilitados');
-        }
-        
-        const disabledCollaborators = await response.json();
-        disabledList.innerHTML = '';
-
-        if (disabledCollaborators.length === 0) {
-          disabledList.innerHTML = '<p class="text-ga-navy">No hay colaboradores deshabilitados.</p>';
-        } else {
-          disabledCollaborators.forEach(colab => {
-            const item = document.createElement('div');
-            item.className = 'flex justify-between items-center p-2 border-b border-ga-cream';
-            item.innerHTML = `
-              <span class="text-ga-navy">${colab.nombre} (Cédula: ${colab.cedula})</span>
-              <button type="button" class="bg-ga-gold text-ga-white py-1 px-2 rounded-md hover:bg-ga-navy" onclick="rehabilitarColaborador(${colab.id})">Rehabilitar</button>
-            `;
-            disabledList.appendChild(item);
-          });
-        }
-
-        modalDisabled.classList.remove('hidden');
-      } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'No se pudieron cargar los colaboradores deshabilitados'
-        });
-      }
-    });
-
-    // Cerrar modal
-    window.closeDisabledModal = function() {
-      modalDisabled.classList.add('hidden');
-    };
-
-    // Rehabilitar colaborador con verificación de contraseña
-    window.rehabilitarColaborador = async function(colaboradorId) {
-      const { value: password } = await Swal.fire({
-        title: 'Ingrese su contraseña',
-        input: 'password',
-        inputLabel: 'Se requiere verificación para rehabilitar al colaborador',
-        inputPlaceholder: 'Contraseña',
-        showCancelButton: true,
-        confirmButtonText: 'Verificar',
-        cancelButtonText: 'Cancelar',
-        inputValidator: (value) => {
-          if (!value) {
-            return '¡Debe ingresar una contraseña!';
-          }
-        }
-      });
-
-      if (password) {
-        try {
-          const response = await fetch(`/rehabilitar-colaborador/${colaboradorId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ password })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Error al rehabilitar el colaborador');
-          }
-
-          Swal.fire({
-            icon: 'success',
-            title: 'Éxito',
-            text: 'Colaborador rehabilitado correctamente'
-          });
-
-          // Recargar la lista de deshabilitados
-          showDisabledBtn.click();
+          
+          // Actualizar botones de eliminar
+          updateRemoveButtons();
+          
         } catch (error) {
-          console.error('Error:', error);
+          console.error("Error al agregar colaborador al formulario:", error);
           Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: error.message || 'No se pudo rehabilitar el colaborador'
+            text: 'No se pudo agregar el colaborador al formulario'
           });
         }
       }
-    };
 
-    // Confirmar eliminación de colaborador
-    window.confirmarEliminarColaborador = function(button) {
-      const persons = personasContainer.querySelectorAll('.person-group');
-      if (persons.length <= 1) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Debe mantener al menos un colaborador'
-        });
-        return;
-      }
-
-      Swal.fire({
-        title: '¿Está seguro?',
-        text: 'Esta acción desactivará el colaborador de la solicitud',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Sí, desactivar',
-        cancelButtonText: 'Cancelar'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          const personGroup = button.closest('.person-group');
-          const colaboradorId = personGroup.querySelector('input[name="colaborador_id[]"]')?.value;
-
-          if (colaboradorId) {
-            fetch(`/actualizar-estado-colaborador/${colaboradorId}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ estado: false })
-            })
-            .then(response => {
-              if (response.ok) {
-                personGroup.remove();
-                validateCollaborators();
-                Swal.fire({
-                  icon: 'success',
-                  title: 'Éxito',
-                  text: 'Colaborador desactivado correctamente'
-                });
-              } else {
-                throw new Error('Error al actualizar el estado del colaborador');
-              }
-            })
-            .catch(error => {
-              console.error('Error:', error);
-              Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'No se pudo desactivar el colaborador'
-              });
-            });
-          } else {
-            personGroup.remove();
-            validateCollaborators();
-          }
-        }
-      });
-    };
-
-    const validateCollaborators = () => {
-      const persons = personasContainer.querySelectorAll('.person-group');
-      if (persons.length === 0) {
-        addCollaborator();
-      }
-      updateRemoveButtons();
-    };
-
-    validateCollaborators();
-    addPersonBtn.addEventListener('click', addCollaborator);
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
-      const fechaFin = new Date(document.getElementById('fin-obra').value);
-      
-      if (!fechaInicio || !fechaFin || isNaN(fechaInicio) || isNaN(fechaFin)) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Por favor seleccione fechas válidas'
-        });
-        return;
-      }
-
-      if (fechaFin < fechaInicio) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
-        });
-        return;
-      }
-
-      if (personasContainer.children.length === 0) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Debe agregar al menos un colaborador'
-        });
-        return;
-      }
-
-      const requiredFields = form.querySelectorAll('[required]');
-      let hasEmptyFields = false;
-      requiredFields.forEach(field => {
-        if (!field.value.trim()) {
-          hasEmptyFields = true;
-          field.classList.add('border-red-500');
-        } else {
-          field.classList.remove('border-red-500');
-        }
-      });
-
-      if (hasEmptyFields) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Por favor complete todos los campos requeridos'
-        });
-        return;
-      }
-
-      if (!lugarValido && !esRenovacion) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Por favor seleccione un lugar válido de la lista'
-        });
-        return;
-      }
-
-      const formData = new FormData(form);
-
-      try {
-        Swal.fire({
-          title: 'Procesando...',
-          text: 'Por favor espere mientras se procesa su solicitud',
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
-        });
-
-        const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
+      function quitarColaboradorDelFormulario(colaboradorId) {
+        if (!esRenovacion) return; // Solo aplicar en modo renovación
         
-        console.log('Enviando solicitud a:', url);
-        console.log('FormData:', Object.fromEntries(formData));
+        // Buscar el colaborador en el formulario
+        const colaboradorDiv = document.querySelector(`.person-group[data-colaborador-id="${colaboradorId}"]`);
+        if (!colaboradorDiv) return;
+        
+        // Verificar si hay más de un colaborador
+        const totalColaboradores = document.querySelectorAll('.person-group').length;
+        if (totalColaboradores <= 1) {
+          Swal.fire({
+            icon: 'info',
+            title: 'Información',
+            text: 'No se puede eliminar el último colaborador del formulario.',
+            timer: 3000
+          });
+          return;
+        }
+        
+        // Eliminar del DOM
+        colaboradorDiv.remove();
+        
+        // Actualizar botones de eliminar
+        updateRemoveButtons();
+      }
 
-        const response = await fetch(url, {
-          method: 'POST',
-          body: formData
-        });
+      const validateCollaborators = () => {
+        const persons = personasContainer.querySelectorAll('.person-group');
+        if (persons.length === 0) {
+          addCollaborator();
+        }
+        updateRemoveButtons();
+      };
 
-        if (!response.ok) {
-          throw new Error('Error al procesar la solicitud');
+      validateCollaborators();
+      addPersonBtn.addEventListener('click', addCollaborator);
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+        const fechaFin = new Date(document.getElementById('fin-obra').value);
+        
+        if (!fechaInicio || !fechaFin || isNaN(fechaInicio) || isNaN(fechaFin)) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Por favor seleccione fechas válidas'
+          });
+          return;
         }
 
-        const result = await response.json();
-        console.log('Respuesta del servidor:', result);
-
-        await Swal.fire({
-          icon: 'success',
-          title: 'Éxito',
-          text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente',
-          confirmButtonText: 'Aceptar'
-        });
-
-        window.location.reload();
-      } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al procesar la solicitud. Por favor intente nuevamente.'
-        });
-      }
-    });
-
-    function calcularDias() {
-      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
-      const fechaFin = new Date(document.getElementById('fin-obra').value);
-      const diasInput = document.getElementById('dias');
-
-      if (fechaInicio && fechaFin && !isNaN(fechaInicio) && !isNaN(fechaFin)) {
-        const diferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
-        
-        if (diferencia < 1) {
+        if (fechaFin < fechaInicio) {
           Swal.fire({
             icon: 'error',
             title: 'Error',
             text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
           });
-          document.getElementById('fin-obra').value = document.getElementById('inicio-obra').value;
-          diasInput.value = '1';
-        } else {
-          diasInput.value = diferencia;
+          return;
         }
-      } else {
-        diasInput.value = '';
+
+        if (personasContainer.children.length === 0) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Debe agregar al menos un colaborador'
+          });
+          return;
+        }
+
+        const requiredFields = form.querySelectorAll('[required]');
+        let hasEmptyFields = false;
+        requiredFields.forEach(field => {
+          if (!field.value.trim()) {
+            hasEmptyFields = true;
+            field.classList.add('border-red-500');
+          } else {
+            field.classList.remove('border-red-500');
+          }
+        });
+
+        if (hasEmptyFields) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Por favor complete todos los campos requeridos'
+          });
+          return;
+        }
+
+        if (!lugarValido && !esRenovacion) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Por favor seleccione un lugar válido de la lista'
+          });
+          return;
+        }
+
+        const formData = new FormData(form);
+
+        try {
+          Swal.fire({
+            title: 'Procesando...',
+            text: 'Por favor espere mientras se procesa su solicitud',
+            allowOutsideClick: false,
+            didOpen: () => {
+              Swal.showLoading();
+            }
+          });
+
+          const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
+          
+          console.log('Enviando solicitud a:', url);
+          console.log('FormData:', Object.fromEntries(formData));
+
+          const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error('Error al procesar la solicitud');
+          }
+
+          const result = await response.json();
+          console.log('Respuesta del servidor:', result);
+
+          await Swal.fire({
+            icon: 'success',
+            title: 'Éxito',
+            text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente',
+            confirmButtonText: 'Aceptar'
+          });
+
+          window.location.reload();
+        } catch (error) {
+          console.error('Error:', error);
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Ocurrió un error al procesar la solicitud. Por favor intente nuevamente.'
+          });
+        }
+      });
+
+      function calcularDias() {
+        const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+        const fechaFin = new Date(document.getElementById('fin-obra').value);
+        const diasInput = document.getElementById('dias');
+
+        if (fechaInicio && fechaFin && !isNaN(fechaInicio) && !isNaN(fechaFin)) {
+          const diferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+          
+          if (diferencia < 1) {
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
+            });
+            document.getElementById('fin-obra').value = document.getElementById('inicio-obra').value;
+            diasInput.value = '1';
+          } else {
+            diasInput.value = diferencia;
+          }
+        } else {
+          diasInput.value = '';
+        }
       }
-    }
 
-    document.getElementById('inicio-obra').addEventListener('change', function() {
-      const finObraInput = document.getElementById('fin-obra');
-      if (!finObraInput.value) {
-        finObraInput.value = this.value;
-      }
-      calcularDias();
-    });
+      document.getElementById('inicio-obra').addEventListener('change', function() {
+        const finObraInput = document.getElementById('fin-obra');
+        if (!finObraInput.value) {
+          finObraInput.value = this.value;
+        }
+        calcularDias();
+      });
 
-    document.getElementById('fin-obra').addEventListener('change', function() {
-      const inicioObraInput = document.getElementById('inicio-obra');
-      if (!inicioObraInput.value) {
-        inicioObraInput.value = this.value;
-      }
-      calcularDias();
-    });
+      document.getElementById('fin-obra').addEventListener('change', function() {
+        const inicioObraInput = document.getElementById('inicio-obra');
+        if (!inicioObraInput.value) {
+          inicioObraInput.value = this.value;
+        }
+        calcularDias();
+      });
 
-    document.getElementById('arl').addEventListener('change', function() {
-      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
-      document.getElementById('arl-filename').textContent = filename;
-    });
+      document.getElementById('arl').addEventListener('change', function() {
+        const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
+        document.getElementById('arl-filename').textContent = filename;
+      });
 
-    document.getElementById('pasocial').addEventListener('change', function() {
-      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
-      document.getElementById('pasocial-filename').textContent = filename;
+      document.getElementById('pasocial').addEventListener('change', function() {
+        const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
+        document.getElementById('pasocial-filename').textContent = filename;
+      });
+
+      // Agregar este código al final del script principal
+      document.addEventListener('DOMContentLoaded', function() {
+        // Configuración global para todos los modales de Bootstrap
+        $(document).on('hidden.bs.modal', '.modal', function() {
+          // Asegurar que no queden elementos con foco dentro del modal
+          document.activeElement.blur();
+          // Eliminar atributos aria-hidden que podrían causar problemas
+          document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
+            if (!el.classList.contains('modal')) {
+              el.removeAttribute('aria-hidden');
+            }
+          });
+        });
+        
+        // Prevenir que se propaguen clics desde botones dentro de modales
+        $(document).on('click', '.modal button', function(e) {
+          e.stopPropagation();
+        });
+      });
+
+      // Modificar la función confirmarEliminarColaborador para manejar ambos casos
+      window.confirmarEliminarColaborador = function(button) {
+        const personGroup = button.closest('.person-group');
+        const totalColaboradores = document.querySelectorAll('.person-group').length;
+        const colaboradorId = personGroup.dataset.colaboradorId;
+        
+        // Verificar si es el último colaborador
+        if (totalColaboradores <= 1) {
+          Swal.fire({
+            icon: 'info',
+            title: 'Información',
+            text: 'No se puede eliminar el último colaborador. Debe haber al menos uno.',
+            timer: 3000
+          });
+          return;
+        }
+        
+        // Comprobar si es un colaborador existente (en renovación) o uno nuevo
+        if (colaboradorId) {
+          // Es un colaborador existente en renovación, preguntar si deshabilitarlo
+          Swal.fire({
+            title: '¿Está seguro?',
+            text: "Este colaborador será deshabilitado pero no eliminado de la solicitud",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#CC9000',
+            cancelButtonColor: '#011C3D',
+            confirmButtonText: 'Sí, deshabilitar',
+            cancelButtonText: 'Cancelar'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              // Llamar a la función que deshabilita el colaborador
+              cambiarEstadoColaborador(parseInt(colaboradorId), false);
+              
+              // Quitar del formulario
+              personGroup.remove();
+              updateRemoveButtons();
+              
+              Swal.fire({
+                icon: 'success',
+                title: 'Deshabilitado',
+                text: 'El colaborador ha sido deshabilitado',
+                timer: 1500,
+                showConfirmButton: false
+              });
+            }
+          });
+        } else {
+          // Es un colaborador nuevo que no está registrado, simplemente quitarlo
+          Swal.fire({
+            title: '¿Está seguro?',
+            text: "¿Desea quitar este colaborador del formulario?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#CC9000',
+            cancelButtonColor: '#011C3D',
+            confirmButtonText: 'Sí, quitar',
+            cancelButtonText: 'Cancelar'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              // Eliminar el colaborador del formulario
+              personGroup.remove();
+              updateRemoveButtons();
+              
+              Swal.fire({
+                icon: 'success',
+                title: 'Eliminado',
+                text: 'El colaborador ha sido removido del formulario',
+                timer: 1500,
+                showConfirmButton: false
+              });
+            }
+          });
+        }
+      };
     });
-  });
-</script>
+  </script>
+</body>
+</html>
+
+<% function getEstadoClass(estado) {
+  if (estado === 'aprobado por sst' || estado === 'pendiente ingreso') return 'text-yellow-500 font-semibold';
+  if (estado === 'en labor') return 'text-blue-500 font-semibold';
+  if (estado === 'labor detenida') return 'text-gray-500 font-semibold';
+  if (estado === 'pendiente ingreso - vencido') return 'text-red-500 font-semibold';
+  if (estado === 'en labor - vencida') return 'text-red-600 font-semibold';
+  if (estado === 'negada') return 'text-red-700 font-semibold';
+  return 'text-green-500 font-semibold';
+} %>

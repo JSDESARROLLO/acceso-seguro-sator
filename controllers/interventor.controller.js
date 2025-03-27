@@ -862,4 +862,80 @@ controller.obtenerDatosTablas = async (req, res) => {
   }
 };
 
+controller.obtenerTodosColaboradores = async (req, res) => {
+  const { solicitudId } = req.params;
+
+  try {
+    // Obtener información de la solicitud
+    const [solicitudData] = await connection.execute(
+      'SELECT id, empresa, nit FROM solicitudes WHERE id = ?',
+      [solicitudId]
+    );
+
+    if (!solicitudData.length) {
+      return res.status(404).json({ success: false, message: 'Solicitud no encontrada' });
+    }
+
+    // Obtener TODOS los colaboradores sin filtrar por estado
+    const [colaboradores] = await connection.execute(`
+      SELECT 
+        c.id, 
+        c.cedula, 
+        c.nombre, 
+        c.foto, 
+        c.cedulaFoto, 
+        c.estado,
+        (SELECT 
+          JSON_OBJECT(
+            'id', pss.id,
+            'fecha_inicio', pss.fecha_inicio,
+            'fecha_fin', pss.fecha_fin
+          )
+         FROM plantilla_seguridad_social pss 
+         WHERE pss.colaborador_id = c.id 
+         ORDER BY pss.fecha_fin DESC LIMIT 1) as plantillaSS,
+        (SELECT rc.estado 
+         FROM resultados_capacitaciones rc 
+         WHERE rc.colaborador_id = c.id 
+         ORDER BY rc.fecha_vencimiento DESC LIMIT 1) as cursoSiso
+      FROM colaboradores c
+      WHERE c.solicitud_id = ?
+    `, [solicitudId]);
+
+    // Convertir formato de los datos
+    const colaboradoresFormateados = colaboradores.map(col => {
+      // Convertir plantillaSS de string a objeto si es necesario
+      let plantillaSS = null;
+      if (col.plantillaSS && typeof col.plantillaSS === 'string') {
+        try {
+          plantillaSS = JSON.parse(col.plantillaSS);
+        } catch (e) {
+          console.error('Error al parsear plantillaSS:', e);
+        }
+      } else {
+        plantillaSS = col.plantillaSS;
+      }
+
+      return {
+        ...col,
+        estado: Boolean(col.estado),
+        plantillaSS: plantillaSS
+      };
+    });
+
+    res.json({ 
+      success: true, 
+      solicitud: solicitudData[0],
+      colaboradores: colaboradoresFormateados 
+    });
+  } catch (error) {
+    console.error('[CONTROLADOR] Error al obtener colaboradores:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al obtener colaboradores',
+      error: error.message 
+    });
+  }
+};
+
 module.exports = controller; 

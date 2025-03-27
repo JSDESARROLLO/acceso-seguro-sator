@@ -43,5 +43,8 @@ Object.entries(requiredRoutes).forEach(([route, funcName]) => {
   handleRoute(method, path, funcName);
 });
 
+// Agregar esta ruta al archivo de rutas del interventor
+router.get('/obtener-colaboradores-todos/:solicitudId', controller.obtenerTodosColaboradores);
+
 // Exportar el router
 module.exports = router;
