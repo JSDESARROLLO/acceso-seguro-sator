@@ -1,3 +1,4 @@
+//db.js
 require('dotenv').config(); // Cargar las variables de entorno del archivo .env
 const mysql = require('mysql2/promise');
 

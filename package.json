@@ -43,6 +43,7 @@
     "puppeteer": "^24.2.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.33.5",
+    "ws": "^8.18.1",
     "yup": "^1.6.1"
   },
   "devDependencies": {

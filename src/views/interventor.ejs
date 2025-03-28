@@ -399,6 +399,12 @@
                       <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="<%= accion.solicitud_id %>">Ver Historial</button>
                     </td>
                   <% } %>
+                  <td>
+                    <!-- Otros botones o acciones -->
+                    <button class="btn btn-primary btn-sm open-chat-btn" data-solicitud-id="<%= accion.solicitud_id %>">
+                      Conversar <span class="badge badge-light unread-count" data-solicitud-id="<%= accion.solicitud_id %>">0</span>
+                    </button>
+                  </td>
                 </tr>
               <% }); %>
             <% } else { %>
@@ -411,6 +417,34 @@
       </div>
     </div>
   </div>
+<!-- Modal de Chat para Interventor -->
+<div id="chatModalInterventor" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="chatModalInterventorLabel">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <!-- Header del chat -->
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="chatModalInterventorLabel">Chat - Solicitud <span id="chatSolicitudIdInterventor"></span></h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar" onclick="closeChatModalInterventor()">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <!-- Cuerpo del chat -->
+      <div class="modal-body" style="height: 300px; overflow-y: auto;">
+        <div id="chatMessagesInterventor" class="p-2"></div>
+      </div>
+      <!-- Input para enviar mensajes -->
+      <div class="modal-footer">
+        <div class="input-group">
+          <textarea id="chatInputInterventor" class="form-control" rows="2" placeholder="Escribe un mensaje..."></textarea>
+          <div class="input-group-append">
+            <button onclick="sendMessageInterventor()" class="btn btn-primary">Enviar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 
   <div class="modal fade" id="historialModal" tabindex="-1" role="dialog" aria-labelledby="historialModalLabel">
     <div class="modal-dialog modal-xl" role="document">
@@ -1066,6 +1100,12 @@
               <td>
                 <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="${accion.solicitud_id}">Ver Historial</button>
               </td>` : ''}
+            <td>
+              <!-- Otros botones o acciones -->
+              <button class="btn btn-primary btn-sm open-chat-btn" data-solicitud-id="<%= accion.solicitud_id %>">
+                Conversar <span class="badge badge-light unread-count" data-solicitud-id="<%= accion.solicitud_id %>">0</span>
+              </button>
+            </td>
           `;
           tbody.appendChild(row);
         });
@@ -1470,6 +1510,318 @@
           });
         });
     }
+
+
+    // Variables globales para el chat Interventor
+let currentSolicitudIdInterventor = null;
+let socketInterventor = null;
+let oldestMessageIdInterventor = null;
+
+// Abrir modal de chat desde los botones
+document.querySelectorAll('.open-chat-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const solicitudId = this.dataset.solicitudId;
+    openChatModalInterventor(solicitudId);
+  });
+});
+
+// Abrir modal de chat
+async function openChatModalInterventor(solicitudId) {
+  currentSolicitudIdInterventor = solicitudId;
+  document.getElementById('chatSolicitudIdInterventor').textContent = solicitudId;
+  document.getElementById('chatModalInterventor').style.display = 'flex'; // Cambiar a display flex
+
+  // Iniciar WebSocket
+  if (!socketInterventor || socketInterventor.readyState !== WebSocket.OPEN) {
+    socketInterventor = new WebSocket(`ws://${window.location.host}/ws/chat/${solicitudId}`);
+    
+    socketInterventor.onopen = function() {
+      console.log(`WebSocket Interventor conectado para solicitud ${solicitudId}`);
+    };
+    
+    socketInterventor.onmessage = function(event) {
+      try {
+        const message = JSON.parse(event.data);
+        console.log("Mensaje recibido por interventor:", message);
+        
+        // Verificar que no sea un mensaje que acabamos de enviar nosotros mismos
+        const isFromCurrentUser = parseInt(message.userId) === parseInt(obtenerIdUsuario());
+        const isFreshMessage = !document.querySelector(`[data-message-id="${message.id}"]`);
+        
+        // Solo procesar si no es un mensaje propio duplicado
+        if (!isFromCurrentUser || isFreshMessage) {
+          // Solo procesar mensajes del tipo interventor y de la solicitud actual
+          if (message.solicitudId === currentSolicitudIdInterventor && 
+              message.type === 'interventor') {
+            
+            // Si el modal está abierto, mostrar mensaje y marcar como leído
+            if (document.getElementById('chatModalInterventor').style.display === 'flex') {
+              displayMessageInterventor(message);
+              markMessagesAsReadInterventor(message.solicitudId);
+            } else {
+              // Si el modal está cerrado, notificar
+              notifyNewMessageInterventor(message);
+            }
+          }
+          
+          // Actualizar contador de mensajes no leídos
+          updateUnreadCountInterventor(message.solicitudId);
+        }
+      } catch (error) {
+        console.error("Error procesando mensaje en interventor:", error);
+      }
+    };
+    
+    socketInterventor.onclose = function() {
+      console.log('WebSocket Interventor cerrado');
+    };
+    
+    socketInterventor.onerror = function(error) {
+      console.error('Error en WebSocket Interventor:', error);
+    };
+  }
+
+  // Cargar los últimos 20 mensajes
+  await loadInitialMessagesInterventor(solicitudId);
+
+  // Marcar mensajes como leídos
+  await fetch(`/api/chat/${solicitudId}/interventor/mark-read`, { 
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: obtenerIdUsuario() }) // Función para obtener ID de usuario actual
+  });
+  
+  updateUnreadCountInterventor(solicitudId);
+  
+  // Configurar scroll para carga progresiva
+  const chatMessages = document.getElementById('chatMessagesInterventor');
+  chatMessages.addEventListener('scroll', function() {
+    if (chatMessages.scrollTop === 0 && oldestMessageIdInterventor) {
+      loadMoreMessagesInterventor(solicitudId);
+    }
+  });
+}
+
+// Función para obtener el ID del usuario actual
+function obtenerIdUsuario() {
+  // Implementar según tu sistema de autenticación
+  return 1; // Valor por defecto
+}
+
+// Función para mostrar notificaciones
+function notifyNewMessageInterventor(message) {
+  // Verificar si las notificaciones están permitidas
+  if (!("Notification" in window)) {
+    return;
+  }
+  
+  // No mostrar notificación si el modal está abierto en esa conversación
+  const modalVisible = document.getElementById('chatModalInterventor').style.display === 'flex';
+  const isCurrentChat = modalVisible && currentSolicitudIdInterventor === message.solicitudId;
+  
+  if (isCurrentChat) {
+    return;
+  }
+  
+  if (Notification.permission === "granted") {
+    const notification = new Notification(`Nuevo mensaje - Solicitud ${message.solicitudId}`, {
+      body: typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+      icon: '/img/logo.png',
+      tag: `chat-interventor-${message.solicitudId}` // Evitar duplicados
+    });
+    
+    notification.onclick = function() {
+      window.focus();
+      openChatModalInterventor(message.solicitudId);
+    };
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+}
+
+// Cerrar modal de chat
+window.closeChatModalInterventor = function() {
+  document.getElementById('chatModalInterventor').style.display = 'none';
+  if (socketInterventor) {
+    socketInterventor.close();
+  }
+  currentSolicitudIdInterventor = null;
+  oldestMessageIdInterventor = null;
+};
+
+// Enviar mensaje
+window.sendMessageInterventor = function() {
+  const input = document.getElementById('chatInputInterventor');
+  const content = input.value.trim();
+  if (!content || !currentSolicitudIdInterventor) return;
+  
+  const userId = obtenerIdUsuario();
+  
+  const message = {
+    solicitudId: currentSolicitudIdInterventor,
+    type: 'interventor',
+    content: content,
+    userId: userId
+  };
+  
+  // Enviar al servidor
+  socketInterventor.send(JSON.stringify(message));
+  
+  // Mostrar localmente el mensaje enviado
+  const localMessage = {
+    id: 'temp-' + Date.now(),
+    content: content,
+    created_at: new Date().toISOString(),
+    usuario_id: userId,
+    isSender: true
+  };
+  
+  displayMessageInterventor(localMessage);
+  
+  // Desplazar al final
+  const chatMessages = document.getElementById('chatMessagesInterventor');
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  
+  // Limpiar input
+  input.value = '';
+};
+
+// Cargar los últimos 20 mensajes
+async function loadInitialMessagesInterventor(solicitudId) {
+  const chatMessages = document.getElementById('chatMessagesInterventor');
+  chatMessages.innerHTML = '';
+  try {
+    const response = await fetch(`/api/chat/${solicitudId}/interventor?limit=20`);
+    const messages = await response.json();
+    messages.forEach(displayMessageInterventor);
+    if (messages.length > 0) {
+      oldestMessageIdInterventor = messages[0].id;
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  } catch (error) {
+    console.error('Error al cargar mensajes iniciales:', error);
+  }
+}
+
+// Cargar más mensajes al hacer scroll hacia arriba
+async function loadMoreMessagesInterventor(solicitudId) {
+  if (!oldestMessageIdInterventor) return;
+  try {
+    const response = await fetch(`/api/chat/${solicitudId}/interventor?limit=20&before=${oldestMessageIdInterventor}`);
+    const messages = await response.json();
+    if (messages.length > 0) {
+      const chatMessages = document.getElementById('chatMessagesInterventor');
+      const scrollHeightBefore = chatMessages.scrollHeight;
+      messages.reverse().forEach(displayMessageInterventor);
+      oldestMessageIdInterventor = messages[0].id;
+      chatMessages.scrollTop = chatMessages.scrollHeight - scrollHeightBefore;
+    } else {
+      oldestMessageIdInterventor = null;
+    }
+  } catch (error) {
+    console.error('Error al cargar más mensajes:', error);
+  }
+}
+
+// Mostrar mensaje en el chat
+function displayMessageInterventor(message) {
+  const chatMessages = document.getElementById('chatMessagesInterventor');
+  const messageDiv = document.createElement('div');
+  
+  // Añadir atributo de ID del mensaje para poder identificarlo
+  if (message.id) {
+    messageDiv.setAttribute('data-message-id', message.id);
+  }
+  
+  // Determinar si el mensaje es del usuario actual
+  const isCurrentUser = message.isSender || parseInt(message.userId) === parseInt(obtenerIdUsuario());
+  
+  messageDiv.className = `p-2 my-1 rounded-md ${isCurrentUser ? 
+    'bg-primary text-white ml-auto' : 
+    'bg-light text-dark'} max-w-xs`;
+  
+  // Formatear contenido
+  let messageContent = '';
+  if (typeof message.content === 'string') {
+    try {
+      const jsonContent = JSON.parse(message.content);
+      messageContent = jsonContent.text || jsonContent.value || JSON.stringify(jsonContent);
+    } catch (e) {
+      messageContent = message.content;
+    }
+  } else if (message.content && typeof message.content === 'object') {
+    messageContent = message.content.text || message.content.value || JSON.stringify(message.content);
+  } else {
+    messageContent = "Mensaje sin contenido";
+  }
+  
+  // Agregar timestamp
+  const timestamp = new Date(message.created_at || new Date()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  
+  messageDiv.innerHTML = `
+    <div>${messageContent}</div>
+    <div class="text-xs mt-1 text-right text-gray-500">${timestamp}</div>
+  `;
+  
+  // Agregar al final (importante para mantener orden cronológico)
+  chatMessages.appendChild(messageDiv);
+  
+  // Desplazar al final del chat
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Actualizar contador de mensajes no leídos
+async function updateUnreadCountInterventor(solicitudId) {
+  try {
+    const response = await fetch(`/api/chat/${solicitudId}/interventor/unread`);
+    const data = await response.json();
+    const badge = document.querySelector(`.unread-count[data-solicitud-id="${solicitudId}"]`);
+    if (badge) {
+      badge.textContent = data.unreadCount;
+      badge.classList.toggle('hidden', data.unreadCount === 0);
+    }
+  } catch (error) {
+    console.error('Error al actualizar contador:', error);
+  }
+}
+
+// Inicializar contadores al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  // Solicitar permiso para notificaciones
+  if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+  
+  // Inicializar contadores
+  const solicitudIds = Array.from(
+    document.querySelectorAll('.open-chat-btn')
+  ).map(btn => btn.dataset.solicitudId);
+  
+  console.log("[Interventor] Inicializando contadores para solicitudes:", solicitudIds);
+  
+  solicitudIds.forEach(async (id) => {
+    await updateUnreadCountInterventor(id);
+  });
+});
+
+// Función para marcar mensajes como leídos (interventor)
+async function markMessagesAsReadInterventor(solicitudId) {
+  try {
+    const userId = obtenerIdUsuario();
+    console.log(`[Interventor] Marcando mensajes como leídos: ${solicitudId}, usuario ${userId}`);
+    
+    await fetch(`/api/chat/${solicitudId}/interventor/mark-read`, { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+    
+    // Actualizar contador local
+    updateUnreadCountInterventor(solicitudId);
+  } catch (error) {
+    console.error("Error al marcar mensajes como leídos:", error);
+  }
+}
   </script>
 </body>
 </html>

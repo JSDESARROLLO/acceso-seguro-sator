@@ -104,23 +104,39 @@ async function uploadToSpaces(filePath, fileName) {
 }
 
 
-// Negar solicitud (Mostrar formulario de comentarios)
-controller.mostrarNegarSolicitud = async (req, res) => {
-    const { id } = req.params;
-
+// Reemplazar la función mostrarNegarSolicitud para usar el modal existente
+exports.mostrarNegarSolicitud = async (req, res) => {
     try {
-        const query = 'SELECT * FROM solicitudes WHERE id = ?';
-        const [solicitud] = await connection.execute(query, [id]);
-
-        if (solicitud.length === 0) {
-            return res.status(404).send('Solicitud no encontrada');
+        const solicitudId = req.params.id;
+        console.log("[RUTAS] Obteniendo detalles para negar solicitud con ID:", solicitudId);
+        
+        // Obtener detalles de la solicitud
+        const [solicitudRows] = await connection.execute(`
+            SELECT s.*, u.nombre AS nombre_usuario, e.nombre AS nombre_empresa 
+            FROM solicitudes s
+            JOIN users u ON s.usuario_id = u.id
+            JOIN empresas e ON s.empresa_id = e.id
+            WHERE s.id = ?
+        `, [solicitudId]);
+        
+        if (solicitudRows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Solicitud no encontrada'
+            });
         }
-
-        res.render('negar-solicitud', { solicitud: solicitud[0] });
-
+        
+        // Devolver los datos en formato JSON para que el modal los use
+        res.json({
+            success: true,
+            solicitud: solicitudRows[0]
+        });
     } catch (error) {
         console.error('Error al obtener detalles de la solicitud:', error);
-        res.status(500).send('Error al obtener detalles de la solicitud');
+        res.status(500).json({
+            success: false,
+            message: 'Error al cargar los detalles de la solicitud'
+        });
     }
 };
 
@@ -157,26 +173,31 @@ controller.negarSolicitud = async (req, res) => {
     const { comentario } = req.body;
     const token = req.cookies.token;
 
-    jwt.verify(token, SECRET_KEY, async (err, decoded) => {
-        if (err) {
-            return res.redirect('/login');
-        }
+    try {
+        const decoded = jwt.verify(token, SECRET_KEY);
+        const usuarioId = decoded.id;
 
-        const { id: usuarioId } = decoded;
+        // Actualizar el estado de la solicitud a "negada"
+        await connection.execute('UPDATE solicitudes SET estado = "negada" WHERE id = ?', [id]);
 
-        try {
-            const query = 'UPDATE solicitudes SET estado = "negada" WHERE id = ?';
-            await connection.execute(query, [id]);
+        // Registrar la acción con el comentario
+        await connection.execute(
+            'INSERT INTO acciones (solicitud_id, usuario_id, accion, comentario) VALUES (?, ?, "negada", ?)',
+            [id, usuarioId, comentario]
+        );
 
-            const accionQuery = 'INSERT INTO acciones (solicitud_id, usuario_id, accion, comentario) VALUES (?, ?, "negada", ?)';
-            await connection.execute(accionQuery, [id, usuarioId, comentario]);
-
-            res.redirect('/vista-sst');
-        } catch (error) {
-            console.error('Error al negar la solicitud:', error);
-            res.status(500).send('Error al negar la solicitud');
-        }
-    });
+        // Responder con éxito
+        res.json({
+            success: true,
+            message: 'Solicitud negada correctamente'
+        });
+    } catch (error) {
+        console.error('Error al negar la solicitud:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al negar la solicitud'
+        });
+    }
 };
  
 

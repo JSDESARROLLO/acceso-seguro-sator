@@ -1,0 +1,172 @@
+  <a href="tel:+573001234567" class="text-sm teams-purple-text hover:underline">
+    <i class="fas fa-phone-alt mr-1"></i> +57 300 1234567
+  </a>
+</div>
+</div>
+</div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.4.1/dist/socket.io.min.js"></script>
+<script>
+  // Configuración inicial
+  const chatId = '<%= chatId %>';
+  const userId = '<%= user.id %>';
+  const userRole = '<%= user.role %>';
+  const mensajesContainer = document.getElementById('mensajes');
+  const mensajeInput = document.getElementById('mensajeInput');
+  const chatForm = document.getElementById('chatForm');
+  let socket;
+
+  // Inicializar Socket.io
+  function inicializarSocket() {
+    socket = io();
+    
+    // Unirse a la sala del usuario
+    socket.emit('joinUserRoom', userId);
+    
+    // Escuchar nuevos mensajes
+    socket.on('nuevoMensaje', (data) => {
+      if (data.chatId === chatId) {
+        agregarMensaje(data.mensaje);
+        marcarComoLeido();
+      }
+    });
+  }
+
+  // Cargar mensajes del chat
+  async function cargarMensajes() {
+    try {
+      const response = await fetch(`/api/chat/${chatId}/mensajes`);
+      const data = await response.json();
+      
+      if (data.mensajes && data.mensajes.length > 0) {
+        mensajesContainer.innerHTML = '';
+        data.mensajes.forEach(mensaje => {
+          agregarMensaje(mensaje);
+        });
+        scrollToBottom();
+      } else {
+        mensajesContainer.innerHTML = `
+          <div class="w-full flex justify-center my-4">
+            <div class="bg-gray-200 rounded-full px-4 py-2 text-sm text-gray-600">
+              No hay mensajes aún. ¡Comienza la conversación!
+            </div>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('Error al cargar mensajes:', error);
+      mensajesContainer.innerHTML = `
+        <div class="w-full flex justify-center my-4">
+          <div class="bg-red-100 text-red-600 rounded-full px-4 py-2 text-sm">
+            Error al cargar mensajes. Intenta recargar la página.
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // Agregar un mensaje a la conversación
+  function agregarMensaje(mensaje) {
+    const fechaFormateada = new Date(mensaje.fecha).toLocaleString();
+    const esPropio = mensaje.usuario.id == userId;
+    const rolColorClass = getRolColorClass(mensaje.usuario.rol);
+    
+    const mensajeHTML = `
+      <div class="flex flex-col ${esPropio ? 'items-end' : 'items-start'} mb-4">
+        <div class="flex items-center mb-1 ${esPropio ? 'flex-row-reverse' : ''}">
+          <div class="w-8 h-8 rounded-full ${rolColorClass} flex items-center justify-center text-white mx-2">
+            <i class="fas ${getRolIcon(mensaje.usuario.rol)}"></i>
+          </div>
+          <span class="text-xs text-gray-500">${mensaje.usuario.nombre} - ${fechaFormateada}</span>
+        </div>
+        <div class="message-bubble ${esPropio ? 'message-sent' : 'message-received'}">
+          ${mensaje.contenido.texto}
+        </div>
+      </div>
+    `;
+    
+    mensajesContainer.insertAdjacentHTML('beforeend', mensajeHTML);
+    scrollToBottom();
+  }
+
+  // Enviar un mensaje
+  async function enviarMensaje(texto) {
+    if (!texto.trim()) return;
+    
+    try {
+      const response = await fetch(`/api/chat/${chatId}/mensaje`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ texto })
+      });
+      
+      const data = await response.json();
+      
+      if (data.mensaje) {
+        agregarMensaje(data.mensaje);
+        mensajeInput.value = '';
+      }
+    } catch (error) {
+      console.error('Error al enviar mensaje:', error);
+      alert('Error al enviar el mensaje. Intenta nuevamente.');
+    }
+  }
+
+  // Marcar chat como leído
+  async function marcarComoLeido() {
+    try {
+      await fetch(`/api/chat/${chatId}/leido`, {
+        method: 'PUT'
+      });
+    } catch (error) {
+      console.error('Error al marcar como leído:', error);
+    }
+  }
+
+  // Funciones auxiliares
+  function scrollToBottom() {
+    const container = document.getElementById('mensajesContainer');
+    container.scrollTop = container.scrollHeight;
+  }
+  
+  function getRolColorClass(rol) {
+    switch(rol) {
+      case 'contratista': return 'bg-green-500';
+      case 'sst': return 'bg-red-500';
+      case 'interventor': return 'bg-blue-500';
+      default: return 'bg-gray-500';
+    }
+  }
+  
+  function getRolIcon(rol) {
+    switch(rol) {
+      case 'contratista': return 'fa-building';
+      case 'sst': return 'fa-shield-alt';
+      case 'interventor': return 'fa-user-tie';
+      default: return 'fa-user';
+    }
+  }
+
+  // Inicializar la página
+  document.addEventListener('DOMContentLoaded', () => {
+    inicializarSocket();
+    cargarMensajes();
+    
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      enviarMensaje(mensajeInput.value);
+    });
+    
+    mensajeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        enviarMensaje(mensajeInput.value);
+      }
+    });
+  });
+</script>
+</body>
+</html> 

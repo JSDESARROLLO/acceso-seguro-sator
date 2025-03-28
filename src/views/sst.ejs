@@ -48,6 +48,7 @@
             <th>Documentos</th>
             <th>Colaboradores</th> <!-- Nueva columna -->
             <th>Acción</th>
+            <th>Mensajes</th>
           </tr>
         </thead>
         <tbody id="tablaSolicitudes">
@@ -86,6 +87,13 @@
                         <%= ['negada'].includes(solicitud.estado) ? 'Negada' : 'Aprobado' %>
                       </span>
                     <% } %>
+                  </td>
+                  <td>
+              
+                    <!-- Botón Conversar añadido -->
+                    <button class="btn btn-primary btn-sm ml-2 open-chat-btn" data-solicitud-id="<%= solicitud.id %>">
+                      Conversar <span class="badge badge-light unread-count" data-solicitud-id="<%= solicitud.id %>">0</span>
+                    </button>
                   </td>
               </tr>
           <% }) %>
@@ -171,6 +179,30 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal de Chat para SST -->
+<div id="chatModalSST" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
+  <div class="bg-white w-full max-w-4xl h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
+    <!-- Header del chat -->
+    <div class="bg-gray-800 text-white px-4 py-3 flex justify-between items-center">
+      <h5 class="text-lg font-semibold">Chat SST - Solicitud <span id="chatSolicitudIdSST"></span></h5>
+      <button type="button" onclick="closeChatModalSST()" class="text-white hover:text-yellow-500">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <!-- Cuerpo del chat -->
+    <div class="flex-1 p-4 overflow-y-auto" id="chatMessagesSST"></div>
+    <!-- Input para enviar mensajes -->
+    <div class="border-t border-gray-200 p-4">
+      <div class="flex space-x-2">
+        <textarea id="chatInputSST" class="flex-1 p-2 border border-gray-300 rounded-md resize-none" rows="2" placeholder="Escribe un mensaje..."></textarea>
+        <button onclick="sendMessageSST()" class="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-yellow-500">Enviar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
   
   <!-- Modal para Definir Plantilla SS -->
@@ -470,6 +502,440 @@ async function definirPlantilla(colaboradorId, solicitudId) {
         Swal.fire({ icon: 'error', title: 'Error', text: error.message || 'No se pudo cargar el historial.' });
       }
     }
+
+
+
+    // Variables globales para el chat SST
+let currentSolicitudIdSST = null;
+let socketSST = null;
+let oldestMessageIdSST = null;
+
+// Abrir modal de chat desde los botones
+document.querySelectorAll('.open-chat-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const solicitudId = this.dataset.solicitudId;
+    openChatModalSST(solicitudId);
+  });
+});
+
+// Abrir modal de chat
+async function openChatModalSST(solicitudId) {
+  currentSolicitudIdSST = solicitudId;
+  document.getElementById('chatSolicitudIdSST').textContent = solicitudId;
+  document.getElementById('chatModalSST').classList.remove('hidden');
+
+  // Iniciar WebSocket
+  if (!socketSST || socketSST.readyState !== WebSocket.OPEN) {
+    socketSST = new WebSocket(`ws://${window.location.host}/ws/chat/sst`);
+    
+    socketSST.onopen = function() {
+      console.log('WebSocket SST conectado');
+    };
+    
+    socketSST.onmessage = function(event) {
+      const message = JSON.parse(event.data);
+      console.log("[SST] Mensaje recibido desde WebSocket:", message);
+      
+      // Solo procesar mensajes para la solicitud actual y de tipo SST
+      if (message.solicitudId === currentSolicitudIdSST && message.type === 'sst') {
+        // Mostrar el mensaje en el chat
+        displayMessageSST(message);
+        
+        // Importante: Solo notificar si el mensaje NO fue enviado por este usuario
+        // y si la ventana no está visible
+        const sstUserId = getSSUserId();
+        if (parseInt(message.usuario_id) !== parseInt(sstUserId) && document.hidden) {
+          console.log("[SST] Enviando notificación de nuevo mensaje recibido");
+          notifyNewMessageSST(message);
+        }
+      }
+      
+      // Actualizar el contador de mensajes no leídos para esta solicitud
+      // pero solo si la solicitud no está abierta actualmente
+      if (message.solicitudId !== currentSolicitudIdSST || document.hidden) {
+        updateUnreadCountSST(message.solicitudId);
+      }
+    };
+    
+    socketSST.onclose = function() {
+      console.log('WebSocket SST cerrado');
+    };
+    
+    socketSST.onerror = function(error) {
+      console.error('Error en WebSocket SST:', error);
+    };
+  }
+
+  // Cargar los últimos 20 mensajes
+  await loadInitialMessagesSST(solicitudId);
+  
+  // Marcar mensajes como leídos
+  await markMessagesAsReadSST(solicitudId);
+
+  // Configurar scroll para carga progresiva
+  const chatMessages = document.getElementById('chatMessagesSST');
+  chatMessages.addEventListener('scroll', () => {
+    if (chatMessages.scrollTop === 0 && oldestMessageIdSST) {
+      loadMoreMessagesSST(solicitudId);
+    }
+  });
+  
+  // Marcar mensajes como leídos al abrir
+  await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { method: 'POST' });
+  updateUnreadCountSST(solicitudId);
+}
+
+// Modificar la función para manejar notificaciones
+
+function notifyNewMessageSST(message) {
+  if (!("Notification" in window)) {
+    console.log("Este navegador no soporta notificaciones");
+    return;
+  }
+  
+  if (Notification.permission === "granted") {
+    // Buscar información de la solicitud para incluir en la notificación
+    const solicitudRow = document.querySelector(`tr[data-id="${message.solicitudId}"]`);
+    let empresa = "Empresa no identificada";
+    
+    if (solicitudRow) {
+      const empresaCell = solicitudRow.querySelector('td:nth-child(2)');
+      if (empresaCell) {
+        empresa = empresaCell.textContent.trim();
+      }
+    }
+    
+    const notification = new Notification(`Nuevo mensaje de ${empresa}`, {
+      body: `Solicitud #${message.solicitudId}: ${message.content}`,
+      icon: '/img/logo.png'
+    });
+    
+    notification.onclick = function() {
+      window.focus();
+      openChatModalSST(message.solicitudId);
+    };
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then(permission => {
+      if (permission === "granted") {
+        notifyNewMessageSST(message);
+      }
+    });
+  }
+}
+
+// Función para marcar mensajes como leídos
+async function markMessagesAsReadSST(solicitudId) {
+  try {
+    await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { method: 'POST' });
+    updateUnreadCountSST(solicitudId);
+  } catch (error) {
+    console.error('Error al marcar mensajes como leídos:', error);
+  }
+}
+
+// Cerrar modal de chat
+window.closeChatModalSST = function() {
+  document.getElementById('chatModalSST').classList.add('hidden');
+  if (socketSST) {
+    socketSST.close();
+  }
+  currentSolicitudIdSST = null;
+  oldestMessageIdSST = null;
+};
+
+// Cargar los últimos 20 mensajes
+async function loadInitialMessagesSST(solicitudId) {
+  const chatMessages = document.getElementById('chatMessagesSST');
+  chatMessages.innerHTML = ''; // Limpiar mensajes existentes
+  
+  try {
+    const sstUserId = getSSUserId();
+    console.log("Usuario SST ID:", sstUserId);
+    
+    const response = await fetch(`/api/chat/${solicitudId}/sst?limit=20&userId=${sstUserId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error al cargar mensajes: ${response.status}`);
+    }
+    
+    const messages = await response.json();
+    console.log("Mensajes cargados:", messages);
+    
+    // Invertimos los mensajes para mostrar en orden cronológico (más antiguos primero)
+    const orderedMessages = [...messages].reverse();
+    
+    for (const message of orderedMessages) {
+      // No sobrescribimos la propiedad isSender que viene del servidor
+      displayMessageSST(message);
+    }
+    
+    if (messages.length > 0) {
+      oldestMessageIdSST = messages[0].id;
+    }
+    
+    // Scroll al final
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+  } catch (error) {
+    console.error('Error al cargar mensajes iniciales:', error);
+    chatMessages.innerHTML = '<div class="text-center p-3 text-red-500">Error al cargar mensajes. Por favor intente nuevamente.</div>';
+  }
+}
+
+// Cargar más mensajes al hacer scroll hacia arriba
+async function loadMoreMessagesSST(solicitudId) {
+  if (!oldestMessageIdSST) return;
+  
+  try {
+    const sstUserId = getSSUserId();
+    const response = await fetch(`/api/chat/${solicitudId}/sst?limit=20&before=${oldestMessageIdSST}&userId=${sstUserId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error al cargar mensajes: ${response.status}`);
+    }
+    
+    const messages = await response.json();
+    
+    if (messages.length > 0) {
+      const chatMessages = document.getElementById('chatMessagesSST');
+      const scrollHeightBefore = chatMessages.scrollHeight;
+      const scrollTopBefore = chatMessages.scrollTop;
+      
+      // Mostrar mensajes en orden cronológico
+      const orderedMessages = [...messages].reverse();
+      
+      for (const message of orderedMessages) {
+        // No sobrescribimos isSender
+        displayMessageSST(message);
+      }
+      
+      oldestMessageIdSST = messages[0].id;
+      
+      // Mantener la posición del scroll
+      chatMessages.scrollTop = scrollTopBefore + (chatMessages.scrollHeight - scrollHeightBefore);
+    } else {
+      oldestMessageIdSST = null; // No hay más mensajes
+    }
+  } catch (error) {
+    console.error('Error al cargar más mensajes:', error);
+  }
+}
+
+// Corregir la función displayMessageSST 
+function displayMessageSST(message) {
+  const chatMessages = document.getElementById('chatMessagesSST');
+  const messageDiv = document.createElement('div');
+  
+  console.log("Mostrando mensaje:", message);
+  
+  // IMPORTANTE: Determinar explícitamente si es un mensaje enviado por el usuario actual
+  const sstUserId = getSSUserId();
+  const isSender = parseInt(message.usuario_id) === parseInt(sstUserId);
+  console.log(`El mensaje es de: ${message.usuario_id}, Usuario SST: ${sstUserId}, isSender: ${isSender}`);
+  
+  // Aplicar clase según el remitente
+  messageDiv.className = `p-3 my-2 rounded-lg ${isSender ? 
+    'bg-blue-600 text-white ml-auto' : 
+    'bg-gray-200 text-gray-800'} max-w-xs`;
+  
+  // Extraer correctamente el contenido del mensaje
+  let messageContent = '';
+  
+  if (typeof message.content === 'string') {
+    try {
+      // Intentar analizar si es un JSON
+      const jsonContent = JSON.parse(message.content);
+      messageContent = jsonContent.text || jsonContent.value || JSON.stringify(jsonContent);
+    } catch (e) {
+      // Si no es un JSON válido, usar el string directamente
+      messageContent = message.content;
+    }
+  } else if (message.content && message.content.text) {
+    messageContent = message.content.text;
+  } else if (message.content && typeof message.content === 'object') {
+    messageContent = message.content.text || message.content.value || JSON.stringify(message.content);
+  } else {
+    messageContent = String(message.content || "Mensaje sin contenido");
+  }
+  
+  // Incluir hora del mensaje
+  const messageTime = new Date(message.created_at).toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  
+  // Crear contenido HTML para el mensaje
+  messageDiv.innerHTML = `
+    <div class="text-sm mb-1">${messageContent}</div>
+    <div class="text-xs text-${isSender ? 'white' : 'gray'}-500 text-right">${messageTime}</div>
+  `;
+  
+  // Almacenar el ID del usuario para referencia futura
+  messageDiv.dataset.userId = message.usuario_id;
+  messageDiv.dataset.isSender = isSender;
+  
+  // Insertar en el orden correcto 
+  if (chatMessages.firstChild) {
+    chatMessages.appendChild(messageDiv); // Añadir al final para mantener orden cronológico
+  } else {
+    chatMessages.appendChild(messageDiv);
+  }
+  
+  // Auto-scroll si estamos cerca del fondo
+  const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+  if (isNearBottom) {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+}
+
+// Enviar mensaje
+window.sendMessageSST = function() {
+  const input = document.getElementById('chatInputSST');
+  const content = input.value.trim();
+  if (!content || !currentSolicitudIdSST || !socketSST) return;
+
+  const sstUserId = getSSUserId();
+  
+  // Crear el mensaje a enviar
+  const message = {
+    solicitudId: currentSolicitudIdSST,
+    type: 'sst',
+    content: content,
+    userId: sstUserId
+  };
+
+  console.log("[SST] Enviando mensaje:", message);
+  
+  // Enviar el mensaje al servidor
+  socketSST.send(JSON.stringify(message));
+  
+  // Crear representación local del mensaje enviado
+  const localMessage = {
+    id: 'temp-' + Date.now(),
+    usuario_id: sstUserId, // Importante: usar el ID real
+    content: content,
+    created_at: new Date().toISOString()
+  };
+  
+  // Aplicar explícitamente isSender = true al mensaje local
+  // para asegurar que se muestre correctamente como enviado
+  localMessage.isSender = true;
+  
+  // Mostrar mensaje inmediatamente en la interfaz
+  displayMessageSST(localMessage);
+  
+  // Limpiar el input y hacer scroll al final
+  input.value = '';
+  const chatMessages = document.getElementById('chatMessagesSST');
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+};
+
+// Actualizar contador de mensajes no leídos para SST
+async function updateUnreadCountSST(solicitudId) {
+  try {
+    // Obtener el ID del usuario SST actual
+    const sstUserId = getSSUserId();
+    console.log(`[SST] Actualizando contadores para solicitud ${solicitudId}, usuario SST: ${sstUserId}`);
+    
+    const response = await fetch(`/api/chat/${solicitudId}/sst/unread?userId=${sstUserId}`);
+    if (!response.ok) {
+      throw new Error('Error al obtener contador de mensajes no leídos');
+    }
+    
+    const data = await response.json();
+    console.log(`[SST] Contador recibido para solicitud ${solicitudId}:`, data);
+    
+    // Actualizar el contador visual solo para el usuario SST
+    const badge = document.querySelector(`.unread-count[data-solicitud-id="${solicitudId}"]`);
+    if (badge) {
+      // Solo mostrar el contador si hay mensajes no leídos
+      if (data.unreadCount > 0) {
+        badge.textContent = data.unreadCount;
+        badge.classList.remove('hidden');
+      } else {
+        badge.textContent = '0';
+        badge.classList.add('hidden');
+      }
+    }
+  } catch (error) {
+    console.error('[SST] Error al actualizar contador:', error);
+  }
+}
+
+// Obtener el ID del usuario SST actual
+function getSSUserId() {
+  // Como sabemos que el ID del usuario SST es 3 (según los logs)
+  // Este valor debe coincidir con tu usuario SST en la base de datos
+  const sstUserId = 3;
+  
+  console.log("Usuario SST ID:", sstUserId);
+  return sstUserId;
+}
+
+// Inicializar contadores al cargar la página
+document.addEventListener('DOMContentLoaded', async () => {
+  const solicitudIds = Array.from(document.querySelectorAll('.open-chat-btn')).map(btn => btn.dataset.solicitudId);
+  for (const id of solicitudIds) {
+    await updateUnreadCountSST(id);
+  }
+});
+
+// Reemplazar el código actual del formulario de negar
+$('#negarForm').on('submit', async function(e) {
+  e.preventDefault();
+  
+  const solicitudId = $(this).attr('action').split('/').pop();
+  const comentario = $('#comentario').val();
+  
+  if (!comentario) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'Por favor ingrese un comentario'
+    });
+    return;
+  }
+  
+  try {
+    Swal.fire({
+      title: 'Procesando...',
+      text: 'Por favor espere mientras se procesa la solicitud',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+    
+    const response = await fetch(`/negar-solicitud/${solicitudId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ comentario })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      Swal.fire({
+        icon: 'success',
+        title: 'Éxito',
+        text: 'La solicitud ha sido negada correctamente'
+      }).then(() => {
+        $('#modalNegar').modal('hide');
+        // Actualizar la UI para reflejar el cambio
+        const btnContainer = $(`tr[data-id="${solicitudId}"] td:nth-child(11)`);
+        btnContainer.html('<span class="badge badge-danger">Negada</span>');
+      });
+    } else {
+      throw new Error(data.message || 'Error al negar la solicitud');
+    }
+  } catch (error) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: error.message || 'No se pudo negar la solicitud'
+    });
+  }
+});
   </script>
 </body>
 </html>
