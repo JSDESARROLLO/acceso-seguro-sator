@@ -6,6 +6,88 @@
     <title><%= title %></title>
     <link rel="stylesheet" href="/css/register.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+      /* Estilos para el modal de política de datos */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+      }
+      
+      .modal-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 800px;
+        max-height: 80vh;
+        overflow-y: auto;
+        border-radius: 8px;
+      }
+      
+      .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      
+      .close:hover {
+        color: black;
+      }
+      
+      .politica-container {
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+        display: none;
+      }
+      
+      .required {
+        position: relative;
+      }
+      
+      .required::after {
+        content: '*';
+        color: red;
+        position: absolute;
+        top: 0;
+        right: -10px;
+      }
+      
+      /* Estilos para el checkbox */
+      .checkbox-container {
+        display: flex;
+        align-items: flex-start;
+        margin-top: 16px;
+      }
+      
+      .checkbox-container input[type="checkbox"] {
+        margin-right: 10px;
+        margin-top: 4px;
+      }
+      
+      .checkbox-container label {
+        font-size: 14px;
+        line-height: 1.4;
+      }
+      
+      .checkbox-container a {
+        color: #0066cc;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
     <div class="container">
@@ -14,7 +96,7 @@
           <img src="/img/logo-fortox.jpeg" alt="Logo" class="logo">
         </div>
         <h1>Regístrate</h1>
-        <form action="/register" method="POST">
+        <form action="/register" method="POST" id="registerForm">
           <div class="form-group">
             <label for="username">Usuario</label>
             <input type="text" name="username" placeholder="Ingresa tu usuario" required>
@@ -52,7 +134,19 @@
                 <% } %>
             </select>
           </div>
-          <button type="submit">Registrar</button>
+          
+          <!-- Política de tratamiento de datos - solo visible para contratistas -->
+          <div id="politicaDatosContainer" class="politica-container">
+            <div class="checkbox-container">
+              <input type="checkbox" name="aceptaPolitica" id="aceptaPolitica">
+              <label for="aceptaPolitica">
+                He leído y acepto la <a href="/politica-tratamiento-datos" target="_blank">Política de Tratamiento de Datos Personales</a>. Entiendo que este consentimiento es necesario para el registro de mis datos y los de mis colaboradores en el sistema.
+              </label>
+            </div>
+            <small style="display: block; margin-top: 8px; color: #666;">Al aceptar, se enviará una copia de esta política a tu correo electrónico para tu registro.</small>
+          </div>
+          
+          <button type="submit" id="submitBtn">Registrar</button>
         </form>
         <% if (error) { %>
           <p class="error"><%= error %></p>
@@ -69,6 +163,8 @@
         const form = document.querySelector('form');
         const emailInput = document.getElementById('email');
         const roleSelect = document.getElementById('role');
+        const politicaContainer = document.getElementById('politicaDatosContainer');
+        const aceptaPolitica = document.getElementById('aceptaPolitica');
         
         // Función para validar el correo electrónico
         function validateEmail(email) {
@@ -84,9 +180,13 @@
           if (isContratista) {
             emailInput.required = true;
             emailInput.parentElement.classList.add('required');
+            politicaContainer.style.display = 'block';
+            aceptaPolitica.required = true;
           } else {
             emailInput.required = false;
             emailInput.parentElement.classList.remove('required');
+            politicaContainer.style.display = 'none';
+            aceptaPolitica.required = false;
           }
         }
 
@@ -114,6 +214,13 @@
               icon: 'error',
               title: 'Correo electrónico inválido',
               text: 'Por favor, ingresa un correo electrónico válido.',
+            });
+          } else if (isContratista && !aceptaPolitica.checked) {
+            event.preventDefault();
+            Swal.fire({
+              icon: 'error',
+              title: 'Política de datos no aceptada',
+              text: 'Debes aceptar la Política de Tratamiento de Datos Personales para continuar.',
             });
           }
         });

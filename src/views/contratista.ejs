@@ -166,8 +166,8 @@
                 <h5 class="modal-title">Colaboradores de la Solicitud</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
                   <span aria-hidden="true">×</span>
-                </button>
-              </div>
+              </button>
+            </div>
               <div class="modal-body">
                 <p><strong>ID de la Solicitud:</strong> <span id="colaboradoresId"></span></p>
                 <p><strong>Empresa:</strong> <span id="colaboradoresEmpresa"></span></p>
@@ -178,7 +178,7 @@
                     <option value="habilitados">Habilitados</option>
                     <option value="inhabilitados">Inhabilitados</option>
                   </select>
-                </div>
+            </div>
                 <div class="table-responsive">
                   <table class="table table-bordered">
                     <thead>
@@ -325,80 +325,80 @@
     <p class="ml-4 text-white text-lg">Procesando archivos...</p>
   </div>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const form = document.getElementById('formulario');
-      const addPersonBtn = document.getElementById('add-person');
-      const personasContainer = document.getElementById('personas-container');
-      const submitButton = document.getElementById('submitButton');
-      const showDisabledBtn = document.getElementById('show-disabled-collaborators');
-      const modalDisabled = document.getElementById('modalDisabledCollaborators');
-      const disabledList = document.getElementById('disabled-collaborators-list');
-      const lugarInput = document.getElementById('lugar');
-      const lugaresList = document.getElementById('lugares-list');
-      const errorLugar = document.getElementById('error-lugar');
-      let esRenovacion = false;
-      let lugarValido = false;
-      let solicitudActualId = null;
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('formulario');
+    const addPersonBtn = document.getElementById('add-person');
+    const personasContainer = document.getElementById('personas-container');
+    const submitButton = document.getElementById('submitButton');
+    const showDisabledBtn = document.getElementById('show-disabled-collaborators');
+    const modalDisabled = document.getElementById('modalDisabledCollaborators');
+    const disabledList = document.getElementById('disabled-collaborators-list');
+    const lugarInput = document.getElementById('lugar');
+    const lugaresList = document.getElementById('lugares-list');
+    const errorLugar = document.getElementById('error-lugar');
+    let esRenovacion = false;
+    let lugarValido = false;
+    let solicitudActualId = null;
 
-      // Lista de lugares desde el servidor
-      const lugares = <%- JSON.stringify(lugares) %>;
+    // Lista de lugares desde el servidor
+    const lugares = <%- JSON.stringify(lugares) %>;
 
-      // Establecer texto inicial del botón
-      submitButton.textContent = 'Enviar Solicitud';
+    // Establecer texto inicial del botón
+    submitButton.textContent = 'Enviar Solicitud';
 
-      // Plantilla para nuevo colaborador (sin cambios)
-      const collaboratorTemplate = `
-        <div class="person-group mb-4 relative p-4 border border-ga-cream rounded-lg">
-          <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-            </svg>
-          </button>
-          <div class="mb-4">
-            <input type="number" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
-            <input type="text" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
-            <input type="hidden" name="estado[]" value="true">
+    // Plantilla para nuevo colaborador (sin cambios)
+    const collaboratorTemplate = `
+      <div class="person-group mb-4 relative p-4 border border-ga-cream rounded-lg">
+        <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        <div class="mb-4">
+          <input type="number" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+          <input type="text" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+          <input type="hidden" name="estado[]" value="true">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-ga-navy mb-2">Foto del colaborador</label>
+            <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
           </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-ga-navy mb-2">Foto del colaborador</label>
-              <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
-            </div>
-            <div>
-              <label class="block text-ga-navy mb-2">Foto de la cédula</label>
-              <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
-            </div>
+          <div>
+            <label class="block text-ga-navy mb-2">Foto de la cédula</label>
+            <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
           </div>
         </div>
-      `;
+      </div>
+    `;
 
-      // Funciones existentes (sin cambios)
-      const addCollaborator = () => {
-        const newPerson = document.createElement('div');
-        newPerson.innerHTML = collaboratorTemplate;
-        personasContainer.appendChild(newPerson.firstElementChild);
-        updateRemoveButtons();
-      };
+    // Funciones existentes (sin cambios)
+    const addCollaborator = () => {
+      const newPerson = document.createElement('div');
+      newPerson.innerHTML = collaboratorTemplate;
+      personasContainer.appendChild(newPerson.firstElementChild);
+      updateRemoveButtons();
+    };
 
-      const updateRemoveButtons = () => {
-        const persons = personasContainer.querySelectorAll('.person-group');
-        persons.forEach(person => {
-          const removeBtn = person.querySelector('.remove-person');
-          if (removeBtn) {
-            if (persons.length === 1) {
-              removeBtn.classList.add('hidden');
-            } else {
-              removeBtn.classList.remove('hidden');
-            }
+    const updateRemoveButtons = () => {
+      const persons = personasContainer.querySelectorAll('.person-group');
+      persons.forEach(person => {
+        const removeBtn = person.querySelector('.remove-person');
+        if (removeBtn) {
+          if (persons.length === 1) {
+            removeBtn.classList.add('hidden');
+          } else {
+            removeBtn.classList.remove('hidden');
           }
-        });
-      };
+        }
+      });
+    };
 
-      // Autocompletado para el campo "Lugar"
-      lugarInput.addEventListener('input', function() {
-        const value = this.value.trim().toLowerCase();
-        lugaresList.innerHTML = '';
+    // Autocompletado para el campo "Lugar"
+    lugarInput.addEventListener('input', function() {
+      const value = this.value.trim().toLowerCase();
+      lugaresList.innerHTML = '';
 
         // Si estamos en modo renovación, mantener lugarValido como true
         if (esRenovacion) {
@@ -409,69 +409,69 @@
         }
         
         if (value.length > 0) {
-          const filteredLugares = lugares.filter(lugar => 
-            lugar.nombre_lugar.toLowerCase().includes(value)
-          );
+        const filteredLugares = lugares.filter(lugar => 
+          lugar.nombre_lugar.toLowerCase().includes(value)
+        );
 
-          if (filteredLugares.length > 0) {
-            filteredLugares.forEach(lugar => {
-              const li = document.createElement('li');
-              li.className = 'p-2 hover:bg-gray-200 cursor-pointer';
-              li.dataset.value = lugar.nombre_lugar;
-              li.textContent = lugar.nombre_lugar;
-              li.addEventListener('click', () => {
-                lugarInput.value = lugar.nombre_lugar;
-                lugarValido = true;
-                lugaresList.classList.add('hidden');
-                errorLugar.classList.add('hidden');
-              });
-              lugaresList.appendChild(li);
+        if (filteredLugares.length > 0) {
+          filteredLugares.forEach(lugar => {
+            const li = document.createElement('li');
+            li.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+            li.dataset.value = lugar.nombre_lugar;
+            li.textContent = lugar.nombre_lugar;
+            li.addEventListener('click', () => {
+              lugarInput.value = lugar.nombre_lugar;
+              lugarValido = true;
+              lugaresList.classList.add('hidden');
+              errorLugar.classList.add('hidden');
             });
-            lugaresList.classList.remove('hidden');
-          } else {
-            lugaresList.classList.add('hidden');
-            lugarValido = false;
-            errorLugar.classList.remove('hidden');
-          }
+            lugaresList.appendChild(li);
+          });
+          lugaresList.classList.remove('hidden');
         } else {
           lugaresList.classList.add('hidden');
           lugarValido = false;
-          errorLugar.classList.add('hidden');
+          errorLugar.classList.remove('hidden');
         }
-      });
+      } else {
+        lugaresList.classList.add('hidden');
+          lugarValido = false;
+          errorLugar.classList.add('hidden');
+      }
+    });
 
       // Modificar también el event listener de click fuera
-      document.addEventListener('click', (e) => {
-        if (!lugarInput.contains(e.target) && !lugaresList.contains(e.target)) {
-          lugaresList.classList.add('hidden');
+    document.addEventListener('click', (e) => {
+      if (!lugarInput.contains(e.target) && !lugaresList.contains(e.target)) {
+        lugaresList.classList.add('hidden');
           if (esRenovacion) {
             lugarValido = true;
             errorLugar.classList.add('hidden');
           } else {
             lugarValido = lugares.some(lugar => lugar.nombre_lugar === lugarInput.value.trim());
             if (!lugarValido) {
-              errorLugar.classList.remove('hidden');
-            } else {
-              errorLugar.classList.add('hidden');
+          errorLugar.classList.remove('hidden');
+        } else {
+          errorLugar.classList.add('hidden');
             }
-          }
         }
-      });
+      }
+    });
 
       // En la función renovarSolicitud
-      window.renovarSolicitud = async function(solicitudId) {
-        try {
-          const response = await fetch(`/obtener-datos-solicitud/${solicitudId}`);
-          if (!response.ok) {
-            throw new Error('Error al obtener datos de la solicitud');
-          }
-          
-          const data = await response.json();
-          console.log('Datos recibidos:', data);
-          
-          if (data.solicitud && data.colaboradores) {
-            esRenovacion = true;
-            solicitudActualId = solicitudId;
+    window.renovarSolicitud = async function(solicitudId) {
+  try {
+    const response = await fetch(`/obtener-datos-solicitud/${solicitudId}`);
+    if (!response.ok) {
+      throw new Error('Error al obtener datos de la solicitud');
+    }
+    
+    const data = await response.json();
+    console.log('Datos recibidos:', data);
+    
+    if (data.solicitud && data.colaboradores) {
+      esRenovacion = true;
+      solicitudActualId = solicitudId;
             
             console.log("Estableciendo solicitudActualId:", solicitudId);
             
@@ -481,10 +481,10 @@
             btnColaboradores.style.display = 'inline-block';
             btnColaboradores.disabled = false;
             console.log("Botón mostrado:", btnColaboradores.style.display);
-            
-            // Campos existentes que ya están deshabilitados
-            document.getElementById('empresa').value = data.solicitud.empresa || '';
-            document.getElementById('nit').value = data.solicitud.nit || '';
+      
+      // Campos existentes que ya están deshabilitados
+      document.getElementById('empresa').value = data.solicitud.empresa || '';
+      document.getElementById('nit').value = data.solicitud.nit || '';
             
             // Establecer el lugar y validarlo inmediatamente
             const lugarInput = document.getElementById('lugar');
@@ -495,128 +495,128 @@
             document.getElementById('error-lugar').classList.add('hidden');
             
             // Continuar con el establecimiento de otros campos
-            document.getElementById('labor').value = data.solicitud.labor || '';
-            document.getElementById('interventor_id').value = data.solicitud.interventor_id || '';
-            
+      document.getElementById('labor').value = data.solicitud.labor || '';
+      document.getElementById('interventor_id').value = data.solicitud.interventor_id || '';
+      
             // Continuar con el resto de atributos/estilos
             lugarInput.setAttribute('readonly', true);
             lugarInput.classList.add('bg-gray-100');
-            document.getElementById('labor').setAttribute('readonly', true);
-            document.getElementById('labor').classList.add('bg-gray-100');
-            document.getElementById('interventor_id').setAttribute('disabled', true);
+      document.getElementById('labor').setAttribute('readonly', true);
+      document.getElementById('labor').classList.add('bg-gray-100');
+      document.getElementById('interventor_id').setAttribute('disabled', true);
 
-            // Formatear las fechas
-            const formatDate = (dateString) => {
-              const date = new Date(dateString);
-              return date.toISOString().split('T')[0];
-            };
-            
-            // Asignar valores a los campos de fecha y deshabilitarlos
-            document.getElementById('inicio-obra').value = formatDate(data.solicitud.inicio_obra);
-            document.getElementById('fin-obra').value = formatDate(data.solicitud.fin_obra);
-            document.getElementById('dias').value = data.solicitud.dias_trabajo || '';
-
-            // Deshabilitar los campos de fecha
-            document.getElementById('inicio-obra').setAttribute('readonly', true);
-            document.getElementById('inicio-obra').classList.add('bg-gray-100');
-            document.getElementById('fin-obra').setAttribute('readonly', true);
-            document.getElementById('fin-obra').classList.add('bg-gray-100');
-
-            // Opcional: también podrías deshabilitar el campo de días si no debe cambiar
-            document.getElementById('dias').setAttribute('readonly', true);
-            document.getElementById('dias').classList.add('bg-gray-100');
-
-            submitButton.textContent = 'Guardar Cambios';
-            
-            // Resto del código sigue igual...
-            showDisabledBtn.removeAttribute('disabled');
-            
-            const arlPreview = document.getElementById('arl-preview');
-            const pasocialPreview = document.getElementById('pasocial-preview');
-            
-            if (data.solicitud.arl_documento) {
-              arlPreview.innerHTML = `
-                <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-                  <span class="text-sm">Documento ARL actual</span>
-                  <div class="flex space-x-2">
-                    <a href="${data.solicitud.arl_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
-                  </div>
-                </div>
-              `;
-            }
-
-            if (data.solicitud.pasocial_documento) {
-              pasocialPreview.innerHTML = `
-                <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-                  <span class="text-sm">Planilla Social actual</span>
-                  <div class="flex space-x-2">
-                    <a href="${data.solicitud.pasocial_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
-                  </div>
-                </div>
-              `;
-            }
-
-            personasContainer.innerHTML = '';
-            
-            if (data.colaboradores && data.colaboradores.length > 0) {
-              data.colaboradores.forEach(colaborador => {
-                const colaboradorDiv = document.createElement('div');
-                colaboradorDiv.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
-                colaboradorDiv.dataset.colaboradorId = colaborador.id;
-                colaboradorDiv.innerHTML = `
-                  <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                  </button>
-                  <div class="mb-4">
-                    <input type="text" value="${colaborador.nombre}" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
-                    <input type="number" value="${colaborador.cedula}" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
-                    <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
-                    <input type="hidden" name="estado[]" value="true">
-                  </div>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div>
-                      <label class="block text-ga-navy mb-2">Foto actual del colaborador</label>
-                      ${colaborador.foto ? `
-                        <div class="mb-2">
-                          <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
-                          <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
-                        </div>
-                      ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
-                      <label class="block text-ga-navy mb-2">Actualizar foto (opcional)</label>
-                      <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
-                    </div>
-                    <div>
-                      <label class="block text-ga-navy mb-2">Cédula actual del colaborador</label>
-                      ${colaborador.cedulaFoto ? `
-                        <div class="mb-2">
-                          <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
-                          <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
-                        </div>
-                      ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
-                      <label class="block text-ga-navy mb-2">Actualizar cédula (opcional)</label>
-                      <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
-                    </div>
-                  </div>
-                `;
-                personasContainer.appendChild(colaboradorDiv);
-              });
-              
-              updateRemoveButtons();
-            }
-
-            document.getElementById('contratistaFormulario').scrollIntoView({ behavior: 'smooth' });
-          }
-        } catch (error) {
-          console.error('Error al renovar solicitud:', error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Error al cargar los datos de la solicitud'
-          });
-        }
+      // Formatear las fechas
+      const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toISOString().split('T')[0];
       };
+      
+      // Asignar valores a los campos de fecha y deshabilitarlos
+      document.getElementById('inicio-obra').value = formatDate(data.solicitud.inicio_obra);
+      document.getElementById('fin-obra').value = formatDate(data.solicitud.fin_obra);
+      document.getElementById('dias').value = data.solicitud.dias_trabajo || '';
+
+      // Deshabilitar los campos de fecha
+      document.getElementById('inicio-obra').setAttribute('readonly', true);
+      document.getElementById('inicio-obra').classList.add('bg-gray-100');
+      document.getElementById('fin-obra').setAttribute('readonly', true);
+      document.getElementById('fin-obra').classList.add('bg-gray-100');
+
+      // Opcional: también podrías deshabilitar el campo de días si no debe cambiar
+      document.getElementById('dias').setAttribute('readonly', true);
+      document.getElementById('dias').classList.add('bg-gray-100');
+
+      submitButton.textContent = 'Guardar Cambios';
+      
+      // Resto del código sigue igual...
+      showDisabledBtn.removeAttribute('disabled');
+      
+      const arlPreview = document.getElementById('arl-preview');
+      const pasocialPreview = document.getElementById('pasocial-preview');
+      
+      if (data.solicitud.arl_documento) {
+        arlPreview.innerHTML = `
+          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+            <span class="text-sm">Documento ARL actual</span>
+            <div class="flex space-x-2">
+              <a href="${data.solicitud.arl_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+            </div>
+          </div>
+        `;
+      }
+
+      if (data.solicitud.pasocial_documento) {
+        pasocialPreview.innerHTML = `
+          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+            <span class="text-sm">Planilla Social actual</span>
+            <div class="flex space-x-2">
+              <a href="${data.solicitud.pasocial_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+            </div>
+          </div>
+        `;
+      }
+
+      personasContainer.innerHTML = '';
+      
+      if (data.colaboradores && data.colaboradores.length > 0) {
+        data.colaboradores.forEach(colaborador => {
+          const colaboradorDiv = document.createElement('div');
+          colaboradorDiv.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
+          colaboradorDiv.dataset.colaboradorId = colaborador.id;
+          colaboradorDiv.innerHTML = `
+            <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
+            <div class="mb-4">
+              <input type="text" value="${colaborador.nombre}" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+              <input type="number" value="${colaborador.cedula}" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+              <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
+              <input type="hidden" name="estado[]" value="true">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-ga-navy mb-2">Foto actual del colaborador</label>
+                ${colaborador.foto ? `
+                  <div class="mb-2">
+                    <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
+                    <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
+                  </div>
+                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
+                <label class="block text-ga-navy mb-2">Actualizar foto (opcional)</label>
+                <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+              </div>
+              <div>
+                <label class="block text-ga-navy mb-2">Cédula actual del colaborador</label>
+                ${colaborador.cedulaFoto ? `
+                  <div class="mb-2">
+                    <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
+                    <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
+                  </div>
+                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
+                <label class="block text-ga-navy mb-2">Actualizar cédula (opcional)</label>
+                <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+              </div>
+            </div>
+          `;
+          personasContainer.appendChild(colaboradorDiv);
+        });
+        
+        updateRemoveButtons();
+      }
+
+      document.getElementById('contratistaFormulario').scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    console.error('Error al renovar solicitud:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'Error al cargar los datos de la solicitud'
+    });
+  }
+};
 
       // Reemplazar el event listener del botón show-disabled-collaborators con esta versión corregida
       document.getElementById('show-disabled-collaborators').addEventListener('click', async function() {
@@ -641,7 +641,7 @@
           
           const response = await fetch(`/obtener-colaboradores-todos/${solicitudActualId}`);
           
-          if (!response.ok) {
+        if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Error al obtener colaboradores');
           }
@@ -666,7 +666,7 @@
                 <td colspan="8" class="text-center">No hay colaboradores para mostrar</td>
               </tr>
             `;
-          } else {
+        } else {
             data.colaboradores.forEach(colaborador => {
               const accionBtn = colaborador.estado ? 
                 `<button class="btn btn-danger btn-sm accion-colaborador" data-colaborador-id="${colaborador.id}" data-nuevo-estado="false">Deshabilitar</button>` :
@@ -713,15 +713,15 @@
             verHistorial(colaboradorId);
           });
           
-        } catch (error) {
+      } catch (error) {
           console.error("Error al cargar colaboradores:", error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
             text: error.message || 'Error al cargar colaboradores'
-          });
-        }
-      });
+        });
+      }
+    });
 
       // Función para filtrar las filas de la tabla según el estado seleccionado
       function aplicarFiltroEstado() {
@@ -888,7 +888,7 @@
           });
           
           const data = await response.json();
-          
+
           if (!response.ok) {
             throw new Error(data.message || 'Error al actualizar el estado');
           }
@@ -936,7 +936,7 @@
             timer: 1500,
             showConfirmButton: false
           });
-          
+
         } catch (error) {
           console.error('Error:', error);
           // Reactivar el botón si existe
@@ -1020,9 +1020,9 @@
           
         } catch (error) {
           console.error("Error al agregar colaborador al formulario:", error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
             text: 'No se pudo agregar el colaborador al formulario'
           });
         }
@@ -1038,7 +1038,7 @@
         // Verificar si hay más de un colaborador
         const totalColaboradores = document.querySelectorAll('.person-group').length;
         if (totalColaboradores <= 1) {
-          Swal.fire({
+                Swal.fire({
             icon: 'info',
             title: 'Información',
             text: 'No se puede eliminar el último colaborador del formulario.',
@@ -1054,174 +1054,174 @@
         updateRemoveButtons();
       }
 
-      const validateCollaborators = () => {
-        const persons = personasContainer.querySelectorAll('.person-group');
-        if (persons.length === 0) {
-          addCollaborator();
+    const validateCollaborators = () => {
+      const persons = personasContainer.querySelectorAll('.person-group');
+      if (persons.length === 0) {
+        addCollaborator();
+      }
+      updateRemoveButtons();
+    };
+
+    validateCollaborators();
+    addPersonBtn.addEventListener('click', addCollaborator);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+      const fechaFin = new Date(document.getElementById('fin-obra').value);
+      
+      if (!fechaInicio || !fechaFin || isNaN(fechaInicio) || isNaN(fechaFin)) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Por favor seleccione fechas válidas'
+        });
+        return;
+      }
+
+      if (fechaFin < fechaInicio) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
+        });
+        return;
+      }
+
+      if (personasContainer.children.length === 0) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Debe agregar al menos un colaborador'
+        });
+        return;
+      }
+
+      const requiredFields = form.querySelectorAll('[required]');
+      let hasEmptyFields = false;
+      requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+          hasEmptyFields = true;
+          field.classList.add('border-red-500');
+        } else {
+          field.classList.remove('border-red-500');
         }
-        updateRemoveButtons();
-      };
+      });
 
-      validateCollaborators();
-      addPersonBtn.addEventListener('click', addCollaborator);
+      if (hasEmptyFields) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Por favor complete todos los campos requeridos'
+        });
+        return;
+      }
 
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fechaInicio = new Date(document.getElementById('inicio-obra').value);
-        const fechaFin = new Date(document.getElementById('fin-obra').value);
+      if (!lugarValido && !esRenovacion) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Por favor seleccione un lugar válido de la lista'
+        });
+        return;
+      }
+
+      const formData = new FormData(form);
+
+      try {
+        Swal.fire({
+          title: 'Procesando...',
+          text: 'Por favor espere mientras se procesa su solicitud',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
         
-        if (!fechaInicio || !fechaFin || isNaN(fechaInicio) || isNaN(fechaFin)) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Por favor seleccione fechas válidas'
-          });
-          return;
+        console.log('Enviando solicitud a:', url);
+        console.log('FormData:', Object.fromEntries(formData));
+
+        const response = await fetch(url, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error('Error al procesar la solicitud');
         }
 
-        if (fechaFin < fechaInicio) {
+        const result = await response.json();
+        console.log('Respuesta del servidor:', result);
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'Éxito',
+          text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente',
+          confirmButtonText: 'Aceptar'
+        });
+
+        window.location.reload();
+      } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Ocurrió un error al procesar la solicitud. Por favor intente nuevamente.'
+        });
+      }
+    });
+
+    function calcularDias() {
+      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+      const fechaFin = new Date(document.getElementById('fin-obra').value);
+      const diasInput = document.getElementById('dias');
+
+      if (fechaInicio && fechaFin && !isNaN(fechaInicio) && !isNaN(fechaFin)) {
+        const diferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (diferencia < 1) {
           Swal.fire({
             icon: 'error',
             title: 'Error',
             text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
           });
-          return;
-        }
-
-        if (personasContainer.children.length === 0) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Debe agregar al menos un colaborador'
-          });
-          return;
-        }
-
-        const requiredFields = form.querySelectorAll('[required]');
-        let hasEmptyFields = false;
-        requiredFields.forEach(field => {
-          if (!field.value.trim()) {
-            hasEmptyFields = true;
-            field.classList.add('border-red-500');
-          } else {
-            field.classList.remove('border-red-500');
-          }
-        });
-
-        if (hasEmptyFields) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Por favor complete todos los campos requeridos'
-          });
-          return;
-        }
-
-        if (!lugarValido && !esRenovacion) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Por favor seleccione un lugar válido de la lista'
-          });
-          return;
-        }
-
-        const formData = new FormData(form);
-
-        try {
-          Swal.fire({
-            title: 'Procesando...',
-            text: 'Por favor espere mientras se procesa su solicitud',
-            allowOutsideClick: false,
-            didOpen: () => {
-              Swal.showLoading();
-            }
-          });
-
-          const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
-          
-          console.log('Enviando solicitud a:', url);
-          console.log('FormData:', Object.fromEntries(formData));
-
-          const response = await fetch(url, {
-            method: 'POST',
-            body: formData
-          });
-
-          if (!response.ok) {
-            throw new Error('Error al procesar la solicitud');
-          }
-
-          const result = await response.json();
-          console.log('Respuesta del servidor:', result);
-
-          await Swal.fire({
-            icon: 'success',
-            title: 'Éxito',
-            text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente',
-            confirmButtonText: 'Aceptar'
-          });
-
-          window.location.reload();
-        } catch (error) {
-          console.error('Error:', error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Ocurrió un error al procesar la solicitud. Por favor intente nuevamente.'
-          });
-        }
-      });
-
-      function calcularDias() {
-        const fechaInicio = new Date(document.getElementById('inicio-obra').value);
-        const fechaFin = new Date(document.getElementById('fin-obra').value);
-        const diasInput = document.getElementById('dias');
-
-        if (fechaInicio && fechaFin && !isNaN(fechaInicio) && !isNaN(fechaFin)) {
-          const diferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
-          
-          if (diferencia < 1) {
-            Swal.fire({
-              icon: 'error',
-              title: 'Error',
-              text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
-            });
-            document.getElementById('fin-obra').value = document.getElementById('inicio-obra').value;
-            diasInput.value = '1';
-          } else {
-            diasInput.value = diferencia;
-          }
+          document.getElementById('fin-obra').value = document.getElementById('inicio-obra').value;
+          diasInput.value = '1';
         } else {
-          diasInput.value = '';
+          diasInput.value = diferencia;
         }
+      } else {
+        diasInput.value = '';
       }
+    }
 
-      document.getElementById('inicio-obra').addEventListener('change', function() {
-        const finObraInput = document.getElementById('fin-obra');
-        if (!finObraInput.value) {
-          finObraInput.value = this.value;
-        }
-        calcularDias();
-      });
+    document.getElementById('inicio-obra').addEventListener('change', function() {
+      const finObraInput = document.getElementById('fin-obra');
+      if (!finObraInput.value) {
+        finObraInput.value = this.value;
+      }
+      calcularDias();
+    });
 
-      document.getElementById('fin-obra').addEventListener('change', function() {
-        const inicioObraInput = document.getElementById('inicio-obra');
-        if (!inicioObraInput.value) {
-          inicioObraInput.value = this.value;
-        }
-        calcularDias();
-      });
+    document.getElementById('fin-obra').addEventListener('change', function() {
+      const inicioObraInput = document.getElementById('inicio-obra');
+      if (!inicioObraInput.value) {
+        inicioObraInput.value = this.value;
+      }
+      calcularDias();
+    });
 
-      document.getElementById('arl').addEventListener('change', function() {
-        const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
-        document.getElementById('arl-filename').textContent = filename;
-      });
+    document.getElementById('arl').addEventListener('change', function() {
+      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
+      document.getElementById('arl-filename').textContent = filename;
+    });
 
-      document.getElementById('pasocial').addEventListener('change', function() {
-        const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
-        document.getElementById('pasocial-filename').textContent = filename;
-      });
+    document.getElementById('pasocial').addEventListener('change', function() {
+      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
+      document.getElementById('pasocial-filename').textContent = filename;
+    });
 
       // Agregar este código al final del script principal
       document.addEventListener('DOMContentLoaded', function() {
@@ -1318,8 +1318,8 @@
           });
         }
       };
-    });
-  </script>
+  });
+</script>
 </body>
 </html>
 

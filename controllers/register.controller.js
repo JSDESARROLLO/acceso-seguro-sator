@@ -1,58 +1,72 @@
+// register.controller.js
 const bcrypt = require('bcrypt');
-const connection = require('../db/db');  // Usando mysql2/promise
-const controller = {};
+const connection = require('../db/db');
+const { S3Client } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
+const emailService = require('../services/email.service');
+const fs = require('fs');
+const path = require('path');
+const { format } = require('date-fns');
+const handlebars = require('handlebars');
 require('dotenv').config();
 
- 
+const controller = {};
 
-// Leer la variable de entorno REGISTRO_ROLES
 const registroRoles = process.env.REGISTRO_HABILITAR_SI_NO;
 
-// Controlador para el formulario de registro
+const s3Client = new S3Client({
+    forcePathStyle: false,
+    endpoint: `https://${process.env.DO_SPACES_ENDPOINT}`,
+    region: "us-east-1",
+    credentials: {
+        accessKeyId: process.env.DO_SPACES_KEY,
+        secretAccessKey: process.env.DO_SPACES_SECRET
+    }
+});
+
+console.log('[CONTROLADOR] Verificando controller.registerForm...');
 controller.registerForm = async (req, res) => {
     try {
+        console.log('[CONTROLADOR] Procesando formulario de registro');
         let roles = [];
-
-        // Verificar el valor de REGISTRO_ROLES y realizar la consulta correspondiente
         if (registroRoles === "SI") {
-            // Si REGISTRO_ROLES es SI, obtienes todos los roles
+            console.log('[CONTROLADOR] REGISTRO_ROLES = SÍ, obteniendo todos los roles');
             const [allRoles] = await connection.query('SELECT id, role_name FROM roles');
             roles = allRoles;
         } else if (registroRoles === "NO") {
-            // Si REGISTRO_ROLES es NO, solo obtienes el rol "contratista"
+            console.log('[CONTROLADOR] REGISTRO_ROLES = NO, obteniendo solo rol contratista');
             const [contratistaRole] = await connection.query('SELECT id, role_name FROM roles WHERE role_name = "contratista"');
             roles = contratistaRole;
         }
 
-        console.log('Roles obtenidos:', roles); // Verifica si los roles se obtienen correctamente
-
-        // Verificar que el objeto roles esté bien definido antes de renderizar
         if (!roles || roles.length === 0) {
+            console.error('[CONTROLADOR] No se encontraron roles');
             return res.status(500).send('No se encontraron roles');
         }
 
-        // Renderizar la plantilla y pasar los roles obtenidos
+        console.log('[CONTROLADOR] Roles obtenidos:', roles);
         res.render('register', { 
             title: 'Regístrate', 
-            roles, // Pasar los roles a la plantilla
+            roles,
             error: null 
         });
+        console.log('[CONTROLADOR] Formulario de registro renderizado');
     } catch (err) {
-        console.error('Error al obtener los roles:', err);
+        console.error('[CONTROLADOR] Error al obtener los roles:', err);
         res.status(500).send('Error en la base de datos');
     }
 };
 
+console.log('[CONTROLADOR] Verificando controller.register...');
 controller.register = async (req, res) => {
-    const { username, password, role, empresa, nit, email } = req.body;
-    console.log('Formulario recibido:', { username, password, role, empresa, nit, email });
+    const { username, password, role, empresa, nit, email, aceptaPolitica } = req.body;
+    console.log('[CONTROLADOR] Formulario recibido:', { username, password, role, empresa, nit, email, aceptaPolitica });
 
     try {
-        // Verificar si el usuario ya existe en la base de datos
+        console.log('[CONTROLADOR] Verificando si el usuario ya existe');
         const [existingUsers] = await connection.query('SELECT * FROM users WHERE username = ?', [username]);
-
         if (existingUsers.length > 0) {
-            // Consultar los roles nuevamente si hay un error
+            console.log('[CONTROLADOR] El usuario ya existe:', username);
             const [roles] = await connection.query('SELECT id, role_name FROM roles');
             return res.render('register', { 
                 title: 'Regístrate', 
@@ -61,12 +75,9 @@ controller.register = async (req, res) => {
             });
         }
 
-        // Obtener el nombre del rol para validar si es contratista
-        const [roleInfo] = await connection.query('SELECT role_name FROM roles WHERE id = ?', [role]);
-        const isContratista = roleInfo[0].role_name.toLowerCase() === 'contratista';
-
-        // Validar que los campos necesarios no estén vacíos
+        console.log('[CONTROLADOR] Validando campos obligatorios');
         if (!username || !password || !role || !empresa || !nit) {
+            console.log('[CONTROLADOR] Faltan campos obligatorios');
             const [roles] = await connection.query('SELECT id, role_name FROM roles');
             return res.render('register', { 
                 title: 'Regístrate', 
@@ -75,34 +86,10 @@ controller.register = async (req, res) => {
             });
         }
 
-        // Validar correo electrónico si es contratista
-        if (isContratista && !email) {
-            const [roles] = await connection.query('SELECT id, role_name FROM roles');
-            return res.render('register', { 
-                title: 'Regístrate', 
-                roles,
-                error: 'El correo electrónico es obligatorio para contratistas' 
-            });
-        }
-
-        // Validar formato de correo electrónico si es contratista
-        if (isContratista) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                const [roles] = await connection.query('SELECT id, role_name FROM roles');
-                return res.render('register', { 
-                    title: 'Regístrate', 
-                    roles,
-                    error: 'Por favor, ingrese un correo electrónico válido' 
-                });
-            }
-        }
-
-        // Asegurémonos de que el rol recibido es un ID, no un nombre
-        const [roleResults] = await connection.query('SELECT id FROM roles WHERE id = ?', [role]);
-
+        console.log('[CONTROLADOR] Verificando validez del rol:', role);
+        const [roleResults] = await connection.query('SELECT id, role_name FROM roles WHERE id = ?', [role]);
         if (roleResults.length === 0) {
-            console.log(`Rol no válido: ${role}`);
+            console.log('[CONTROLADOR] Rol no válido:', role);
             const [roles] = await connection.query('SELECT id, role_name FROM roles');
             return res.render('register', { 
                 title: 'Regístrate', 
@@ -112,30 +99,167 @@ controller.register = async (req, res) => {
         }
 
         const roleId = roleResults[0].id;
-        console.log(`ID del rol seleccionado: ${roleId}`);
+        const isContratista = roleResults[0].role_name.toLowerCase() === 'contratista';
+        console.log('[CONTROLADOR] Rol seleccionado - ID:', roleId, 'Es contratista:', isContratista);
 
-        // Crear un nuevo usuario con la contraseña hasheada
-        const hashedPassword = bcrypt.hashSync(password, 10);
+        if (isContratista) {
+            console.log('[CONTROLADOR] Validaciones específicas para contratista');
+            if (!email) {
+                console.log('[CONTROLADOR] Email requerido para contratista');
+                const [roles] = await connection.query('SELECT id, role_name FROM roles');
+                return res.render('register', { 
+                    title: 'Regístrate', 
+                    roles,
+                    error: 'El correo electrónico es obligatorio para contratistas' 
+                });
+            }
 
-        // Insertar el nuevo usuario en la base de datos
-        const result = await connection.query('INSERT INTO users (username, password, role_id, empresa, nit, email) VALUES (?, ?, ?, ?, ?, ?)', [
-            username,
-            hashedPassword,
-            roleId,
-            empresa,
-            nit,
-            email || null // Si no es contratista, guardar como null
-        ]);
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                console.log('[CONTROLADOR] Email inválido:', email);
+                const [roles] = await connection.query('SELECT id, role_name FROM roles');
+                return res.render('register', { 
+                    title: 'Regístrate', 
+                    roles,
+                    error: 'Por favor, ingrese un correo electrónico válido' 
+                });
+            }
 
+            if (!aceptaPolitica) {
+                console.log('[CONTROLADOR] Políticas no aceptadas');
+                const [roles] = await connection.query('SELECT id, role_name FROM roles');
+                return res.render('register', { 
+                    title: 'Regístrate', 
+                    roles,
+                    error: 'Debe aceptar las políticas de tratamiento de datos' 
+                });
+            }
+        }
+
+        console.log('[CONTROLADOR] Hasheando contraseña');
+        const hashedPassword = await bcrypt.hash(password, 10);
+        console.log('[CONTROLADOR] Insertando nuevo usuario en la base de datos');
+        const [result] = await connection.query(
+            'INSERT INTO users (username, password, role_id, empresa, nit, email) VALUES (?, ?, ?, ?, ?, ?)',
+            [username, hashedPassword, roleId, empresa, nit, email || null]
+        );
+        const userId = result.insertId;
+        console.log('[CONTROLADOR] Usuario creado con ID:', userId);
+
+        // Si el usuario proporcionó un email, enviar correo de bienvenida
+        if (email) {
+            console.log('[CONTROLADOR] Enviando correo de bienvenida al usuario');
+            try {
+                await emailService.sendRegistrationEmail(email, username, empresa);
+            } catch (emailError) {
+                console.error('[CONTROLADOR] Error al enviar correo de bienvenida:', emailError);
+                // Continuamos con el proceso aunque falle el envío del correo
+            }
+        }
+
+        if (isContratista && aceptaPolitica) {
+            console.log('[CONTROLADOR] Generando documento de aceptación para contratista');
+            const documentoUrl = await generateAcceptanceDocument(userId, empresa, nit, email, req.ip);
+            console.log('[CONTROLADOR] Documento generado, URL:', documentoUrl);
+
+            console.log('[CONTROLADOR] Guardando registro de aceptación en BD');
+            await connection.execute(
+                'INSERT INTO politicas_aceptadas (usuario_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
+                [userId, req.ip || 'No disponible', documentoUrl]
+            );
+
+            console.log('[CONTROLADOR] Enviando correo de aceptación');
+            await emailService.sendAcceptanceEmail(email, empresa, documentoUrl);
+        }
+
+        console.log('[CONTROLADOR] Redirigiendo a /login');
         res.redirect('/login');
     } catch (err) {
-        console.error('Error al registrar el usuario:', err);
-        res.status(500).send('Error al registrar el usuario');
+        console.error('[CONTROLADOR] Error al registrar el usuario:', err);
+        const [roles] = await connection.query('SELECT id, role_name FROM roles');
+        res.render('register', { 
+            title: 'Regístrate', 
+            roles,
+            error: 'Error al registrar el usuario'
+        });
     }
 };
 
+async function generateAcceptanceDocument(userId, empresa, nit, email, ip) {
+    try {
+        console.log('[CONTROLADOR] Generando documento HTML de aceptación');
+        const templateContent = `
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <title>Constancia de Aceptación</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    .container { max-width: 800px; margin: 0 auto; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    .content { border: 1px solid #ddd; padding: 20px; }
+                    .footer { text-align: center; margin-top: 20px; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Constancia de Aceptación</h1>
+                    </div>
+                    <div class="content">
+                        <p><strong>Usuario ID:</strong> {{userId}}</p>
+                        <p><strong>Empresa:</strong> {{empresa}}</p>
+                        <p><strong>NIT:</strong> {{nit}}</p>
+                        <p><strong>Email:</strong> {{email}}</p>
+                        <p><strong>Fecha:</strong> {{fecha}}</p>
+                        <p><strong>IP:</strong> {{ip}}</p>
+                        <p>El usuario ha aceptado las políticas de tratamiento de datos establecidas en ${process.env.DOMAIN_URL}/politica-tratamiento-datos</p>
+                    </div>
+                    <div class="footer">
+                        <p>Documento generado electrónicamente</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
 
+        console.log('[CONTROLADOR] Compilando plantilla Handlebars');
+        const template = handlebars.compile(templateContent);
+        const html = template({
+            userId,
+            empresa,
+            nit,
+            email,
+            fecha: format(new Date(), 'dd/MM/yyyy HH:mm:ss'),
+            ip
+        });
 
+        console.log('[CONTROLADOR] Convirtiendo HTML a buffer');
+        const buffer = Buffer.from(html, 'utf-8');
+        const filename = `aceptaciones/${userId}_${Date.now()}.html`;
+        console.log('[CONTROLADOR] Nombre del archivo generado:', filename);
 
+        console.log('[CONTROLADOR] Subiendo archivo a DigitalOcean Spaces');
+        const upload = new Upload({
+            client: s3Client,
+            params: {
+                Bucket: 'gestion-contratistas-os',
+                Key: filename,
+                Body: buffer,
+                ContentType: 'text/html',
+                ACL: 'public-read'
+            }
+        });
+
+        const result = await upload.done();
+        const url = `https://gestion-contratistas-os.nyc3.digitaloceanspaces.com/${filename}`;
+        console.log('[CONTROLADOR] Archivo subido exitosamente, URL:', url);
+        return url;
+    } catch (error) {
+        console.error('[CONTROLADOR] Error generando documento:', error);
+        throw error;
+    }
+}
 
 module.exports = controller;

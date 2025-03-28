@@ -1,0 +1,22 @@
+<!-- templates/emails/politica-aceptacion.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #f5f5f5; padding: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Bienvenido al Sistema de Acceso Seguro</h2>
+        </div>
+        <p>Estimado contratista de {{empresa}},</p>
+        <p>Usted ha sido registrado exitosamente en el sistema y ha aceptado las políticas de tratamiento de datos.</p>
+        <p>Puede consultar las políticas en: <a href="{{domainUrl}}/politica-tratamiento-datos">{{domainUrl}}/politica-tratamiento-datos</a></p>
+        <p>Descargue la constancia de aceptación aquí: <a href="{{documentoUrl}}">Descargar</a></p>
+    </div>
+</body>
+</html>
