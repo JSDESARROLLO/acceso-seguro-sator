@@ -146,42 +146,55 @@ controller.register = async (req, res) => {
         const userId = result.insertId;
         console.log('[CONTROLADOR] Usuario creado con ID:', userId);
 
-        // Si el usuario proporcionó un email, enviar correo de bienvenida
+        // Enviar correo de bienvenida a cualquier usuario con email
         if (email) {
-            console.log('[CONTROLADOR] Enviando correo de bienvenida al usuario');
             try {
+                console.log('[CONTROLADOR] Enviando correo de bienvenida al usuario');
                 await emailService.sendRegistrationEmail(email, username, empresa);
+                console.log('[CONTROLADOR] Correo de bienvenida enviado exitosamente');
             } catch (emailError) {
                 console.error('[CONTROLADOR] Error al enviar correo de bienvenida:', emailError);
-                // Continuamos con el proceso aunque falle el envío del correo
+                // Continuamos aunque falle el envío del correo
             }
         }
 
+        // Para contratistas que aceptaron políticas
         if (isContratista && aceptaPolitica) {
-            console.log('[CONTROLADOR] Generando documento de aceptación para contratista');
-            const documentoUrl = await generateAcceptanceDocument(userId, empresa, nit, email, req.ip);
-            console.log('[CONTROLADOR] Documento generado, URL:', documentoUrl);
+            try {
+                console.log('[CONTROLADOR] Generando documento de aceptación para contratista');
+                const documentoUrl = await generateAcceptanceDocument(userId, empresa, nit, email, req.ip);
+                console.log('[CONTROLADOR] Documento generado, URL:', documentoUrl);
 
-            console.log('[CONTROLADOR] Guardando registro de aceptación en BD');
-            await connection.execute(
-                'INSERT INTO politicas_aceptadas (usuario_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
-                [userId, req.ip || 'No disponible', documentoUrl]
-            );
+                console.log('[CONTROLADOR] Guardando registro de aceptación en BD');
+                await connection.execute(
+                    'INSERT INTO politicas_aceptadas (usuario_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
+                    [userId, req.ip || 'No disponible', documentoUrl]
+                );
 
-            console.log('[CONTROLADOR] Enviando correo de aceptación');
-            await emailService.sendAcceptanceEmail(email, empresa, documentoUrl);
+                console.log('[CONTROLADOR] Enviando correo de aceptación');
+                await emailService.sendAcceptanceEmail(email, empresa, documentoUrl);
+                console.log('[CONTROLADOR] Correo de aceptación enviado exitosamente');
+            } catch (policyError) {
+                console.error('[CONTROLADOR] Error procesando la aceptación de políticas:', policyError);
+                // Continuamos con la redirección a login aunque falle
+            }
         }
 
         console.log('[CONTROLADOR] Redirigiendo a /login');
         res.redirect('/login');
     } catch (err) {
         console.error('[CONTROLADOR] Error al registrar el usuario:', err);
-        const [roles] = await connection.query('SELECT id, role_name FROM roles');
-        res.render('register', { 
-            title: 'Regístrate', 
-            roles,
-            error: 'Error al registrar el usuario'
-        });
+        try {
+            const [roles] = await connection.query('SELECT id, role_name FROM roles');
+            res.render('register', { 
+                title: 'Regístrate', 
+                roles,
+                error: 'Error al registrar el usuario'
+            });
+        } catch (rolesError) {
+            console.error('[CONTROLADOR] Error adicional al obtener roles:', rolesError);
+            res.status(500).send('Error en el servidor al procesar el registro');
+        }
     }
 };
 

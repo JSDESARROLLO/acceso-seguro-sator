@@ -1,3 +1,4 @@
+// controllers/capacitacion.controller.js
 const connection = require('../db/db');
 const crypto = require('crypto');
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
@@ -215,58 +216,94 @@ controllers.listadoCapacitaciones = async (req, res) => {
         res.status(500).json({ error: 'Error al obtener el listado de capacitaciones' });
     }
 };
-
 controllers.responderCapacitacion = async (req, res) => {
-    const { codigo_seguridad, respuestas, colaborador_id, solicitud_id } = req.body;
+    const { codigo_seguridad, respuestas, colaborador_id, solicitud_id, email, aceptaPolitica } = req.body;
+
+    console.log('[CONTROLADOR] Datos recibidos:', { codigo_seguridad, respuestas, colaborador_id, solicitud_id, email, aceptaPolitica });
 
     if (!colaborador_id || !solicitud_id) {
+        console.log('[CONTROLADOR] Faltan IDs requeridos');
         return res.status(400).json({ error: 'Se requiere el ID del colaborador y de la solicitud' });
     }
 
+    if (!aceptaPolitica) {
+        console.log('[CONTROLADOR] Políticas no aceptadas');
+        return res.status(400).json({ error: 'Debe aceptar la política de tratamiento de datos' });
+    }
+
     try {
-        // Verificar que el colaborador existe y pertenece a la solicitud
+        console.log('[CONTROLADOR] Verificando colaborador');
         const [colaborador] = await connection.query(
-            'SELECT id FROM colaboradores WHERE id = ? AND solicitud_id = ?',
+            'SELECT c.*, s.empresa FROM colaboradores c JOIN solicitudes s ON c.solicitud_id = s.id WHERE c.id = ? AND c.solicitud_id = ?',
             [colaborador_id, solicitud_id]
         );
 
         if (colaborador.length === 0) {
+            console.log('[CONTROLADOR] Colaborador no encontrado');
             return res.status(404).json({ error: 'Colaborador no encontrado o no pertenece a la solicitud indicada' });
         }
 
-        // Verificar que no haya un resultado aprobado vigente
+        if (email) {
+            console.log('[CONTROLADOR] Generando documento de aceptación para colaborador');
+            const documentoUrl = await generateAcceptanceDocumentColaborador(
+                colaborador_id,
+                colaborador[0].nombre,
+                colaborador[0].cedula,
+                email,
+                req.ip,
+                colaborador[0].empresa
+            );
+
+            console.log('[CONTROLADOR] Guardando aceptación en politicas_aceptadas_colaboradores');
+            await connection.execute(
+                'INSERT INTO politicas_aceptadas_colaboradores (colaborador_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
+                [colaborador_id, req.ip || 'No disponible', documentoUrl]
+            );
+
+            console.log('[CONTROLADOR] Enviando correo al colaborador');
+            await emailService.sendAcceptanceEmailColaborador(colaborador[0].nombre, email, documentoUrl);
+        } else {
+            console.log('[CONTROLADOR] Guardando aceptación sin correo');
+            await connection.execute(
+                'INSERT INTO politicas_aceptadas_colaboradores (colaborador_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
+                [colaborador_id, req.ip || 'No disponible', null]
+            );
+        }
+
+        console.log('[CONTROLADOR] Verificando resultado existente');
         const [resultadoExistente] = await connection.query(
             'SELECT id FROM resultados_capacitaciones WHERE colaborador_id = ? AND solicitud_id = ? AND estado = "APROBADO" AND fecha_vencimiento > NOW()',
             [colaborador_id, solicitud_id]
         );
 
         if (resultadoExistente.length > 0) {
+            console.log('[CONTROLADOR] Capacitación ya aprobada');
             return res.status(400).json({ error: 'Ya tienes una capacitación aprobada y vigente' });
         }
 
-        // Obtener datos de la capacitación
+        console.log('[CONTROLADOR] Obteniendo capacitación');
         const [capacitacion] = await connection.query(
             'SELECT * FROM capacitaciones WHERE codigo_seguridad = ?',
             [codigo_seguridad]
         );
 
         if (!capacitacion.length) {
+            console.log('[CONTROLADOR] Capacitación no encontrada');
             return res.status(404).json({ error: 'Capacitación no encontrada' });
         }
 
         let preguntas;
         try {
-            preguntas = typeof capacitacion[0].preguntas === 'string' 
+            preguntas = typeof capacitacion[0].preguntas === 'string'
                 ? JSON.parse(capacitacion[0].preguntas)
                 : capacitacion[0].preguntas;
         } catch (error) {
-            console.error('Error al parsear preguntas:', error);
+            console.error('[CONTROLADOR] Error al parsear preguntas:', error);
             return res.status(500).json({ error: 'Error al procesar las preguntas' });
         }
 
         let puntaje_obtenido = 0;
-
-        // Calcular puntaje
+        console.log('[CONTROLADOR] Calculando puntaje');
         preguntas.forEach((pregunta, index) => {
             if (pregunta.respuesta_correcta === respuestas[index]) {
                 puntaje_obtenido += capacitacion[0].puntos_por_pregunta;
@@ -274,30 +311,105 @@ controllers.responderCapacitacion = async (req, res) => {
         });
 
         const estado = puntaje_obtenido >= capacitacion[0].puntaje_minimo_aprobacion ? 'APROBADO' : 'PERDIDO';
-        
-        // Calcular fecha de vencimiento
         const fecha_vencimiento = new Date();
         fecha_vencimiento.setMonth(fecha_vencimiento.getMonth() + capacitacion[0].vigencia_meses);
 
-        // Guardar resultado
+        console.log('[CONTROLADOR] Guardando resultado');
         await connection.query(
             'INSERT INTO resultados_capacitaciones (capacitacion_id, colaborador_id, solicitud_id, respuestas, puntaje_obtenido, estado, fecha_vencimiento) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [capacitacion[0].id, colaborador_id, solicitud_id, JSON.stringify(respuestas), puntaje_obtenido, estado, fecha_vencimiento]
         );
 
         res.json({
-            message: estado === 'APROBADO' ? '¡Felicitaciones! Has aprobado la capacitación' : 'No has alcanzado el puntaje mínimo requerido',
+            message: estado === 'APROBADO' ? '¡Felicitaciones! Has aprobado la capacitación' : 'No has alcanzado el puntaje mínimo',
             estado,
             puntaje_obtenido,
             puntaje_minimo: capacitacion[0].puntaje_minimo_aprobacion,
             fecha_vencimiento: estado === 'APROBADO' ? fecha_vencimiento : null
         });
-
     } catch (error) {
-        console.error('Error al procesar respuestas:', error);
+        console.error('[CONTROLADOR] Error al procesar respuestas:', error);
         res.status(500).json({ error: 'Error al procesar las respuestas' });
     }
-};
+};  
+  
+
+
+async function generateAcceptanceDocumentColaborador(colaboradorId, nombre, cedula, email, ip, empresa) {
+    try {
+        console.log('[CONTROLADOR] Generando documento para colaborador');
+        const templateContent = `
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <title>Constancia de Aceptación - Colaborador</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    .container { max-width: 800px; margin: 0 auto; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    .content { border: 1px solid #ddd; padding: 20px; }
+                    .footer { text-align: center; margin-top: 20px; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Constancia de Aceptación - Colaborador</h1>
+                    </div>
+                    <div class="content">
+                        <p><strong>ID Colaborador:</strong> {{colaboradorId}}</p>
+                        <p><strong>Nombre:</strong> {{nombre}}</p>
+                        <p><strong>Cédula:</strong> {{cedula}}</p>
+                        <p><strong>Email:</strong> {{email}}</p>
+                        <p><strong>Empresa:</strong> {{empresa}}</p>
+                        <p><strong>Fecha:</strong> {{fecha}}</p>
+                        <p><strong>IP:</strong> {{ip}}</p>
+                        <p>El colaborador ha aceptado las políticas de tratamiento de datos en ${process.env.DOMAIN_URL}/politica-tratamiento-datos</p>
+                    </div>
+                    <div class="footer">
+                        <p>Documento generado electrónicamente</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        const template = handlebars.compile(templateContent);
+        const html = template({
+            colaboradorId,
+            nombre,
+            cedula,
+            email: email || 'No proporcionado',
+            empresa,
+            fecha: format(new Date(), 'dd/MM/yyyy HH:mm:ss'),
+            ip
+        });
+
+        const buffer = Buffer.from(html, 'utf-8');
+        const filename = `aceptaciones/colaboradores/${colaboradorId}_${Date.now()}.html`;
+
+        console.log('[CONTROLADOR] Subiendo documento a Spaces');
+        const upload = new Upload({
+            client: s3Client,
+            params: {
+                Bucket: 'gestion-contratistas-os',
+                Key: filename,
+                Body: buffer,
+                ContentType: 'text/html',
+                ACL: 'public-read'
+            }
+        });
+
+        await upload.done();
+        const url = `https://gestion-contratistas-os.nyc3.digitaloceanspaces.com/${filename}`;
+        console.log('[CONTROLADOR] Documento subido:', url);
+        return url;
+    } catch (error) {
+        console.error('[CONTROLADOR] Error generando documento:', error);
+        throw error;
+    }
+}
 
 controllers.eliminarMultimedia = async (req, res) => {
     try {
