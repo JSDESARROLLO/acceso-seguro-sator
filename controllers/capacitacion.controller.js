@@ -2,6 +2,10 @@
 const connection = require('../db/db');
 const crypto = require('crypto');
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const handlebars = require('handlebars');
+const { format } = require('date-fns');
+const { Upload } = require("@aws-sdk/lib-storage");
+const emailService = require('../services/email.service');
 const controllers = {};
 
 // Configuración del cliente S3 para Digital Ocean Spaces
@@ -244,24 +248,51 @@ controllers.responderCapacitacion = async (req, res) => {
         }
 
         if (email) {
-            console.log('[CONTROLADOR] Generando documento de aceptación para colaborador');
-            const documentoUrl = await generateAcceptanceDocumentColaborador(
-                colaborador_id,
-                colaborador[0].nombre,
-                colaborador[0].cedula,
-                email,
-                req.ip,
-                colaborador[0].empresa
+            console.log('[CONTROLADOR] Verificando si el colaborador ya aceptó las políticas');
+            const [politicaExistente] = await connection.query(
+                'SELECT documento_url FROM politicas_aceptadas_colaboradores WHERE colaborador_id = ? ORDER BY fecha_aceptacion DESC LIMIT 1',
+                [colaborador_id]
             );
 
-            console.log('[CONTROLADOR] Guardando aceptación en politicas_aceptadas_colaboradores');
-            await connection.execute(
-                'INSERT INTO politicas_aceptadas_colaboradores (colaborador_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
-                [colaborador_id, req.ip || 'No disponible', documentoUrl]
-            );
+            let documentoUrl;
 
-            console.log('[CONTROLADOR] Enviando correo al colaborador');
-            await emailService.sendAcceptanceEmailColaborador(colaborador[0].nombre, email, documentoUrl);
+            if (politicaExistente.length > 0 && politicaExistente[0].documento_url) {
+                console.log('[CONTROLADOR] Colaborador ya tiene documento de aceptación');
+                documentoUrl = politicaExistente[0].documento_url;
+                
+                // Enviar correo con el documento existente
+                console.log('[CONTROLADOR] Reenviando correo con documento existente');
+                await emailService.sendAcceptanceEmailColaborador(
+                    email, 
+                    colaborador[0].nombre, 
+                    documentoUrl,
+                    true // Indicador de que es un reenvío
+                );
+            } else {
+                console.log('[CONTROLADOR] Generando nuevo documento de aceptación para colaborador');
+                documentoUrl = await emailService.generateAndUploadAcceptanceDocument(
+                    colaborador_id,
+                    colaborador[0].nombre,
+                    colaborador[0].cedula,
+                    email,
+                    req.ip,
+                    colaborador[0].empresa
+                );
+
+                console.log('[CONTROLADOR] Guardando aceptación en politicas_aceptadas_colaboradores');
+                await connection.execute(
+                    'INSERT INTO politicas_aceptadas_colaboradores (colaborador_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
+                    [colaborador_id, req.ip || 'No disponible', documentoUrl]
+                );
+
+                console.log('[CONTROLADOR] Enviando correo al colaborador');
+                await emailService.sendAcceptanceEmailColaborador(
+                    email, 
+                    colaborador[0].nombre, 
+                    documentoUrl,
+                    false // Indicador de que es nuevo
+                );
+            }
         } else {
             console.log('[CONTROLADOR] Guardando aceptación sin correo');
             await connection.execute(
