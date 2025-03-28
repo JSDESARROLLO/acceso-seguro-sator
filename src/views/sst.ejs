@@ -626,10 +626,28 @@ function notifyNewMessageSST(message) {
 // Función para marcar mensajes como leídos
 async function markMessagesAsReadSST(solicitudId) {
   try {
-    await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { method: 'POST' });
+    const sstUserId = getSSUserId(); // Obtener ID de usuario SST
+    
+    console.log(`[SST] Marcando mensajes como leídos para solicitud ${solicitudId}, usuario ${sstUserId}`);
+    
+    const response = await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { 
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId: sstUserId }) // Incluir userId en el cuerpo
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error al marcar mensajes como leídos:', errorData);
+      throw new Error(errorData.message || 'Error al marcar mensajes como leídos');
+    }
+    
+    // Actualizar contador visual
     updateUnreadCountSST(solicitudId);
   } catch (error) {
-    console.error('Error al marcar mensajes como leídos:', error);
+    console.error('[SST] Error al marcar mensajes como leídos:', error);
   }
 }
 

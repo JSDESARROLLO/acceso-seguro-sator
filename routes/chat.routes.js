@@ -91,9 +91,21 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
 router.post('/:solicitudId/:tipo/mark-read', async (req, res) => {
     try {
         const { solicitudId, tipo } = req.params;
+        
+        console.log(`[chat.routes] Recibiendo petición mark-read para: ${solicitudId}/${tipo}`);
+        console.log(`[chat.routes] Body recibido:`, req.body);
+        
         const { userId } = req.body;
         
         console.log(`Marcando mensajes como leídos: solicitud ${solicitudId}, tipo ${tipo}, usuario ${userId}`);
+        
+        // Si userId no está definido, responder con error
+        if (!userId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Se requiere userId para marcar mensajes como leídos' 
+            });
+        }
         
         // Primero obtener el chat_id
         const [chats] = await db.query(
