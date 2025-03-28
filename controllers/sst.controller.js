@@ -104,40 +104,40 @@ async function uploadToSpaces(filePath, fileName) {
 }
 
 
-// Reemplazar la función mostrarNegarSolicitud para usar el modal existente
-exports.mostrarNegarSolicitud = async (req, res) => {
-    try {
-        const solicitudId = req.params.id;
-        console.log("[RUTAS] Obteniendo detalles para negar solicitud con ID:", solicitudId);
-        
-        // Obtener detalles de la solicitud
-        const [solicitudRows] = await connection.execute(`
-            SELECT s.*, u.nombre AS nombre_usuario, e.nombre AS nombre_empresa 
-            FROM solicitudes s
-            JOIN users u ON s.usuario_id = u.id
-            JOIN empresas e ON s.empresa_id = e.id
-            WHERE s.id = ?
-        `, [solicitudId]);
-        
-        if (solicitudRows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Solicitud no encontrada'
-            });
-        }
-        
-        // Devolver los datos en formato JSON para que el modal los use
-        res.json({
-            success: true,
-            solicitud: solicitudRows[0]
-        });
-    } catch (error) {
-        console.error('Error al obtener detalles de la solicitud:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al cargar los detalles de la solicitud'
-        });
+// Función para mostrar la pantalla de negar solicitud
+controller.mostrarNegarSolicitud = async (req, res) => {
+  try {
+    const solicitudId = req.params.id;
+    console.log("[RUTAS] Mostrando detalles para negar solicitud con ID:", solicitudId);
+    
+    // Obtener detalles de la solicitud
+    const [solicitudRows] = await connection.execute(`
+      SELECT s.*, u.nombre AS nombre_usuario, e.nombre AS nombre_empresa 
+      FROM solicitudes s
+      JOIN users u ON s.usuario_id = u.id
+      JOIN empresas e ON s.empresa_id = e.id
+      WHERE s.id = ?
+    `, [solicitudId]);
+    
+    if (solicitudRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Solicitud no encontrada'
+      });
     }
+    
+    // Devolver los datos en formato JSON para que el modal los use
+    res.json({
+      success: true,
+      solicitud: solicitudRows[0]
+    });
+  } catch (error) {
+    console.error('Error al obtener detalles de la solicitud:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al cargar los detalles de la solicitud'
+    });
+  }
 };
 
 // Aprobar solicitud

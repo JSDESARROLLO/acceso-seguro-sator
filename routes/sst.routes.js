@@ -61,7 +61,6 @@ if (typeof controller.negarSolicitud !== 'function') {
   });
 }
 
-
 // Verificación de que la función 'mostrarNegarSolicitud' está definida en el controlador
 console.log('Verificando controller.mostrarNegarSolicitud...');
 if (typeof controller.mostrarNegarSolicitud !== 'function') {
@@ -78,8 +77,6 @@ if (typeof controller.mostrarNegarSolicitud !== 'function') {
     }
   });
 }
-
-
 
 // Verificación de que la función 'descargarSolicitud' está definida en el controlador
 console.log('Verificando controller.descargarSolicitud...');
