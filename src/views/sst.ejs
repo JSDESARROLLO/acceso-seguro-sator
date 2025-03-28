@@ -524,12 +524,17 @@ async function openChatModalSST(solicitudId) {
   document.getElementById('chatSolicitudIdSST').textContent = solicitudId;
   document.getElementById('chatModalSST').classList.remove('hidden');
 
-  // Iniciar WebSocket
+  // Iniciar WebSocket con protocolo seguro cuando es necesario
   if (!socketSST || socketSST.readyState !== WebSocket.OPEN) {
-    socketSST = new WebSocket(`ws://${window.location.host}/ws/chat/sst`);
+    // Detectar si estamos en HTTPS para usar WSS o WS
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/chat/sst`;
+    
+    console.log(`[SST] Conectando a WebSocket: ${wsUrl}`);
+    socketSST = new WebSocket(wsUrl);
     
     socketSST.onopen = function() {
-      console.log('WebSocket SST conectado');
+      console.log('[SST] WebSocket conectado correctamente');
     };
     
     socketSST.onmessage = function(event) {
