@@ -1477,17 +1477,19 @@ window.openChatWindow = async function(solicitudId) {
 
     // Limpiar y reiniciar vista
     const chatMessages = document.getElementById('chatMessages');
-    chatMessages.innerHTML = '';
+    chatMessages.innerHTML = '<div class="text-center text-gray-500 p-4">Selecciona un contacto para comenzar la conversación</div>';
     chatMessages.removeEventListener('scroll', scrollHandler);
     chatMessages.addEventListener('scroll', scrollHandler);
 
     // Actualizar contadores
     await updateAllUnreadCounters(solicitudId);
 
-    // Cargar chat de SST automáticamente y mostrar área de escritura después
-    await loadChat('sst'); // Cargar el chat de SST directamente
-    chatInputContainer.classList.remove('hidden'); // Mostrar área de escritura solo después de cargar
+    // Remover cualquier selección activa previa
+    document.getElementById('sstContact').classList.remove('active');
+    document.getElementById('interventorContact').classList.remove('active');
 
+    // Ya no llamamos automáticamente a loadChat('sst')
+    
     console.log('[Contratista] Ventana de chat abierta correctamente');
   } catch (error) {
     console.error('[Contratista] Error al abrir ventana de chat:', error);
@@ -1587,19 +1589,35 @@ function safeUpdateTextContent(element, text) {
 // Modificar loadChat para manejar errores de manera más robusta
 window.loadChat = async function(type) {
   try {
-  currentChatType = type;
-  
-  // Cambiar clases de los contactos
-  document.getElementById('sstContact').classList.toggle('active', type === 'sst');
-  document.getElementById('interventorContact').classList.toggle('active', type === 'interventor');
-  
-  // Actualizar encabezado
-  document.getElementById('chatActiveContact').textContent = 
-    type === 'sst' ? 'SST' : `Interventor: ${interventorName}`;
-  
-    // Limpiar el área de mensajes
+    currentChatType = type;
+    
+    // Actualizar clases active de los contactos
+    const sstContact = document.getElementById('sstContact');
+    const interventorContact = document.getElementById('interventorContact');
+    
+    // Remover active de ambos primero
+    sstContact.classList.remove('active');
+    interventorContact.classList.remove('active');
+    
+    // Agregar active al seleccionado
+    if (type === 'sst') {
+      sstContact.classList.add('active');
+    } else if (type === 'interventor') {
+      interventorContact.classList.add('active');
+    }
+    
+    // Actualizar encabezado
+    document.getElementById('chatActiveContact').textContent = 
+      type === 'sst' ? 'SST' : `Interventor: ${interventorName}`;
+    
+    // Limpiar el área de mensajes y mostrar loader
     const chatMessages = document.getElementById('chatMessages');
     chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-ga-gold"></div></div>';
+    
+    // Mostrar el área de escritura con animación
+    const chatInputContainer = document.getElementById('chatInputContainer');
+    chatInputContainer.classList.remove('hidden');
+    chatInputContainer.classList.add('fade-in-animation');
     
     // Eliminar listener previo si existe
     chatMessages.removeEventListener('scroll', scrollHandler);
@@ -1608,10 +1626,10 @@ window.loadChat = async function(type) {
     chatMessages.addEventListener('scroll', scrollHandler);
     
     // Cargar mensajes
-  await loadInitialMessages(currentSolicitudId, type);
-  
+    await loadInitialMessages(currentSolicitudId, type);
+    
     // Marcar mensajes como leídos
-  await markMessagesAsRead(currentSolicitudId, type);
+    await markMessagesAsRead(currentSolicitudId, type);
     
     console.log(`[Contratista] Chat tipo ${type} cargado correctamente`);
   } catch (error) {
@@ -2270,6 +2288,32 @@ async function loadMoreMessages(solicitudId, type) {
     isLoadingMore = false;
   }
 }
+
+// Remover el autofocus o selección automática
+const textArea = document.querySelector('.chat-textarea'); // ajusta el selector según tu código
+textArea.classList.add('fade-in-animation');
+
+// Si existe código que hace focus automático, eliminarlo o comentarlo
+// textArea.focus();
+// textArea.select();
+
+// Remover cualquier código que haga selección automática de contacto
+// Agregar las clases de animación al modal y al área de chat
+const chatModal = document.querySelector('.chat-modal'); // ajusta el selector según tu estructura
+const chatArea = document.querySelector('.chat-area'); // ajusta el selector según tu estructura
+
+if (chatModal) {
+    chatModal.classList.add('modal-animation');
+}
+
+if (chatArea) {
+    chatArea.classList.add('chat-area-animation');
+}
+
+// Eliminar o comentar cualquier código que haga focus o select automático
+// const contactSelect = document.querySelector('.contact-select');
+// contactSelect.focus();
+// contactSelect.select();
 </script>
 </body>
 </html>

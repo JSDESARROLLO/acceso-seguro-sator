@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
  
@@ -181,22 +183,73 @@
       background-color: var(--primary-color);
       transform: translateY(-1px);
     }
+
+    .notification-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background-color: red;
+      color: white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .status-icon-sent,
+    .status-icon-delivered,
+    .status-icon-read,
+    .status-icon-error {
+      margin-left: 4px;
+    }
+
+    .status-icon-sent,
+    .status-icon-delivered {
+      color: #d1d1d1;
+    }
+
+    .status-icon-read {
+      color: #53bdeb;
+    }
+
+    .status-icon-error {
+      color: #f44336;
+    }
+
+    .chat-message {
+      position: relative;
+    }
+
+    // Agregar estos estilos al bloque de estilos existente
+    .filters-content {
+      transition: max-height 0.3s ease-out;
+      max-height: 1000px; /* Ajusta este valor según el alto máximo de tus filtros */
+      overflow: hidden;
+    }
+
+    .filters-content.hidden {
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      margin-top: 0;
+      margin-bottom: 0;
+      border: none;
+    }
   </style>
+  <!-- Agregar en el <head> después de los otros CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 </head>
 <body>
   <nav class="navbar navbar-expand-lg navbar-dark">
     <div class="container">
       <a class="navbar-brand" href="#">Interventor ST - <%= username %></a>
-      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ml-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="/logout">Cerrar sesión</a>
-          </li>
-        </ul>
-      </div>
+      <a class="text-lg text-white " href="/logout">Cerrar sesión</a>
+ 
     </div>
   </nav>
 
@@ -206,12 +259,12 @@
     <div class="filters-section">
       <div class="filters-header">
         <h2 class="filters-title">Filtros de Búsqueda</h2>
-        <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosCollapse">
-          <span id="toggleText">Ocultar Filtros</span>
+        <button class="btn btn-secondary" type="button" id="toggleFilters">
+          <i class="fas fa-filter"></i> <span id="toggleText">Ocultar Filtros</span>
         </button>
       </div>
 
-      <div class="collapse show" id="filtrosCollapse">
+      <div id="filtrosCollapse" class="filters-content">
         <form id="filtrosForm">
           <div class="filter-group">
             <h3 class="filter-group-title">Información Principal</h3>
@@ -328,6 +381,7 @@
               <% if (username === "COA") { %>
                 <th>H. de Ingresos</th>
               <% } %>
+              <th>Chat</th>
             </tr>
           </thead>
           <tbody>
@@ -399,6 +453,11 @@
                       <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="<%= accion.solicitud_id %>">Ver Historial</button>
                     </td>
                   <% } %>
+                  <td>
+                    <button class="btn btn-primary btn-sm ml-2 open-chat-btn-interventor" data-solicitud-id="<%= accion.solicitud_id %>">
+                      Conversar <span class="badge badge-light unread-count" data-solicitud-id="<%= accion.solicitud_id %>">0</span>
+                    </button>
+                  </td>
                 </tr>
               <% }); %>
             <% } else { %>
@@ -660,22 +719,70 @@
     </div>
   </div>
 
+  <!-- Modal de Chat para Interventor -->
+  <div id="chatModalInterventor" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
+    <div class="bg-white w-full max-w-4xl h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
+      <!-- Header del chat -->
+      <div class="bg-gray-800 text-white px-4 py-3 flex justify-between items-center">
+        <h5 class="text-lg font-semibold">Chat Interventor - Solicitud <span id="chatSolicitudIdInterventor"></span></h5>
+        <button type="button" onclick="closeChatModalInterventor()" class="text-white hover:text-yellow-500">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <!-- Cuerpo del chat -->
+      <div class="flex-1 p-4 overflow-y-auto bg-gray-50" id="chatMessagesInterventor"></div>
+      <!-- Input para enviar mensajes -->
+      <div class="border-t border-gray-200 p-4 bg-white">
+        <div class="flex space-x-2">
+          <textarea 
+            id="chatInputInterventor" 
+            class="flex-1 p-2 border border-gray-300 rounded-md resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+            rows="2" 
+            placeholder="Escribe un mensaje..."></textarea>
+          <button 
+            onclick="sendMessageInterventor()" 
+            class="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-yellow-500 transition-colors">
+            Enviar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://kit.fontawesome.com/your-font-awesome-kit.js"></script>
-  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+
   <script>
-    const username = '<%= username %>';
-    // console.log('[DEBUG] Username recibido en el frontend:', username);
-
-    $(document).ready(function () {
-      reasignarEventos();
+    // ===== Configuración inicial y permisos de notificaciones =====
+    document.addEventListener('DOMContentLoaded', () => {
+      // Permisos de notificaciones se solicitarán al abrir el chat, no aquí
     });
-
+  
+    // ===== Variables globales =====
+    const USERNAME = '<%= username %>'; // Nombre de usuario del interventor o COA
+    let currentSolicitudIdInterventor = null; // ID de la solicitud actual en el chat
+    let socketInterventor = null; // Conexión WebSocket para el chat
+    let oldestMessageIdInterventor = null; // ID del mensaje más antiguo cargado
+    const displayedMessagesInterventor = new Set(); // Conjunto para evitar mensajes duplicados
+  
+    // ===== Inicialización de jQuery =====
+    $(document).ready(() => {
+      reasignarEventos(); // Asignar eventos iniciales a los botones
+    });
+  
+    // ===== Funciones de manejo de acciones =====
+    /**
+     * Maneja la aprobación de una solicitud con confirmación y recarga la página si tiene éxito.
+     * @param {HTMLElement} btn - Botón que desencadena la acción.
+     */
     async function manejarAprobar(btn) {
       const solicitudId = btn.id.replace('aprobarBtn-', '');
       const confirmacion = await Swal.fire({
@@ -688,28 +795,32 @@
         confirmButtonText: 'Sí, aprobar',
         cancelButtonText: 'Cancelar',
       });
-
+  
       if (!confirmacion.isConfirmed) return;
-
+  
       try {
         const response = await fetch('/aprobar-solicitud-interventor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ solicitudId }),
         });
-
+  
         if (response.ok) {
           await Swal.fire('¡Éxito!', 'La solicitud ha sido aprobada.', 'success');
           window.location.reload();
         } else {
-          Swal.fire('Error', 'Hubo un problema al aprobar la solicitud.', 'error');
+          throw new Error('Error al aprobar la solicitud');
         }
       } catch (error) {
         console.error('[ERROR] Error al aprobar:', error);
         Swal.fire('Error', 'Ocurrió un error al realizar la solicitud.', 'error');
       }
     }
-
+  
+    /**
+     * Muestra el QR de una solicitud en un modal.
+     * @param {HTMLElement} btn - Botón que desencadena la acción.
+     */
     async function manejarVerQR(btn) {
       const solicitudId = btn.id.replace('verQR-', '');
       try {
@@ -719,197 +830,203 @@
           document.getElementById('qr-container').innerHTML = `<img src="${qrData.qrUrl}" alt="QR Code" class="img-fluid">`;
           $('#modalVerQR').modal('show');
         } else {
-          Swal.fire('Error', 'No se pudo obtener el QR para esta solicitud', 'error');
+          throw new Error('No se pudo obtener el QR');
         }
       } catch (error) {
         console.error('[ERROR] Error al obtener el QR:', error);
         Swal.fire('Error', 'Hubo un error al obtener el QR.', 'error');
       }
     }
-
+  
+    /**
+     * Muestra los detalles de una solicitud en un modal con formato personalizado.
+     * @param {HTMLElement} btn - Botón que desencadena la acción.
+     */
     async function manejarVerDetalles(btn) {
       const solicitudId = btn.id.replace('verDETALLES-', '');
       try {
         const response = await fetch(`/obtener-detalles-solicitud/${solicitudId}`);
-        if (response.ok) {
-          const detalles = await response.json();
-          // console.log('[DEBUG] Detalles recibidos:', detalles);
-
-          const detallesContainer = document.getElementById('detalles-container');
-          detallesContainer.innerHTML = `
-            <style>
-              .modal-body { font-family: Arial, sans-serif; padding: 20px; }
-              .header { text-align: center; margin-bottom: 20px; }
-              .header img { width: 100px; }
-              .header h1 { margin: 0; font-size: 24px; }
-              .header p { margin: 0; font-size: 14px; color: #666; }
-              .section { margin-bottom: 20px; }
-              .section h2 { font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-              .section p { margin: 5px 0; }
-              .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-              .table th, .table td { border: 1px solid #000; padding: 8px; text-align: left; }
-              .table th { background-color: #f2f2f2; }
-              .table img { width: 100px; height: 100px; object-fit: cover; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
-              .modal-custom { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); justify-content: center; align-items: center; }
-              .modal-content-custom { background-color: #fff; padding: 20px; border-radius: 10px; text-align: center; max-width: 600px; width: 90%; }
-              .modal-content-custom img.foto-large { width: 400px; height: 400px; object-fit: contain; margin-bottom: 20px; }
-              .modal-content-custom h3 { font-size: 24px; margin: 10px 0; }
-              .modal-content-custom p { font-size: 18px; margin: 5px 0; }
-              .close-btn-custom { position: absolute; top: 10px; right: 20px; font-size: 30px; cursor: pointer; color: #333; }
-            </style>
-            <div class="header">
-              <img src="${detalles.logoBase64}" alt="Logo">
-              <h1>Informe de Solicitud</h1>
-              <p>Sistema Gestor de Ingreso Contratistas</p>
-              <p>Documento generado el día: ${detalles.fecha}</p>
-            </div>
-            <div class="section">
-              <h2>Detalles de la Solicitud</h2>
-              <p><strong>ID de la Solicitud:</strong> ${detalles.solicitud.id || '❌'}</p>
-              <p><strong>Empresa:</strong> ${detalles.solicitud.empresa || '❌'}</p>
-              <p><strong>NIT:</strong> ${detalles.solicitud.nit || '❌'}</p>
-              <p><strong>Lugar:</strong> ${detalles.solicitud.lugar || '❌'}</p>
-              <p><strong>Labor:</strong> ${detalles.solicitud.labor || '❌'}</p>
-              <p><strong>Contratista:</strong> ${detalles.contractorName || '❌'}</p>
-              <p><strong>Interventor:</strong> ${detalles.interventorName || '❌'}</p>
-              <p><strong>Fechas:</strong> ${detalles.solicitud.inicio_obra || '❌'} - ${detalles.solicitud.fin_obra || '❌'}</p>
-              <p><strong>ARL:</strong> ${detalles.solicitud.arl_documento ? '✅' : '❌'}</p>
-              <p><strong>Planilla de Pago Seguridad Social:</strong> ${detalles.solicitud.pasocial_documento ? '✅' : '❌'}</p>
-            </div>
-            <div class="section">
-              <h2>Colaboradores</h2>
-              <table class="table">
-                <thead>
+        if (!response.ok) throw new Error('No se pudieron obtener los detalles');
+  
+        const detalles = await response.json();
+        const detallesContainer = document.getElementById('detalles-container');
+        detallesContainer.innerHTML = `
+          <style>
+            .modal-body { font-family: Arial, sans-serif; padding: 20px; }
+            .header { text-align: center; margin-bottom: 20px; }
+            .header img { width: 100px; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .header p { margin: 0; font-size: 14px; color: #666; }
+            .section { margin-bottom: 20px; }
+            .section h2 { font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+            .section p { margin: 5px 0; }
+            .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .table th, .table td { border: 1px solid #000; padding: 8px; text-align: left; }
+            .table th { background-color: #f2f2f2; }
+            .table img { width: 100px; height: 100px; object-fit: cover; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
+            .modal-custom { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); justify-content: center; align-items: center; }
+            .modal-content-custom { background-color: #fff; padding: 20px; border-radius: 10px; text-align: center; max-width: 600px; width: 90%; }
+            .modal-content-custom img.foto-large { width: 400px; height: 400px; object-fit: contain; margin-bottom: 20px; }
+            .modal-content-custom h3 { font-size: 24px; margin: 10px 0; }
+            .modal-content-custom p { font-size: 18px; margin: 5px 0; }
+            .close-btn-custom { position: absolute; top: 10px; right: 20px; font-size: 30px; cursor: pointer; color: #333; }
+          </style>
+          <div class="header">
+            <img src="${detalles.logoBase64}" alt="Logo">
+            <h1>Informe de Solicitud</h1>
+            <p>Sistema Gestor de Ingreso Contratistas</p>
+            <p>Documento generado el día: ${detalles.fecha}</p>
+          </div>
+          <div class="section">
+            <h2>Detalles de la Solicitud</h2>
+            <p><strong>ID de la Solicitud:</strong> ${detalles.solicitud.id || '❌'}</p>
+            <p><strong>Empresa:</strong> ${detalles.solicitud.empresa || '❌'}</p>
+            <p><strong>NIT:</strong> ${detalles.solicitud.nit || '❌'}</p>
+            <p><strong>Lugar:</strong> ${detalles.solicitud.lugar || '❌'}</p>
+            <p><strong>Labor:</strong> ${detalles.solicitud.labor || '❌'}</p>
+            <p><strong>Contratista:</strong> ${detalles.contractorName || '❌'}</p>
+            <p><strong>Interventor:</strong> ${detalles.interventorName || '❌'}</p>
+            <p><strong>Fechas:</strong> ${detalles.solicitud.inicio_obra || '❌'} - ${detalles.solicitud.fin_obra || '❌'}</p>
+            <p><strong>ARL:</strong> ${detalles.solicitud.arl_documento ? '✅' : '❌'}</p>
+            <p><strong>Planilla de Pago Seguridad Social:</strong> ${detalles.solicitud.pasocial_documento ? '✅' : '❌'}</p>
+          </div>
+          <div class="section">
+            <h2>Colaboradores</h2>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID Colaborador</th>
+                  <th>Cédula</th>
+                  <th>Nombre</th>
+                  <th>Fotos</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${detalles.colaboradores.map(colaborador => `
                   <tr>
-                    <th>ID Colaborador</th>
-                    <th>Cédula</th>
-                    <th>Nombre</th>
-                    <th>Fotos</th>
+                    <td>${colaborador.id || '❌'}</td>
+                    <td>${colaborador.cedula || '❌'}</td>
+                    <td>${colaborador.nombre || '❌'}</td>
+                    <td>
+                      ${colaborador.foto 
+                        ? `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" data-foto="${colaborador.foto}" data-nombre="${colaborador.nombre}" data-id="${colaborador.id}">` 
+                        : '❌ Sin foto'}
+                      <br>
+                      ${colaborador.cedulaFoto 
+                        ? `<img src="${colaborador.cedulaFoto}" alt="Foto de la cédula" class="foto-img" data-foto="${colaborador.cedulaFoto}" data-nombre="${colaborador.nombre}" data-id="${colaborador.id}">` 
+                        : '❌ Sin cédula'}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  ${detalles.colaboradores.map(colaborador => `
-                    <tr>
-                      <td>${colaborador.id || '❌'}</td>
-                      <td>${colaborador.cedula || '❌'}</td>
-                      <td>${colaborador.nombre || '❌'}</td>
-                      <td>
-                        ${colaborador.foto 
-                          ? `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" data-foto="${colaborador.foto}" data-nombre="${colaborador.nombre}" data-id="${colaborador.id}">` 
-                          : '❌ Sin foto'}
-                        <br>
-                        ${colaborador.cedulaFoto 
-                          ? `<img src="${colaborador.cedulaFoto}" alt="Foto de la cédula" class="foto-img" data-foto="${colaborador.cedulaFoto}" data-nombre="${colaborador.nombre}" data-id="${colaborador.id}">` 
-                          : '❌ Sin cédula'}
-                      </td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div id="fotoModalCustom" class="modal-custom">
+            <div class="modal-content-custom">
+              <span class="close-btn-custom" onclick="closeModalCustom()">×</span>
+              <img id="modalFotoCustom" class="foto-large" src="" alt="Foto ampliada">
+              <h3 id="modalNombreCustom"></h3>
+              <p><strong>ID Colaborador:</strong> <span id="modalIdCustom"></span></p>
             </div>
-            <div id="fotoModalCustom" class="modal-custom">
-              <div class="modal-content-custom">
-                <span class="close-btn-custom" onclick="closeModalCustom()">×</span>
-                <img id="modalFotoCustom" class="foto-large" src="" alt="Foto ampliada">
-                <h3 id="modalNombreCustom"></h3>
-                <p><strong>ID Colaborador:</strong> <span id="modalIdCustom"></span></p>
-              </div>
-            </div>
-          `;
-
-          const modal = document.getElementById('modalVerDetalles');
-          modal.removeAttribute('aria-hidden');
-          $('#modalVerDetalles').modal('show');
-          
-          // Manejar el foco cuando el modal se cierra
-          $('#modalVerDetalles').on('hidden.bs.modal', function () {
-            modal.setAttribute('aria-hidden', 'true');
-            btn.focus(); // Devolver el foco al botón que abrió el modal
+          </div>
+        `;
+  
+        const modal = document.getElementById('modalVerDetalles');
+        modal.removeAttribute('aria-hidden');
+        $('#modalVerDetalles').modal('show');
+  
+        $('#modalVerDetalles').on('hidden.bs.modal', () => {
+          modal.setAttribute('aria-hidden', 'true');
+          btn.focus();
+        });
+  
+        document.querySelectorAll('.foto-img').forEach(img => {
+          img.addEventListener('click', () => {
+            const fotoSrc = img.getAttribute('data-foto');
+            const nombre = img.getAttribute('data-nombre');
+            const id = img.getAttribute('data-id');
+            openModalCustom(fotoSrc, nombre, id);
           });
-
-          const fotoImages = document.querySelectorAll('.foto-img');
-          // console.log('[DEBUG] Fotos encontradas:', fotoImages.length);
-          fotoImages.forEach(img => {
-            img.addEventListener('click', () => {
-              const fotoSrc = img.getAttribute('data-foto');
-              const nombre = img.getAttribute('data-nombre');
-              const id = img.getAttribute('data-id');
-              // console.log('[DEBUG] Foto clickeada:', { fotoSrc, nombre, id });
-              openModalCustom(fotoSrc, nombre, id);
-            });
-          });
-
-        } else {
-          Swal.fire('Error', 'No se pudieron obtener los detalles de la solicitud', 'error');
-        }
+        });
       } catch (error) {
         console.error('[ERROR] Error al obtener los detalles:', error);
         Swal.fire('Error', 'Hubo un error al obtener los detalles de la solicitud.', 'error');
       }
     }
-
+  
+    /**
+     * Abre un modal personalizado para mostrar una foto ampliada.
+     * @param {string} fotoSrc - URL de la foto.
+     * @param {string} nombre - Nombre del colaborador.
+     * @param {string} id - ID del colaborador.
+     */
     function openModalCustom(fotoSrc, nombre, id) {
       const modal = document.getElementById('fotoModalCustom');
-      const modalFoto = document.getElementById('modalFotoCustom');
-      const modalNombre = document.getElementById('modalNombreCustom');
-      const modalId = document.getElementById('modalIdCustom');
-
-      // console.log('[DEBUG] Abriendo modal con:', { fotoSrc, nombre, id });
-      modalFoto.src = fotoSrc;
-      modalNombre.textContent = nombre || 'Sin nombre';
-      modalId.textContent = id || 'Sin ID';
+      document.getElementById('modalFotoCustom').src = fotoSrc;
+      document.getElementById('modalNombreCustom').textContent = nombre || 'Sin nombre';
+      document.getElementById('modalIdCustom').textContent = id || 'Sin ID';
       modal.style.display = 'flex';
     }
-
+  
+    /**
+     * Cierra el modal personalizado de fotos.
+     */
     function closeModalCustom() {
-      const modal = document.getElementById('fotoModalCustom');
-      modal.style.display = 'none';
+      document.getElementById('fotoModalCustom').style.display = 'none';
     }
-
-    document.addEventListener('click', (e) => {
+  
+    // Cerrar el modal al hacer clic fuera
+    document.addEventListener('click', e => {
       const modal = document.getElementById('fotoModalCustom');
-      if (e.target === modal) {
-        // console.log('[DEBUG] Cerrando modal por clic fuera');
-        closeModalCustom();
-      }
+      if (e.target === modal) closeModalCustom();
     });
-
+  
+    /**
+     * Maneja la detención o reanudación de una labor con confirmación.
+     * @param {string} solicitudId - ID de la solicitud.
+     * @param {HTMLElement} button - Botón que desencadena la acción.
+     * @param {string} accion - 'detener' o 'reanudar'.
+     */
     async function manejarLabor(solicitudId, button, accion) {
+      const mensajeConfirmacion = accion === 'detener' ? '¿Está seguro de que desea detener la labor?' : '¿Está seguro de que desea reanudar la labor?';
+      const result = await Swal.fire({
+        title: 'Confirmar acción',
+        text: mensajeConfirmacion,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, continuar',
+        cancelButtonText: 'Cancelar',
+      });
+  
+      if (!result.isConfirmed) return;
+  
+      button.disabled = true;
+      button.innerHTML = accion === 'detener' ? 'Detener Labor' : 'Reanudar Labor';
+  
       try {
-        const mensajeConfirmacion = accion === 'detener' ? '¿Está seguro de que desea detener la labor?' : '¿Está seguro de que desea reanudar la labor?';
-        const result = await Swal.fire({
-          title: 'Confirmar acción',
-          text: mensajeConfirmacion,
-          icon: 'warning',
-          showCancelButton: true,
-          confirmButtonText: 'Sí, continuar',
-          cancelButtonText: 'Cancelar',
-        });
-
-        if (!result.isConfirmed) return;
-
-        button.disabled = true;
-        button.innerHTML = accion === 'detener' ? 'Detener Labor' : 'Reanudar Labor';
-
         const endpoint = accion === 'detener' ? `/solicitudes/${solicitudId}/detener-labor` : `/solicitudes/${solicitudId}/reanudar-labor`;
         const response = await fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' } });
-
+  
         if (response.ok) {
           document.location.reload();
         } else {
           const errorData = await response.json();
-          Swal.fire('Error al procesar la solicitud', errorData.message || 'No se pudo procesar la solicitud.', 'error');
+          throw new Error(errorData.message || 'No se pudo procesar la solicitud');
         }
       } catch (err) {
-        Swal.fire('Error de conexión', 'Ocurrió un error al intentar procesar la solicitud.', 'error');
-        console.error('[ERROR] Error al intentar manejar la labor:', err);
+        console.error('[ERROR] Error al manejar la labor:', err);
+        Swal.fire('Error', 'Ocurrió un error al procesar la solicitud.', 'error');
       } finally {
         button.disabled = false;
         button.innerHTML = accion === 'detener' ? 'Detener Labor' : 'Reanudar Labor';
       }
     }
-
-    document.getElementById('filtrarBtn').addEventListener('click', async function () {
+  
+    // ===== Filtros y descargas =====
+    /**
+     * Filtra las solicitudes según los criterios del formulario y actualiza la tabla.
+     */
+    document.getElementById('filtrarBtn').addEventListener('click', async () => {
       const filtros = {
         id: document.getElementById('filtroId').value.trim(),
         idColaborador: document.getElementById('filtroIdColaborador').value.trim(),
@@ -923,32 +1040,34 @@
         lugar: document.getElementById('filtroLugar').value,
         vigencia: document.getElementById('filtroVigencia').value,
       };
-
+  
       try {
         const response = await fetch('/filtrar-solicitudes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(filtros),
         });
-
+  
         if (response.ok) {
           let solicitudesFiltradas = await response.json();
-          
           if (filtros.vigencia) {
             solicitudesFiltradas = solicitudesFiltradas.filter(accion => accion.estado_vigencia === filtros.vigencia);
           }
-
           actualizarTabla(solicitudesFiltradas);
+          iniciarActualizacionContadores();
         } else {
-          Swal.fire('Error', 'No se pudieron filtrar las solicitudes.', 'error');
+          throw new Error('No se pudieron filtrar las solicitudes');
         }
       } catch (error) {
         console.error('[ERROR] Error al filtrar:', error);
         Swal.fire('Error', 'Hubo un error al realizar el filtrado.', 'error');
       }
     });
-
-    document.getElementById('descargarUnicoExcel').addEventListener('click', function () {
+  
+    /**
+     * Descarga un Excel único para una solicitud específica.
+     */
+    document.getElementById('descargarUnicoExcel').addEventListener('click', () => {
       const solicitudId = document.querySelector('#historialModal').dataset.solicitudId;
       if (solicitudId) {
         window.location.href = `/descargar-excel-unico/${solicitudId}`;
@@ -956,11 +1075,18 @@
         Swal.fire('Error', 'No se encontró el ID de la solicitud.', 'error');
       }
     });
-
-    document.getElementById('descargarGlobalExcel').addEventListener('click', function () {
+  
+    /**
+     * Descarga un Excel global con todas las solicitudes.
+     */
+    document.getElementById('descargarGlobalExcel').addEventListener('click', () => {
       window.location.href = '/descargar-excel-global';
     });
-
+  
+    /**
+     * Muestra el historial de una solicitud en un modal.
+     * @param {HTMLElement} btn - Botón que desencadena la acción.
+     */
     function manejarVerHistorial(btn) {
       const solicitudId = btn.getAttribute('data-solicitud-id');
       fetch(`/obtener-historial/${solicitudId}`)
@@ -987,24 +1113,25 @@
           modal.dataset.solicitudId = solicitudId;
           modal.removeAttribute('aria-hidden');
           $('#historialModal').modal('show');
-          
-          // Manejar el foco cuando el modal se cierra
-          $('#historialModal').on('hidden.bs.modal', function () {
+  
+          $('#historialModal').on('hidden.bs.modal', () => {
             modal.setAttribute('aria-hidden', 'true');
-            btn.focus(); // Devolver el foco al botón que abrió el modal
+            btn.focus();
           });
         })
         .catch(error => console.error('[ERROR] Error al obtener el historial:', error));
     }
-
+  
+    /**
+     * Actualiza la tabla de solicitudes con los datos filtrados o iniciales.
+     * @param {Array} acciones - Lista de solicitudes a mostrar.
+     */
     function actualizarTabla(acciones) {
-      // console.log('[DEBUG] Entrando en actualizarTabla con acciones:', acciones);
       const tbody = document.querySelector('#tablaSolicitudes tbody');
       tbody.innerHTML = '';
-
+  
       if (acciones.length > 0) {
         acciones.forEach(accion => {
-          // console.log('[DEBUG] Procesando acción:', accion);
           const row = document.createElement('tr');
           row.innerHTML = `
             <td class="solicitud-id">${accion.solicitud_id}</td>
@@ -1054,7 +1181,7 @@
                               `<span class="badge bg-secondary">Estado Desconocido</span>`)))))))
               }
             </td>
-            ${username === "COA" ? `
+            ${USERNAME === 'COA' ? `
               <td>
                 <button class="btn btn-danger btn-sm eliminar-solicitud" data-solicitud-id="${accion.solicitud_id}">Eliminar</button>
               </td>` : ''}
@@ -1062,42 +1189,51 @@
               <button class="btn btn-info btn-sm" id="verDETALLES-${accion.solicitud_id}">Ver</button>
               <button class="btn btn-primary btn-sm ver-colaboradores" data-solicitud-id="${accion.solicitud_id}">Colaboradores</button>
             </td>
-            ${username === "COA" ? `
+            ${USERNAME === 'COA' ? `
               <td>
                 <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="${accion.solicitud_id}">Ver Historial</button>
               </td>` : ''}
+            <td>
+              <button class="btn btn-primary btn-sm ml-2 open-chat-btn-interventor" data-solicitud-id="${accion.solicitud_id}">
+                Conversar <span class="badge bg-danger text-white unread-count" data-solicitud-id="${accion.solicitud_id}">0</span>
+              </button>
+            </td>
           `;
           tbody.appendChild(row);
         });
       } else {
-        // console.log('[DEBUG] No hay acciones para mostrar');
-        tbody.innerHTML = `<tr><td colspan="${username === "COA" ? 14 : 13}" class="text-center">No hay acciones para revisar.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${USERNAME === 'COA' ? 14 : 13}" class="text-center">No hay acciones para revisar.</td></tr>`;
       }
-      // console.log('[DEBUG] Tabla actualizada, reasignando eventos');
+  
       reasignarEventos();
+  
+      document.querySelectorAll('.open-chat-btn-interventor').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.replaceWith(newBtn);
+        newBtn.addEventListener('click', () => openChatModalInterventor(newBtn.dataset.solicitudId));
+        updateUnreadCountInterventor(newBtn.dataset.solicitudId);
+      });
     }
-
+  
+    /**
+     * Reasigna eventos a los botones después de actualizar la tabla.
+     */
     function reasignarEventos() {
-      // console.log('[DEBUG] Reasignando eventos');
       document.querySelectorAll('[id^="aprobarBtn-"]').forEach(btn => {
         btn.addEventListener('click', () => manejarAprobar(btn));
-        // console.log('[DEBUG] Evento asignado a aprobarBtn:', btn.id);
       });
       document.querySelectorAll('[id^="verQR-"]').forEach(btn => {
         btn.addEventListener('click', () => manejarVerQR(btn));
-        // console.log('[DEBUG] Evento asignado a verQR:', btn.id);
       });
       document.querySelectorAll('[id^="verDETALLES-"]').forEach(btn => {
         btn.addEventListener('click', () => manejarVerDetalles(btn));
-        // console.log('[DEBUG] Evento asignado a verDETALLES:', btn.id);
       });
       document.querySelectorAll('.ver-historial').forEach(btn => {
         btn.addEventListener('click', () => manejarVerHistorial(btn));
-        // console.log('[DEBUG] Evento asignado a ver-historial:', btn.getAttribute('data-solicitud-id'));
       });
       document.querySelectorAll('.eliminar-solicitud').forEach(btn => {
-        btn.addEventListener('click', function () {
-          const solicitudId = this.getAttribute('data-solicitud-id');
+        btn.addEventListener('click', () => {
+          const solicitudId = btn.getAttribute('data-solicitud-id');
           Swal.fire({
             title: '¿Estás seguro?',
             text: 'Esta acción eliminará la solicitud y todos los archivos asociados. No se puede deshacer.',
@@ -1106,39 +1242,42 @@
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
             confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-          }).then((result) => {
+            cancelButtonText: 'Cancelar',
+          }).then(result => {
             if (result.isConfirmed) {
               $.ajax({
                 url: '/eliminar-solicitud',
                 method: 'POST',
                 data: { solicitud_id: solicitudId },
-                success: function (response) {
+                success: () => {
                   Swal.fire('Eliminado!', 'La solicitud ha sido eliminada correctamente.', 'success').then(() => {
                     window.location.reload();
                   });
                 },
-                error: function (xhr) {
+                error: xhr => {
                   Swal.fire('Error!', 'No se pudo eliminar la solicitud: ' + xhr.responseText, 'error');
-                }
+                },
               });
             }
           });
         });
-        // console.log('[DEBUG] Evento asignado a eliminar-solicitud:', btn.getAttribute('data-solicitud-id'));
       });
       document.querySelectorAll('.ver-colaboradores').forEach(btn => {
         btn.addEventListener('click', () => manejarVerColaboradores(btn));
       });
     }
-
+  
+    /**
+     * Llena los selectores de año en el modal de estadísticas.
+     */
     function llenarSelectoresAño() {
       const currentYear = new Date().getFullYear();
       const startYear = 2020;
-      
       const selectores = ['yearSolicitudes', 'yearColaboradores', 'yearInterventores'];
+  
       selectores.forEach(selectorId => {
         const select = document.getElementById(selectorId);
+        select.innerHTML = ''; // Limpiar opciones previas
         for (let year = currentYear; year >= startYear; year--) {
           const option = document.createElement('option');
           option.value = year;
@@ -1147,116 +1286,77 @@
         }
       });
     }
-
+  
+    /**
+     * Carga los datos de las tablas estadísticas según los filtros seleccionados.
+     */
     async function cargarDatosTablas() {
       try {
-        const yearSolicitudes = document.getElementById('yearSolicitudes').value;
-        const monthSolicitudes = document.getElementById('monthSolicitudes').value;
-        const yearColaboradores = document.getElementById('yearColaboradores').value;
-        const monthColaboradores = document.getElementById('monthColaboradores').value;
-        const yearInterventores = document.getElementById('yearInterventores').value;
-        const monthInterventores = document.getElementById('monthInterventores').value;
-
-        const params = new URLSearchParams();
-        if (yearSolicitudes) params.append('yearSolicitudes', yearSolicitudes);
-        if (monthSolicitudes) params.append('monthSolicitudes', monthSolicitudes);
-        if (yearColaboradores) params.append('yearColaboradores', yearColaboradores);
-        if (monthColaboradores) params.append('monthColaboradores', monthColaboradores);
-        if (yearInterventores) params.append('yearInterventores', yearInterventores);
-        if (monthInterventores) params.append('monthInterventores', monthInterventores);
-
-        const url = `/obtener-datos-tablas${params.toString() ? '?' + params.toString() : ''}`;
-        const response = await fetch(url, {
+        const params = new URLSearchParams({
+          yearSolicitudes: document.getElementById('yearSolicitudes').value,
+          monthSolicitudes: document.getElementById('monthSolicitudes').value,
+          yearColaboradores: document.getElementById('yearColaboradores').value,
+          monthColaboradores: document.getElementById('monthColaboradores').value,
+          yearInterventores: document.getElementById('yearInterventores').value,
+          monthInterventores: document.getElementById('monthInterventores').value,
+        }).toString();
+  
+        const response = await fetch(`/obtener-datos-tablas${params ? '?' + params : ''}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
-
-        if (!response.ok) {
-          throw new Error('Error al obtener datos de tablas');
-        }
-
+  
+        if (!response.ok) throw new Error('Error al obtener datos');
         const datos = await response.json();
-
+  
         const solicitudesBody = document.querySelector('#solicitudesPorPuestoTable tbody');
-        solicitudesBody.innerHTML = '';
-        datos.solicitudesPorPuesto.forEach(item => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${item.lugar}</td>
-            <td>${item.cantidad}</td>
-          `;
-          solicitudesBody.appendChild(row);
-        });
-
+        solicitudesBody.innerHTML = datos.solicitudesPorPuesto.map(item => `
+          <tr><td>${item.lugar}</td><td>${item.cantidad}</td></tr>
+        `).join('');
+  
         const colaboradoresBody = document.querySelector('#colaboradoresPorContratistaTable tbody');
-        colaboradoresBody.innerHTML = '';
-        datos.colaboradoresPorContratista.forEach(item => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${item.contratista}</td>
-            <td>${item.cantidad}</td>
-          `;
-          colaboradoresBody.appendChild(row);
-        });
-
+        colaboradoresBody.innerHTML = datos.colaboradoresPorContratista.map(item => `
+          <tr><td>${item.contratista}</td><td>${item.cantidad}</td></tr>
+        `).join('');
+  
         const interventoresBody = document.querySelector('#solicitudesPorInterventorTable tbody');
-        interventoresBody.innerHTML = '';
-        datos.solicitudesPorInterventor.forEach(item => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${item.interventor}</td>
-            <td>${item.cantidad}</td>
-          `;
-          interventoresBody.appendChild(row);
-        });
-
+        interventoresBody.innerHTML = datos.solicitudesPorInterventor.map(item => `
+          <tr><td>${item.interventor}</td><td>${item.cantidad}</td></tr>
+        `).join('');
       } catch (error) {
-        console.error('Error al cargar datos de tablas:', error);
+        console.error('[ERROR] Error al cargar datos de tablas:', error);
         Swal.fire('Error', 'No se pudieron cargar los datos estadísticos.', 'error');
       }
     }
-
-    $('#tablasModal').on('shown.bs.modal', function () {
+  
+    $('#tablasModal').on('shown.bs.modal', () => {
       llenarSelectoresAño();
       cargarDatosTablas();
-
-      $('#yearSolicitudes, #monthSolicitudes, #yearColaboradores, #monthColaboradores, #yearInterventores, #monthInterventores').on('change', function() {
-        cargarDatosTablas();
-      });
+      $('#yearSolicitudes, #monthSolicitudes, #yearColaboradores, #monthColaboradores, #yearInterventores, #monthInterventores').on('change', cargarDatosTablas);
     });
-
-    // Función para ver y gestionar colaboradores
+  
+    /**
+     * Muestra y gestiona los colaboradores de una solicitud en un modal.
+     * @param {HTMLElement} btn - Botón que desencadena la acción.
+     */
     function manejarVerColaboradores(btn) {
       const solicitudId = btn.getAttribute('data-solicitud-id');
       fetch(`/obtener-colaboradores-todos/${solicitudId}`)
         .then(response => response.json())
         .then(data => {
-          console.log("Datos de colaboradores:", data);
-          
-          // Actualizar información del modal
           document.getElementById('modalSolicitudId').textContent = solicitudId;
           document.getElementById('modalEmpresa').textContent = data.solicitud?.empresa || '';
-          
+  
           const tbody = document.getElementById('tablaModalColaboradores');
-          tbody.innerHTML = '';
-          
-          if (data.colaboradores && data.colaboradores.length > 0) {
-            data.colaboradores.forEach(col => {
-              // Estado de Curso SISO y Plantilla SS (pueden ser null en interventor)
-              const cursoSiso = col.cursoSiso || 'No definido';
-              const plantillaSS = col.plantillaSS ? 
-                (new Date(col.plantillaSS.fecha_fin) > new Date() ? 'Vigente' : 'Vencido') : 
-                'No definida';
-              
-              // Botón de acción para habilitar/deshabilitar
-              const accionBtn = col.estado ? 
-                `<button class="btn btn-danger btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="false">Deshabilitar</button>` :
-                `<button class="btn btn-success btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="true">Habilitar</button>`;
-              
-              const row = document.createElement('tr');
-              row.setAttribute('data-colaborador-id', col.id);
-              row.setAttribute('data-estado', col.estado ? 'habilitado' : 'inhabilitado');
-              row.innerHTML = `
+          tbody.innerHTML = data.colaboradores && data.colaboradores.length > 0 ? data.colaboradores.map(col => {
+            const cursoSiso = col.cursoSiso || 'No definido';
+            const plantillaSS = col.plantillaSS ? (new Date(col.plantillaSS.fecha_fin) > new Date() ? 'Vigente' : 'Vencido') : 'No definida';
+            const accionBtn = col.estado ?
+              `<button class="btn btn-danger btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="false">Deshabilitar</button>` :
+              `<button class="btn btn-success btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="true">Habilitar</button>`;
+  
+            return `
+              <tr data-colaborador-id="${col.id}" data-estado="${col.estado ? 'habilitado' : 'inhabilitado'}">
                 <td>${col.id}</td>
                 <td>${col.nombre}</td>
                 <td>${col.cedula}</td>
@@ -1265,211 +1365,485 @@
                 <td>${plantillaSS}</td>
                 <td class="acciones-colaborador">${accionBtn}</td>
                 <td><button class="btn btn-info btn-sm ver-historial-colab" data-colaborador-id="${col.id}">Ver</button></td>
-              `;
-              
-              tbody.appendChild(row);
-            });
-          } else {
-            tbody.innerHTML = `
-              <tr>
-                <td colspan="8" class="text-center">No hay colaboradores para mostrar</td>
               </tr>
             `;
-          }
-          
-          // Mostrar el modal
+          }).join('') : '<tr><td colspan="8" class="text-center">No hay colaboradores para mostrar</td></tr>';
+  
           $('#modalColaboradores').modal('show');
-          
-          // Asignar eventos a los botones
+  
           document.querySelectorAll('.accion-int-colaborador').forEach(btn => {
-            btn.addEventListener('click', function(e) {
+            btn.addEventListener('click', e => {
               e.preventDefault();
-              e.stopPropagation();
-              const colaboradorId = this.getAttribute('data-colaborador-id');
-              const nuevoEstado = this.getAttribute('data-nuevo-estado') === 'true';
+              const colaboradorId = btn.getAttribute('data-colaborador-id');
+              const nuevoEstado = btn.getAttribute('data-nuevo-estado') === 'true';
               cambiarEstadoColaboradorInterventor(colaboradorId, nuevoEstado, e);
             });
           });
-          
+  
           document.querySelectorAll('.ver-historial-colab').forEach(btn => {
-            btn.addEventListener('click', function(e) {
+            btn.addEventListener('click', e => {
               e.preventDefault();
-              e.stopPropagation();
-              const colaboradorId = this.getAttribute('data-colaborador-id');
+              const colaboradorId = btn.getAttribute('data-colaborador-id');
               verHistorialColaborador(colaboradorId);
             });
           });
-          
-          // Filtro por estado
+  
           document.getElementById('filtroModalEstado').addEventListener('change', aplicarFiltroModalEstado);
         })
         .catch(error => {
-          console.error('Error al obtener colaboradores:', error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudieron cargar los colaboradores: ' + error.message
-          });
+          console.error('[ERROR] Error al obtener colaboradores:', error);
+          Swal.fire('Error', 'No se pudieron cargar los colaboradores: ' + error.message, 'error');
         });
     }
-
-    // Función para aplicar filtro en el modal de colaboradores
+  
+    /**
+     * Filtra las filas del modal de colaboradores según el estado seleccionado.
+     */
     function aplicarFiltroModalEstado() {
       const filtro = document.getElementById('filtroModalEstado').value;
-      console.log("Aplicando filtro en modal:", filtro);
-      
       const filas = document.querySelectorAll('#tablaModalColaboradores tr');
-      let contador = 0;
-      
+  
       filas.forEach(fila => {
         const dataEstado = fila.getAttribute('data-estado');
-        if (!dataEstado) return; // Ignorar filas sin atributo de estado
-        
-        if (filtro === 'todos' || 
-            (filtro === 'habilitados' && dataEstado === 'habilitado') || 
-            (filtro === 'inhabilitados' && dataEstado === 'inhabilitado')) {
-          fila.style.display = '';
-          contador++;
-        } else {
-          fila.style.display = 'none';
-        }
+        if (!dataEstado) return;
+        fila.style.display = filtro === 'todos' || (filtro === 'habilitados' && dataEstado === 'habilitado') || (filtro === 'inhabilitados' && dataEstado === 'inhabilitado') ? '' : 'none';
       });
-      
-      console.log(`Se muestran ${contador} filas de ${filas.length}`);
     }
-
-    // Función para cambiar el estado de un colaborador (interventor)
+  
+    /**
+     * Cambia el estado de un colaborador (habilitar/deshabilitar).
+     * @param {string} colaboradorId - ID del colaborador.
+     * @param {boolean} nuevoEstado - Nuevo estado (true: habilitado, false: inhabilitado).
+     * @param {Event} event - Evento del botón.
+     */
     async function cambiarEstadoColaboradorInterventor(colaboradorId, nuevoEstado, event) {
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-      
+      const boton = event.target;
+      boton.disabled = true;
+      boton.textContent = 'Procesando...';
+  
       try {
-        console.log(`Cambiando estado del colaborador ${colaboradorId} a ${nuevoEstado} (interventor)`);
-        
-        // Desactivar el botón
-        const boton = event.target;
-        boton.disabled = true;
-        boton.textContent = 'Procesando...';
-        
         const response = await fetch(`/actualizar-estado-colaborador/${colaboradorId}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ estado: nuevoEstado, usuario: username })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ estado: nuevoEstado, usuario: USERNAME }),
         });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.message || 'Error al actualizar el estado');
-        }
-        
-        // Actualizar la fila en la tabla
+  
+        if (!response.ok) throw new Error((await response.json()).message || 'Error al actualizar');
         const fila = document.querySelector(`tr[data-colaborador-id="${colaboradorId}"]`);
-        
+  
         if (fila) {
-          // Actualizar texto y atributos
           fila.querySelector('.estado-colaborador').textContent = nuevoEstado ? 'Habilitado' : 'Inhabilitado';
           fila.setAttribute('data-estado', nuevoEstado ? 'habilitado' : 'inhabilitado');
-          
-          // Actualizar botón
-          const nuevoBoton = nuevoEstado ? 
+          fila.querySelector('.acciones-colaborador').innerHTML = nuevoEstado ?
             `<button class="btn btn-danger btn-sm accion-int-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="false">Deshabilitar</button>` :
             `<button class="btn btn-success btn-sm accion-int-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="true">Habilitar</button>`;
-          
-          fila.querySelector('.acciones-colaborador').innerHTML = nuevoBoton;
-          
-          // Reactivar eventos para el nuevo botón
-          fila.querySelector('.accion-int-colaborador').addEventListener('click', function(e) {
+  
+          fila.querySelector('.accion-int-colaborador').addEventListener('click', e => {
             e.preventDefault();
-            e.stopPropagation();
-            const colId = this.getAttribute('data-colaborador-id');
-            const newState = this.getAttribute('data-nuevo-estado') === 'true';
+            const colId = e.target.getAttribute('data-colaborador-id');
+            const newState = e.target.getAttribute('data-nuevo-estado') === 'true';
             cambiarEstadoColaboradorInterventor(colId, newState, e);
           });
-          
-          // Aplicar filtro actual
+  
           aplicarFiltroModalEstado();
         }
-        
-        // Mensaje de éxito
-        Swal.fire({
-          icon: 'success',
-          title: 'Éxito',
-          text: `Colaborador ${nuevoEstado ? 'habilitado' : 'deshabilitado'} correctamente`,
-          timer: 1500,
-          showConfirmButton: false
-        });
-        
+  
+        Swal.fire({ icon: 'success', title: 'Éxito', text: `Colaborador ${nuevoEstado ? 'habilitado' : 'deshabilitado'} correctamente`, timer: 1500, showConfirmButton: false });
       } catch (error) {
-        console.error('Error:', error);
-        
-        // Reactivar el botón
-        if (boton) {
-          boton.disabled = false;
-          boton.textContent = nuevoEstado ? 'Habilitar' : 'Deshabilitar';
-        }
-        
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: error.message
-        });
+        console.error('[ERROR] Error al cambiar estado:', error);
+        Swal.fire('Error', error.message, 'error');
+      } finally {
+        boton.disabled = false;
+        boton.textContent = nuevoEstado ? 'Habilitar' : 'Deshabilitar';
       }
     }
-
-    // Función para ver el historial de un colaborador
+  
+    /**
+     * Muestra el historial de un colaborador en un modal.
+     * @param {string} colaboradorId - ID del colaborador.
+     */
     function verHistorialColaborador(colaboradorId) {
       fetch(`/obtener-historial-colaborador/${colaboradorId}`)
         .then(response => response.json())
         .then(data => {
-          console.log('Historial del colaborador:', data);
-          
-          // Usar el modal de historial existente
           const tableBody = document.getElementById('historialTableBody');
-          tableBody.innerHTML = '';
-          
-          if (data && data.length > 0) {
-            data.forEach(registro => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${registro.nombre_colaborador}</td>
-                <td>${registro.empresa}</td>
-                <td>${registro.nit}</td>
-                <td>${registro.tipo}</td>
-                <td>${registro.lugar}</td>
-                <td>${registro.usuario_registro}</td>
-                <td>${registro.registro_hecho}</td>
-                <td>${registro.fecha_hora}</td>
-                <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual}</span></td>
-              `;
-              tableBody.appendChild(row);
-            });
-          } else {
-            tableBody.innerHTML = '<tr><td colspan="9" class="text-center">No hay registros de ingresos o salidas para este colaborador</td></tr>';
-          }
-          
-          // Ocultar el modal de colaboradores y mostrar el de historial
+          tableBody.innerHTML = data.length > 0 ? data.map(registro => `
+            <tr>
+              <td>${registro.nombre_colaborador}</td>
+              <td>${registro.empresa}</td>
+              <td>${registro.nit}</td>
+              <td>${registro.tipo}</td>
+              <td>${registro.lugar}</td>
+              <td>${registro.usuario_registro}</td>
+              <td>${registro.registro_hecho}</td>
+              <td>${registro.fecha_hora}</td>
+              <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual}</span></td>
+            </tr>
+          `).join('') : '<tr><td colspan="9" class="text-center">No hay registros de ingresos o salidas para este colaborador</td></tr>';
+  
           $('#modalColaboradores').modal('hide');
           $('#historialModal').modal('show');
-          
-          // Configurar el cierre del modal historial para volver al modal de colaboradores
-          $('#historialModal').on('hidden.bs.modal', function() {
-            $('#modalColaboradores').modal('show');
-          });
+  
+          $('#historialModal').on('hidden.bs.modal', () => $('#modalColaboradores').modal('show'));
         })
         .catch(error => {
-          console.error('Error al obtener historial del colaborador:', error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo obtener el historial del colaborador'
-          });
+          console.error('[ERROR] Error al obtener historial:', error);
+          Swal.fire('Error', 'No se pudo obtener el historial del colaborador', 'error');
         });
     }
+  
+    // ===== Funciones de chat =====
+    /**
+     * Obtiene el ID del usuario interventor (ajustar según autenticación real).
+     * @returns {number} ID del usuario interventor.
+     */
+    function getInterventorUserId() {
+      return 2; // Reemplazar con lógica de autenticación real, ej: window.currentUserId
+    }
+  
+    /**
+     * Abre el modal de chat para una solicitud específica y solicita permisos de notificación.
+     * @param {string} solicitudId - ID de la solicitud.
+     */
+    async function openChatModalInterventor(solicitudId) {
+      try {
+        // Solicitar permiso de notificaciones si no está concedido
+        if ('Notification' in window && Notification.permission !== 'granted') {
+          if (Notification.permission !== 'denied') {
+            const permission = await Notification.requestPermission();
+            console.log(`[Notificaciones] Permiso ${permission === 'granted' ? 'concedido' : 'denegado'}`);
+          } else {
+            console.log('[Notificaciones] Permiso denegado previamente por el usuario');
+          }
+        }
+  
+        currentSolicitudIdInterventor = solicitudId;
+        document.getElementById('chatSolicitudIdInterventor').textContent = solicitudId;
+        document.getElementById('chatModalInterventor').classList.remove('hidden');
+        displayedMessagesInterventor.clear();
+  
+        if (!socketInterventor || socketInterventor.readyState !== WebSocket.OPEN) {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          socketInterventor = new WebSocket(`${protocol}//${window.location.host}/ws/chat/interventor`);
+  
+          socketInterventor.onopen = () => console.log('[Interventor] WebSocket conectado');
+          socketInterventor.onmessage = event => {
+            const message = JSON.parse(event.data);
+            
+            // Si es una actualización de estado
+            if (message.type === 'status_update') {
+                const messageDiv = document.querySelector(`[data-message-id="${message.messageId}"]`);
+                if (messageDiv) {
+                    const statusSpan = messageDiv.querySelector('.status');
+                    if (statusSpan) {
+                        switch (message.status) {
+                            case 'delivered':
+                                statusSpan.innerHTML = '<span class="status-icon-delivered text-gray-400">✓✓</span>';
+                                break;
+                            case 'read':
+                                statusSpan.innerHTML = '<span class="status-icon-read text-blue-400">✓✓</span>';
+                                break;
+                        }
+                    }
+                }
+                return;
+            }
+  
+            // Para mensajes nuevos
+            if (message.solicitudId === currentSolicitudIdInterventor) {
+                displayMessageInterventor(message);
+                if (document.hidden) {
+                    notifyNewMessageInterventor(message);
+                }
+                
+                // Enviar confirmación de lectura si el chat está abierto
+                if (!document.hidden && socketInterventor.readyState === WebSocket.OPEN) {
+                    socketInterventor.send(JSON.stringify({
+                        type: 'status_update',
+                        messageId: message.id,
+                        status: 'read',
+                        solicitudId: message.solicitudId,
+                        chatType: 'interventor'
+                    }));
+                }
+            }
+            updateUnreadCountInterventor(message.solicitudId);
+          };
+          socketInterventor.onerror = error => console.error('[Interventor] Error en WebSocket:', error);
+          socketInterventor.onclose = () => console.log('[Interventor] WebSocket cerrado');
+        }
+  
+        await loadInitialMessagesInterventor(solicitudId);
+        await markMessagesAsReadInterventor(solicitudId);
+      } catch (error) {
+        console.error('[Interventor] Error al abrir chat:', error);
+        Swal.fire('Error', 'No se pudo cargar el chat.', 'error');
+      }
+    }
+  
+    /**
+     * Cierra el modal de chat y limpia los recursos.
+     */
+    function closeChatModalInterventor() {
+      document.getElementById('chatModalInterventor').classList.add('hidden');
+      if (socketInterventor) {
+        socketInterventor.close();
+        socketInterventor = null;
+      }
+      currentSolicitudIdInterventor = null;
+      oldestMessageIdInterventor = null;
+      displayedMessagesInterventor.clear();
+    }
+  
+    /**
+     * Envía un mensaje al WebSocket y lo muestra localmente con estado "enviado".
+     */
+    function sendMessageInterventor() {
+        const input = document.getElementById('chatInputInterventor');
+        const content = input.value.trim();
+        if (!content || !currentSolicitudIdInterventor || !socketInterventor) return;
+  
+        const interventorUserId = getInterventorUserId();
+        const messageId = Date.now().toString(); // ID temporal para seguimiento
+        const message = {
+            id: messageId,
+            solicitudId: currentSolicitudIdInterventor,
+            type: 'interventor',
+            content,
+            userId: interventorUserId.toString(),
+            timestamp: new Date().toISOString(),
+            leido: false,
+            isLocal: true
+        };
+  
+        if (socketInterventor.readyState === WebSocket.OPEN) {
+            socketInterventor.send(JSON.stringify(message));
+            displayMessageInterventor({ 
+                ...message, 
+                usuario_id: interventorUserId,
+                created_at: message.timestamp
+            }, true);
+            input.value = '';
+        }
+    }
+  
+    /**
+     * Carga los mensajes iniciales de una conversación.
+     * @param {string} solicitudId - ID de la solicitud.
+     */
+    async function loadInitialMessagesInterventor(solicitudId) {
+      const chatMessages = document.getElementById('chatMessagesInterventor');
+      chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-600"></div></div>';
+  
+      try {
+        const interventorUserId = getInterventorUserId();
+        const response = await fetch(`/api/chat/${solicitudId}/interventor?limit=20&userId=${interventorUserId}`);
+        if (!response.ok) throw new Error(`Error al cargar mensajes: ${response.status}`);
+  
+        const messages = await response.json();
+        chatMessages.innerHTML = messages.length === 0 ?
+          '<div class="text-center text-gray-500 p-4">No hay mensajes en esta conversación.</div>' : '';
+  
+        messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+          .forEach(message => displayMessageInterventor(message));
+        oldestMessageIdInterventor = messages[0]?.id;
+  
+        setTimeout(() => chatMessages.scrollTop = chatMessages.scrollHeight, 100);
+      } catch (error) {
+        console.error('[ERROR] Error al cargar mensajes:', error);
+        chatMessages.innerHTML = '<div class="text-center text-red-500 p-4">Error al cargar mensajes.</div>';
+      }
+    }
+  
+    /**
+     * Devuelve el ícono de estado según las condiciones actuales del backend.
+     * @param {boolean} isLocal - Si el mensaje es local (recién enviado).
+     * @param {boolean} leido - Si el mensaje fue leído.
+     * @returns {string} HTML del ícono de estado.
+     */
+    function getStatusIcon(isLocal, leido, isDelivered = false) {
+        if (isLocal) {
+            return '<span class="status-icon-sent text-gray-400">✓</span>'; // Enviado (✓ gris)
+        } else if (leido) {
+            return '<span class="status-icon-read text-blue-400">✓✓</span>'; // Leído (✓✓ azul)
+        } else if (isDelivered) {
+            return '<span class="status-icon-delivered text-gray-400">✓✓</span>'; // Entregado (✓✓ gris)
+        }
+        return '<span class="status-icon-sent text-gray-400">✓</span>'; // Por defecto, enviado
+    }
+  
+    /**
+     * Muestra o actualiza un mensaje en el chat con manejo robusto de fechas.
+     * @param {Object} message - Mensaje a mostrar o actualizar.
+     * @param {boolean} isLocal - Si el mensaje es local (recién enviado).
+     */
+    function displayMessageInterventor(message, isLocal = false) {
+      const chatMessages = document.getElementById('chatMessagesInterventor');
+      const interventorUserId = getInterventorUserId();
+      const isSender = parseInt(message.usuario_id) === interventorUserId;
+  
+      // Si el mensaje ya existe, actualizamos su estado
+      if (message.id && displayedMessagesInterventor.has(message.id)) {
+        const existingMessageDiv = chatMessages.querySelector(`[data-message-id="${message.id}"]`);
+        if (existingMessageDiv && isSender) {
+          const statusIcon = getStatusIcon(false, message.leido, true);
+          existingMessageDiv.querySelector('.status').innerHTML = statusIcon;
+        }
+        return;
+      }
+  
+      if (message.id) displayedMessagesInterventor.add(message.id);
+  
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `chat-message p-3 my-2 rounded-lg ${isSender ? 'ml-auto bg-blue-600 text-white max-w-[70%]' : 'bg-gray-200 text-gray-800 max-w-[70%]'}`;
+      if (message.id) messageDiv.setAttribute('data-message-id', message.id);
+  
+      let messageContent = '';
+      try {
+        messageContent = typeof message.content === 'string' ? 
+          (JSON.parse(message.content).text || message.content) : 
+          (message.content.text || message.content.value || JSON.stringify(message.content));
+      } catch (e) {
+        messageContent = message.content || 'Mensaje inválido';
+      }
+  
+      // Formateo de fecha
+      const messageDate = message.created_at ? new Date(message.created_at) : new Date(message.timestamp);
+      const formattedDateTime = messageDate.toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+  
+      const statusIcon = isSender ? getStatusIcon(isLocal, message.leido, !isLocal) : '';
+  
+      messageDiv.innerHTML = `
+        <div class="text-sm mb-1">${messageContent}</div>
+        <div class="text-xs ${isSender ? 'text-gray-300' : 'text-gray-500'} text-right">
+          ${formattedDateTime} <span class="status">${statusIcon}</span>
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+  
+      const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+      if (isNearBottom) chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  
+    /**
+     * Actualiza el contador de mensajes no leídos en el botón de chat.
+     * @param {string} solicitudId - ID de la solicitud.
+     */
+    async function updateUnreadCountInterventor(solicitudId) {
+      try {
+        const interventorUserId = getInterventorUserId();
+        const response = await fetch(`/api/chat/${solicitudId}/interventor/unread?userId=${interventorUserId}`);
+        if (!response.ok) throw new Error('Error al obtener contador');
+  
+        const data = await response.json();
+        const button = document.querySelector(`.open-chat-btn-interventor[data-solicitud-id="${solicitudId}"]`);
+        if (button) {
+          const unreadBadge = button.querySelector('.unread-count');
+          if (unreadBadge) {
+            unreadBadge.textContent = data.unreadCount || 0;
+            unreadBadge.style.display = data.unreadCount > 0 ? 'inline-block' : 'none';
+          } else {
+            console.warn(`[Interventor] Badge no encontrado para solicitud ${solicitudId}`);
+          }
+        }
+      } catch (error) {
+        console.error('[ERROR] Error al actualizar contador:', error);
+      }
+    }
+  
+    /**
+     * Marca los mensajes de una conversación como leídos.
+     * @param {string} solicitudId - ID de la solicitud.
+     */
+    async function markMessagesAsReadInterventor(solicitudId) {
+      try {
+        const interventorUserId = getInterventorUserId();
+        const response = await fetch(`/api/chat/${solicitudId}/interventor/mark-read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: interventorUserId }),
+        });
+  
+        if (!response.ok) throw new Error((await response.json()).message || 'Error al marcar como leídos');
+        updateUnreadCountInterventor(solicitudId);
+      } catch (error) {
+        console.error('[ERROR] Error al marcar mensajes como leídos:', error);
+      }
+    }
+  
+    /**
+     * Muestra una notificación del navegador para un nuevo mensaje.
+     * @param {Object} message - Mensaje recibido.
+     */
+    function notifyNewMessageInterventor(message) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  
+      let messageContent = '';
+      try {
+        messageContent = typeof message.content === 'string' ? (JSON.parse(message.content).text || message.content) : (message.content.text || message.content.value || JSON.stringify(message.content));
+      } catch (e) {
+        messageContent = message.content || 'Nuevo mensaje';
+      }
+      new Notification(`Nuevo mensaje en solicitud ${message.solicitudId}`, {
+        body: messageContent,
+        icon: '/static/icon.png', // Asegúrate de que este archivo exista
+      });
+    }
+  
+    // ===== Inicialización de eventos =====
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.open-chat-btn-interventor').forEach(btn => {
+        btn.addEventListener('click', () => openChatModalInterventor(btn.dataset.solicitudId));
+        updateUnreadCountInterventor(btn.dataset.solicitudId);
+      });
+  
+      document.getElementById('chatInputInterventor')?.addEventListener('keypress', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessageInterventor();
+        }
+      });
+  
+      iniciarActualizacionContadores();
+    });
+  
+    /**
+     * Inicia la actualización periódica de los contadores de mensajes no leídos.
+     */
+    function iniciarActualizacionContadores() {
+      if (window.contadoresInterval) clearInterval(window.contadoresInterval);
+      window.contadoresInterval = setInterval(() => {
+        document.querySelectorAll('.open-chat-btn-interventor').forEach(btn => updateUnreadCountInterventor(btn.dataset.solicitudId));
+      }, 5000);
+    }
+  </script>
+
+  <script>
+    // Agregar después de los otros scripts existentes
+    document.addEventListener('DOMContentLoaded', function() {
+      const filtrosContent = document.getElementById('filtrosCollapse');
+      const toggleButton = document.getElementById('toggleFilters');
+      const toggleText = document.getElementById('toggleText');
+      let filtrosVisible = true;
+
+      toggleButton.addEventListener('click', function() {
+        filtrosVisible = !filtrosVisible;
+        
+        if (filtrosVisible) {
+          filtrosContent.classList.remove('hidden');
+          toggleText.textContent = 'Ocultar Filtros';
+        } else {
+          filtrosContent.classList.add('hidden');
+          toggleText.textContent = 'Mostrar Filtros';
+        }
+      });
+    });
   </script>
 </body>
 </html>

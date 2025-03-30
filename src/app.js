@@ -80,9 +80,27 @@ wss.on('connection', (ws, req) => {
     ws.on('message', async (data) => {
         try {
             const message = JSON.parse(data);
-            console.log(`Mensaje recibido: ${JSON.stringify(message)}`);
+            
+            // Si es una confirmación de estado
+            if (message.type === 'status_update') {
+                // Propagar el cambio de estado a todos los clientes relevantes
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN && client !== ws) {
+                        if ((client.chatType === 'chat' && client.identifier === message.solicitudId) ||
+                            (client.identifier === 'interventor' && message.chatType === 'interventor')) {
+                            client.send(JSON.stringify({
+                                type: 'status_update',
+                                messageId: message.messageId,
+                                status: message.status,
+                                solicitudId: message.solicitudId
+                            }));
+                        }
+                    }
+                });
+                return;
+            }
 
-            // Validar mensaje
+            // Para mensajes nuevos
             if (!message.solicitudId || !message.type || !message.content) {
                 console.error('Mensaje con formato inválido:', message);
                 return;
@@ -105,6 +123,14 @@ wss.on('connection', (ws, req) => {
 
             // Actualizar mensajes no leídos para los participantes
             await updateUnreadCount(chatId, message);
+
+            // Enviar confirmación de entrega al remitente
+            ws.send(JSON.stringify({
+                type: 'status_update',
+                messageId: message.id,
+                status: 'delivered',
+                solicitudId: message.solicitudId
+            }));
 
             // Enviar el mensaje a todos los clientes interesados en esta conversación
             wss.clients.forEach(client => {

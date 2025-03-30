@@ -578,7 +578,7 @@ controller.filtrarSolicitudes = async (req, res) => {
       LEFT JOIN users us ON us.id = s.interventor_id
       LEFT JOIN colaboradores c ON c.solicitud_id = s.id
       WHERE 
-        (a.accion IN ('aprobada', 'pendiente', 'negada') OR s.estado IN ('en labor', 'labor detenida'))
+        (a.accion IN ('aprobada', 'pendiente') OR s.estado IN ('en labor', 'labor detenida'))
     `;
     const params = [];
 
@@ -636,6 +636,14 @@ controller.filtrarSolicitudes = async (req, res) => {
     if (username !== "COA") {
       query += ' AND s.interventor_id = ?';
       params.push(id);
+    }
+
+    // Si hay algún filtro específico, entonces incluimos las negadas
+    if (filtroId || cedula || interventor || estado || fechaInicio || fechaFin || nit || empresa || lugar || vigencia || idColaborador) {
+      query = query.replace(
+        "(a.accion IN ('aprobada', 'pendiente')", 
+        "(a.accion IN ('aprobada', 'pendiente', 'negada')"
+      );
     }
 
     query += ' ORDER BY a.id DESC';
