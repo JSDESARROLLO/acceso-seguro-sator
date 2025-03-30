@@ -11,85 +11,88 @@ controller.vistaContratista = async (req, res) => {
   console.log('[CONTROLADOR] Procesando vista del contratista');
 
   const token = req.cookies.token;
-
-  if (!token) {
-      console.log('[CONTROLADOR] No se encontró el token, redirigiendo a login');
-      return res.redirect('/login');
+  let userId = null;
+  
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, SECRET_KEY);
+      userId = decoded.id; // El ID del usuario en el token
+      console.log("ID del usuario desde token:", userId);
+    } catch (err) {
+      console.error("Error al decodificar token:", err);
+      return res.redirect('/logout');
+    }
+  } else {
+    console.log("No se encontró token");
+    return res.redirect('/logout');
   }
 
   try {
-      const decoded = jwt.verify(token, SECRET_KEY);
-      const { role, id } = decoded;
+    console.log('[CONTROLADOR] Obteniendo solicitudes del contratista');
 
-      if (role !== 'contratista') {
-          console.log(`[CONTROLADOR] Rol incorrecto: ${role}`);
-          return res.redirect('/login');
-      }
+    const query = `
+      SELECT 
+      s.id, 
+      s.empresa, 
+      s.nit, 
+      DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra, 
+      DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra, 
+      s.dias_trabajo, 
+      s.estado, 
+      a.accion, 
+      a.comentario, 
+      s.lugar, 
+      s.labor,
+      us.username AS interventor,
+      CASE
+          WHEN s.estado = 'aprobada' AND a.accion = 'pendiente' THEN 'aprobado por sst'  -- Solicitud aprobada y acción pendiente
+          WHEN s.estado = 'aprobada' AND a.accion = 'aprobada' THEN 'pendiente ingreso'  -- Solicitud y acción ambas aprobadas
+          WHEN s.estado = 'aprobada' AND CURDATE() > DATE(s.fin_obra) THEN 'pendiente ingreso - vencido'
+          WHEN s.estado = 'en labor' AND CURDATE() > DATE(s.fin_obra) THEN 'en labor - vencida'
+          WHEN s.estado = 'en labor' THEN 'en labor'
+          WHEN s.estado = 'labor detenida' THEN 'labor detenida'
+          ELSE s.estado
+      END AS estado_actual
+  FROM solicitudes s
+  LEFT JOIN acciones a ON s.id = a.solicitud_id
+  LEFT JOIN users us ON us.id = s.interventor_id
+  WHERE s.usuario_id = ?
+  ORDER BY s.id DESC;
+    `;
 
-      console.log('[CONTROLADOR] Obteniendo solicitudes del contratista');
+    // Obtener las URLs de los documentos (si existen)
+    const [solicitud_url_download] = await connection.execute('SELECT * FROM sst_documentos WHERE solicitud_id IN (SELECT id FROM solicitudes)');
 
-      const query = `
-        SELECT 
-        s.id, 
-        s.empresa, 
-        s.nit, 
-        DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra, 
-        DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra, 
-        s.dias_trabajo, 
-        s.estado, 
-        a.accion, 
-        a.comentario, 
-        s.lugar, 
-        s.labor,
-        us.username AS interventor,
-        CASE
-            WHEN s.estado = 'aprobada' AND a.accion = 'pendiente' THEN 'aprobado por sst'  -- Solicitud aprobada y acción pendiente
-            WHEN s.estado = 'aprobada' AND a.accion = 'aprobada' THEN 'pendiente ingreso'  -- Solicitud y acción ambas aprobadas
-            WHEN s.estado = 'aprobada' AND CURDATE() > DATE(s.fin_obra) THEN 'pendiente ingreso - vencido'
-            WHEN s.estado = 'en labor' AND CURDATE() > DATE(s.fin_obra) THEN 'en labor - vencida'
-            WHEN s.estado = 'en labor' THEN 'en labor'
-            WHEN s.estado = 'labor detenida' THEN 'labor detenida'
-            ELSE s.estado
-        END AS estado_actual
-    FROM solicitudes s
-    LEFT JOIN acciones a ON s.id = a.solicitud_id
-    LEFT JOIN users us ON us.id = s.interventor_id
-    WHERE s.usuario_id = ?
-    ORDER BY s.id DESC;
-      `;
+    const [solicitudes] = await connection.execute(query, [userId]);
 
+    console.log('[CONTROLADOR] Solicitudes obtenidas:', solicitudes);
 
-      // Obtener las URLs de los documentos (si existen)
-      const [solicitud_url_download] = await connection.execute('SELECT * FROM sst_documentos WHERE solicitud_id IN (SELECT id FROM solicitudes)');
+    const [userDetails] = await connection.query('SELECT empresa, nit FROM users WHERE id = ?', [userId]);
+    
+    const [lugares] = await connection.query('SELECT * FROM lugares');
+    
+    const [Usersinterventores] = await connection.execute(` 
+      SELECT id, username FROM users WHERE role_id = (SELECT id FROM roles WHERE role_name = 'interventor')
+    `);
 
-      const [solicitudes] = await connection.execute(query, [id]);
+    const empresa = userDetails.length > 0 ? userDetails[0].empresa : '';
+    const nit = userDetails.length > 0 ? userDetails[0].nit : '';
+    const interventores =  Usersinterventores.length > 0 ? Usersinterventores : '';
 
-      console.log('[CONTROLADOR] Solicitudes obtenidas:', solicitudes);
-
-      const [userDetails] = await connection.query('SELECT empresa, nit FROM users WHERE id = ?', [id]);
-
-      
-      const [lugares] = await connection.query('SELECT * FROM lugares');
-
-      
-      
-      const [Usersinterventores] = await connection.execute(` 
-        SELECT id, username FROM users WHERE role_id = (SELECT id FROM roles WHERE role_name = 'interventor')
-      `);
-
-      const empresa = userDetails.length > 0 ? userDetails[0].empresa : '';
-      const nit = userDetails.length > 0 ? userDetails[0].nit : '';
-      const interventores =  Usersinterventores.length > 0 ? Usersinterventores : '';
- 
-      res.render('contratista', {
-          title: 'Contratista - Grupo Argos',
-          solicitudes,
-          empresa,
-          nit,
-          interventores: Array.isArray(interventores) ? interventores : [], 
-          lugares,
-          solicitud_url_download: solicitud_url_download
-      });
+    // Renderizar la vista incluyendo el ID del usuario
+    res.render('contratista', {
+        title: 'Contratista - Grupo Argos',
+        solicitudes,
+        empresa,
+        nit,
+        interventores: Array.isArray(interventores) ? interventores : [], 
+        lugares,
+        solicitud_url_download: solicitud_url_download,
+        userId: userId, // Asegúrate de que sea el ID correcto
+        interventores: interventores,
+        empresa: empresa,
+        nit: nit
+    });
   } catch (error) {
       console.error('[CONTROLADOR] Error:', error);
       res.status(500).send('Error al procesar la solicitud');

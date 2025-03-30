@@ -6,6 +6,7 @@ const { format } = require('date-fns');
 const controller = require('../controllers/contratista.controller');
 const jwt = require('jsonwebtoken');
 const SECRET_KEY = process.env.JWT_SECRET || 'secreto';
+const authMiddleware = require('../middleware/auth.middleware');
 
 const connection = require('../db/db'); // Database connection
 require('dotenv').config();  // Cargar variables de entorno desde el archivo .env
@@ -142,6 +143,8 @@ async function deleteSSTDocuments(solicitudId) {
 }
  
 
+
+router.use(authMiddleware);
 
 router.post('/generar-solicitud', upload.fields([
     { name: 'arl', maxCount: 1 },

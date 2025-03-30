@@ -4,15 +4,8 @@
       { "src": "src/app.js", "use": "@vercel/node" }
     ],
     "routes": [
+      { "src": "/socket.io/(.*)", "dest": "src/app.js" },
       { "src": "/public/(.*)", "dest": "/public/$1" },
-      { 
-        "src": "/ws/(.*)", 
-        "dest": "src/app.js",
-        "headers": {
-          "Connection": "upgrade",
-          "Upgrade": "websocket"
-        }
-      },
       { "src": "/(.*)", "dest": "src/app.js" }
     ]
   }

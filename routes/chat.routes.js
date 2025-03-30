@@ -2,6 +2,39 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/db');
 
+// Ruta para obtener mensajes con paginación
+router.get('/chat/:solicitudId/:type', async (req, res) => {
+    try {
+      const { solicitudId, type } = req.params;
+      const { limit = 20, before, userId } = req.query;
+      
+      let query = `
+        SELECT m.*, 
+        CASE WHEN m.usuario_id = $1 THEN true ELSE false END as isSender
+        FROM mensajes m
+        WHERE m.solicitud_id = $2 AND m.tipo = $3
+      `;
+      
+      const params = [userId, solicitudId, type];
+      
+      // Filtrar por ID si se proporciona
+      if (before) {
+        query += ` AND m.id < $${params.length + 1}`;
+        params.push(before);
+      }
+      
+      // Ordenar y limitar
+      query += ` ORDER BY m.id DESC LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit));
+      
+      const result = await pool.query(query, params);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Error al obtener mensajes:', error);
+      res.status(500).json({ error: 'Error al obtener mensajes' });
+    }
+  }); 
+
 // Obtener mensajes de un chat
 router.get('/:solicitudId/:tipo', async (req, res) => {
     try {
@@ -13,7 +46,8 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
         console.log(`[chat.routes] Usuario actual: ${currentUserId}, solicitando mensajes para solicitud ${solicitudId}, tipo ${tipo}`);
         
         let query = `
-            SELECT m.id, m.chat_id, m.usuario_id, m.contenido, m.leido, m.created_at 
+            SELECT m.id, m.chat_id, m.usuario_id, m.contenido, m.leido, 
+                   m.created_at, DATE_FORMAT(m.created_at, '%Y-%m-%dT%H:%i:%s.000Z') as formatted_date 
             FROM mensajes m
             JOIN chats c ON m.chat_id = c.id
             WHERE c.solicitud_id = ? AND c.tipo = ?
@@ -32,7 +66,7 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
         console.log(`[chat.routes] Consultando mensajes para solicitud ${solicitudId}, tipo ${tipo}, usuario ${currentUserId}`);
         const [mensajes] = await db.query(query, params);
         
-        // Mejorar el procesamiento de los mensajes
+        // Procesamiento de mensajes con manejo cuidadoso de fechas
         mensajes.forEach(m => {
             try {
                 // Intentar parsear el contenido si es string
@@ -63,6 +97,28 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
                     }
                 }
                 
+                // Asegurar formato de fecha consistente
+                m.created_at = m.formatted_date || m.created_at;
+                if (typeof m.created_at === 'object' && m.created_at !== null) {
+                    // Si es un objeto Date, convertir a ISO string
+                    m.created_at = m.created_at.toISOString();
+                } else if (typeof m.created_at === 'string') {
+                    // Validar formato y reparar si es necesario
+                    try {
+                        const testDate = new Date(m.created_at);
+                        if (!isNaN(testDate.getTime())) {
+                            m.created_at = testDate.toISOString();
+                        }
+                    } catch (e) {
+                        console.warn('Formato de fecha inválido:', m.created_at);
+                        // Usar la fecha actual como fallback
+                        m.created_at = new Date().toISOString();
+                    }
+                } else {
+                    // Si no hay fecha, usar la actual
+                    m.created_at = new Date().toISOString();
+                }
+                
                 // Determinar explícitamente si el usuario actual es el remitente
                 const usuarioId = parseInt(m.usuario_id);
                 const usuarioActual = parseInt(currentUserId);
@@ -72,11 +128,13 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
                 
             } catch (e) {
                 console.error('Error al procesar mensaje:', e);
+                // Valores de fallback
                 m.content = String(m.contenido || "Error en el mensaje");
+                m.created_at = new Date().toISOString();
                 m.isSender = false;
             }
             
-            // Eliminar el contenido original para no duplicar datos
+            delete m.formatted_date; // Limpiar campo auxiliar
             delete m.contenido;
         });
         

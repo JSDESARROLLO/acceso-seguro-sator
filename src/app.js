@@ -92,15 +92,20 @@ wss.on('connection', (ws, req) => {
             // Esto debe adaptarse según tu sistema de autenticación
             const userId = message.userId || 1; // Valor temporal, ajustar según tu sistema
 
+            // Obtener el timestamp del mensaje o crear uno nuevo
+            const timestamp = message.timestamp 
+                ? new Date(message.timestamp) 
+                : new Date();
+                
+            // Asegurarse de que sea formato ISO para consistencia
+            message.created_at = timestamp.toISOString();
+
             // Guardar el mensaje en la base de datos
             const chatId = await saveMessageToDatabase({...message, userId});
 
             // Actualizar mensajes no leídos para los participantes
             await updateUnreadCount(chatId, message);
 
-            // Añadir timestamp al mensaje
-            message.created_at = new Date().toISOString();
-            
             // Enviar el mensaje a todos los clientes interesados en esta conversación
             wss.clients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
@@ -133,13 +138,13 @@ wss.on('connection', (ws, req) => {
                         client.send(JSON.stringify({
                             id: message.id || null,
                             chatId: chatId,
-                            usuario_id: userId,
+                            usuario_id: message.userId,
                             content: contenidoParaEnviar,
                             leido: false,
                             created_at: message.created_at,
                             solicitudId: message.solicitudId,
                             type: message.type,
-                            isSender: false // Nunca será el remitente porque ya excluimos a ws
+                            isSender: false
                         }));
                     }
                 }
@@ -198,26 +203,41 @@ async function saveMessageToDatabase(message) {
             chatId = chatRows[0].id;
         }
 
-        // AQUÍ ESTÁ EL CAMBIO CLAVE: Asegurar que el contenido sea un JSON válido
+        // Determinar el timestamp (usar el enviado o generar uno nuevo)
+        const timestamp = message.timestamp 
+          ? new Date(message.timestamp) 
+          : new Date();
+          
+        // Formatear para MySQL
+        const formattedTimestamp = timestamp.toISOString().slice(0, 19).replace('T', ' ');
+
+        // Asegurar que el contenido se almacene como JSON
         let contenidoMsg;
         if (typeof message.content === 'string') {
-            // Si es una cadena, convertirla a un objeto JSON
-            contenidoMsg = JSON.stringify({ text: message.content });
+            contenidoMsg = JSON.stringify({ 
+                text: message.content,
+                timestamp: timestamp.toISOString() // Incluir timestamp dentro del contenido
+            });
         } else if (typeof message.content === 'object') {
-            // Si ya es un objeto, simplemente serializarlo
-            contenidoMsg = JSON.stringify(message.content);
+            // Añadir el timestamp al objeto existente
+            const contentObj = { ...message.content, timestamp: timestamp.toISOString() };
+            contenidoMsg = JSON.stringify(contentObj);
         } else {
-            // Para otros casos, crear un objeto con el contenido
-            contenidoMsg = JSON.stringify({ value: message.content });
+            contenidoMsg = JSON.stringify({ 
+                value: message.content,
+                timestamp: timestamp.toISOString()
+            });
         }
 
-        // Insertar el mensaje en la tabla 'mensajes'
+        // Insertar el mensaje en la tabla 'mensajes' con el timestamp
         const [result] = await db.query(
-            'INSERT INTO mensajes (chat_id, usuario_id, contenido, leido, created_at) VALUES (?, ?, ?, FALSE, NOW())',
-            [chatId, message.userId || 1, contenidoMsg]
+            'INSERT INTO mensajes (chat_id, usuario_id, contenido, leido, created_at) VALUES (?, ?, ?, FALSE, ?)',
+            [chatId, message.userId || 1, contenidoMsg, formattedTimestamp]
         );
 
-        message.id = result.insertId; // Agregar el ID al mensaje para enviarlo al cliente
+        message.id = result.insertId; // Agregar el ID al mensaje
+        message.created_at = timestamp.toISOString(); // Asegurar que el timestamp sea formato ISO
+        
         return chatId;
     } catch (error) {
         console.error('Error al guardar mensaje:', error);
@@ -253,6 +273,282 @@ async function updateUnreadCount(chatId, message) {
         console.error('Error al actualizar mensajes no leídos:', error);
     }
 }
+
+// Actualizar la ruta para marcar mensajes como leídos
+app.post('/api/chat/:solicitudId/:type/mark-read', async (req, res) => {
+  try {
+    const { solicitudId, type } = req.params;
+    const { userId } = req.body;
+    
+    console.log(`Marcando mensajes como leídos: solicitud ${solicitudId}, tipo ${type}, usuario ${userId}`);
+    
+    // Validar los parámetros
+    if (!solicitudId || !type || !userId) {
+      return res.status(400).json({ 
+        error: 'Parámetros incompletos. Se requiere solicitudId, type y userId',
+        details: { solicitudId, type, userId }
+      });
+    }
+    
+    // Validar que userId sea un número válido
+    const userIdNum = parseInt(userId);
+    if (isNaN(userIdNum) || userIdNum <= 0) {
+      return res.status(400).json({ 
+        error: 'ID de usuario inválido, debe ser un número positivo',
+        details: { userId, parsed: userIdNum }
+      });
+    }
+    
+    // Primero, obtener el chat_id correspondiente
+    const [chats] = await db.query(
+      'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
+      [solicitudId, type]
+    );
+    
+    if (chats.length === 0) {
+      // No existe un chat para esta solicitud y tipo, pero no es un error
+      return res.json({ success: true, info: 'No hay chat para marcar mensajes' });
+    }
+    
+    const chatId = chats[0].id;
+    
+    // Marcar como leídos todos los mensajes que NO fueron enviados por este usuario
+    await db.query(`
+      UPDATE mensajes
+      SET leido = TRUE
+      WHERE chat_id = ?
+      AND usuario_id != ?
+      AND leido = FALSE
+    `, [chatId, userIdNum]);
+    
+    // Actualizar contador de mensajes no leídos en la tabla chat_participantes
+    await db.query(`
+      UPDATE chat_participantes
+      SET mensajes_no_leidos = 0
+      WHERE chat_id = ? AND usuario_id = ?
+    `, [chatId, userIdNum]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error al marcar mensajes como leídos:', error);
+    res.status(500).json({ 
+      error: 'Error al marcar mensajes como leídos', 
+      details: error.message 
+    });
+  }
+});
+
+// API para actualizar estado de mensajes
+app.put('/api/chat/message/:messageId/status', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { status } = req.body;
+    
+    if (!messageId || !status) {
+      return res.status(400).json({ error: 'Se requiere ID de mensaje y estado' });
+    }
+    
+    // Actualizar el estado del mensaje en la base de datos
+    if (status === 'read') {
+      await db.query('UPDATE mensajes SET leido = true WHERE id = ?', [messageId]);
+    }
+    
+    // Enviar notificación de cambio de estado por WebSocket
+    // (implementación depende de cómo manejas los WebSockets en el servidor)
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error al actualizar estado del mensaje:', error);
+    res.status(500).json({ error: 'Error al actualizar estado del mensaje' });
+  }
+});
+
+// API para obtener estado de mensajes
+app.get('/api/chat/messages/status', async (req, res) => {
+  try {
+    const { ids } = req.query;
+    
+    if (!ids) {
+      return res.status(400).json({ error: 'Se requieren IDs de mensajes' });
+    }
+    
+    const messageIds = ids.split(',');
+    
+    // Consultar estado de los mensajes
+    const [rows] = await db.query(
+      'SELECT id, leido FROM mensajes WHERE id IN (?)',
+      [messageIds]
+    );
+    
+    const statuses = {};
+    rows.forEach(row => {
+      statuses[row.id] = row.leido ? 'read' : 'delivered';
+    });
+    
+    res.json({ statuses });
+  } catch (error) {
+    console.error('Error al obtener estado de mensajes:', error);
+    res.status(500).json({ error: 'Error al obtener estado de mensajes' });
+  }
+});
+
+// Agregar directamente en src/app.js para garantizar que la ruta funcione
+app.get('/api/solicitud/:solicitudId/participants', async (req, res) => {
+  try {
+    const { solicitudId } = req.params;
+    
+    // Validar que el ID sea un número
+    if (!solicitudId || isNaN(parseInt(solicitudId))) {
+      return res.status(400).json({ error: 'ID de solicitud inválido' });
+    }
+    
+    // Obtener información de la solicitud incluyendo el interventor
+    const [solicitud] = await db.query(`
+      SELECT s.id, s.empresa, s.usuario_id, s.interventor_id, 
+             u_interventor.username AS interventor_nombre
+      FROM solicitudes s
+      LEFT JOIN users u_interventor ON s.interventor_id = u_interventor.id
+      WHERE s.id = ?
+    `, [solicitudId]);
+    
+    if (solicitud.length === 0) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+    
+    // Obtener información del usuario contratista
+    const [contratista] = await db.query(`
+      SELECT id, username, empresa, nit
+      FROM users
+      WHERE id = ?
+    `, [solicitud[0].usuario_id]);
+    
+    // Obtener usuarios SST (todos los que tienen ese rol)
+    const [sstUsers] = await db.query(`
+      SELECT u.id, u.username
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+      WHERE r.role_name = 'sst'
+      ORDER BY u.username ASC
+    `);
+    
+    // Enviar la respuesta con la información de participantes
+    res.json({
+      solicitudId: parseInt(solicitudId),
+      interventorId: solicitud[0].interventor_id,
+      interventorName: solicitud[0].interventor_nombre || 'Sin asignar',
+      contratistaId: contratista[0]?.id,
+      contratistaName: contratista[0]?.username || 'Desconocido',
+      sstUsers: sstUsers.map(user => ({
+        id: user.id,
+        username: user.username
+      })),
+      sstUsername: 'Soporte SST'
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener participantes del chat:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener participantes del chat',
+      details: error.message 
+    });
+  }
+});
+
+// Agregar esta ruta para obtener cantidad de mensajes no leídos
+app.get('/api/chat/:solicitudId/:type/unread', async (req, res) => {
+  try {
+    const { solicitudId, type } = req.params;
+    const { userId } = req.query;
+    
+    // Validar parámetros
+    if (!solicitudId || !type || !userId) {
+      return res.status(400).json({ 
+        error: 'Parámetros incompletos. Se requiere solicitudId, type y userId',
+        details: { solicitudId, type, userId }
+      });
+    }
+    
+    // Validar que userId sea un número válido
+    const userIdNum = parseInt(userId);
+    if (isNaN(userIdNum) || userIdNum <= 0) {
+      return res.status(400).json({ 
+        error: 'ID de usuario inválido, debe ser un número positivo',
+        details: { userId, parsed: userIdNum }
+      });
+    }
+    
+    // Obtener el chat_id correspondiente
+    const [chats] = await db.query(
+      'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
+      [solicitudId, type]
+    );
+    
+    if (chats.length === 0) {
+      // No existe un chat para esta solicitud y tipo
+      return res.json({ unreadCount: 0 });
+    }
+    
+    const chatId = chats[0].id;
+    
+    // Obtener el número de mensajes no leídos
+    const [rows] = await db.query(`
+      SELECT mensajes_no_leidos 
+      FROM chat_participantes 
+      WHERE chat_id = ? AND usuario_id = ?
+    `, [chatId, userIdNum]);
+    
+    const unreadCount = rows.length > 0 ? rows[0].mensajes_no_leidos : 0;
+    
+    res.json({ unreadCount });
+  } catch (error) {
+    console.error('Error al obtener mensajes no leídos:', error);
+    res.status(500).json({ error: 'Error al obtener mensajes no leídos' });
+  }
+});
+
+// Ruta auxiliar para depuración (quítala en producción)
+app.get('/debug/routes', (req, res) => {
+  const routes = [];
+  
+  // Recolectar todas las rutas registradas
+  app._router.stack.forEach(middleware => {
+    if (middleware.route) {
+      // Rutas directamente registradas en app
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods).join(', ').toUpperCase()
+      });
+    } else if (middleware.name === 'router') {
+      // Rutas incluidas a través de un router
+      middleware.handle.stack.forEach(handler => {
+        if (handler.route) {
+          routes.push({
+            path: handler.route.path,
+            methods: Object.keys(handler.route.methods).join(', ').toUpperCase(),
+            baseRouter: middleware.regexp.toString()
+          });
+        }
+      });
+    }
+  });
+  
+  // Renderizar la lista de rutas
+  res.send(`
+    <h1>Rutas registradas</h1>
+    <table border="1">
+      <tr>
+        <th>Método</th>
+        <th>Ruta</th>
+      </tr>
+      ${routes.map(route => `
+        <tr>
+          <td>${route.methods}</td>
+          <td>${route.path}</td>
+        </tr>
+      `).join('')}
+    </table>
+  `);
+});
 
 // Iniciar servidor
 const PORT = 3900;

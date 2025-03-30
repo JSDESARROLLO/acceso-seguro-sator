@@ -16,6 +16,42 @@
       gap: 20px;
 
     }
+
+    .notification-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background-color: red;
+      color: white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    
+    .status-icon-sent {
+      color: #d1d1d1;
+    }
+    
+    .status-icon-delivered {
+      color: #d1d1d1;
+    }
+    
+    .status-icon-read {
+      color: #53bdeb;
+    }
+    
+    .status-icon-error {
+      color: #f44336;
+    }
+    
+    .chat-message {
+      position: relative;
+    }
   </style>
 </head>
 <body>
@@ -520,6 +556,7 @@ document.querySelectorAll('.open-chat-btn').forEach(btn => {
 
 // Abrir modal de chat
 async function openChatModalSST(solicitudId) {
+  try {
   currentSolicitudIdSST = solicitudId;
   document.getElementById('chatSolicitudIdSST').textContent = solicitudId;
   document.getElementById('chatModalSST').classList.remove('hidden');
@@ -570,6 +607,10 @@ async function openChatModalSST(solicitudId) {
       console.error('Error en WebSocket SST:', error);
     };
   }
+    
+    // Mostrar indicador de carga inicial
+    const chatMessages = document.getElementById('chatMessagesSST');
+    chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-600"></div></div>';
 
   // Cargar los últimos 20 mensajes
   await loadInitialMessagesSST(solicitudId);
@@ -577,140 +618,57 @@ async function openChatModalSST(solicitudId) {
   // Marcar mensajes como leídos
   await markMessagesAsReadSST(solicitudId);
 
-  // Configurar scroll para carga progresiva
-  const chatMessages = document.getElementById('chatMessagesSST');
-  chatMessages.addEventListener('scroll', () => {
-    if (chatMessages.scrollTop === 0 && oldestMessageIdSST) {
-      loadMoreMessagesSST(solicitudId);
-    }
-  });
-  
-  // Marcar mensajes como leídos al abrir
-  await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { method: 'POST' });
-  updateUnreadCountSST(solicitudId);
-}
-
-// Modificar la función para manejar notificaciones
-
-function notifyNewMessageSST(message) {
-  if (!("Notification" in window)) {
-    console.log("Este navegador no soporta notificaciones");
-    return;
-  }
-  
-  if (Notification.permission === "granted") {
-    // Buscar información de la solicitud para incluir en la notificación
-    const solicitudRow = document.querySelector(`tr[data-id="${message.solicitudId}"]`);
-    let empresa = "Empresa no identificada";
+    // Asegurar que se realice el scroll al final
+    setTimeout(() => {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 200);
     
-    if (solicitudRow) {
-      const empresaCell = solicitudRow.querySelector('td:nth-child(2)');
-      if (empresaCell) {
-        empresa = empresaCell.textContent.trim();
-      }
-    }
+    // Configurar listener de scroll
+    chatMessages.removeEventListener('scroll', scrollHandlerSST);
+    chatMessages.addEventListener('scroll', scrollHandlerSST);
     
-    const notification = new Notification(`Nuevo mensaje de ${empresa}`, {
-      body: `Solicitud #${message.solicitudId}: ${message.content}`,
-      icon: '/img/logo.png'
-    });
-    
-    notification.onclick = function() {
-      window.focus();
-      openChatModalSST(message.solicitudId);
-    };
-  } else if (Notification.permission !== "denied") {
-    Notification.requestPermission().then(permission => {
-      if (permission === "granted") {
-        notifyNewMessageSST(message);
-      }
-    });
-  }
-}
-
-// Función para marcar mensajes como leídos
-async function markMessagesAsReadSST(solicitudId) {
-  try {
-    const sstUserId = getSSUserId(); // Obtener ID de usuario SST
-    
-    console.log(`[SST] Marcando mensajes como leídos para solicitud ${solicitudId}, usuario ${sstUserId}`);
-    
-    const response = await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { 
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ userId: sstUserId }) // Incluir userId en el cuerpo
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error al marcar mensajes como leídos:', errorData);
-      throw new Error(errorData.message || 'Error al marcar mensajes como leídos');
-    }
-    
-    // Actualizar contador visual
+    // Actualizar contadores
     updateUnreadCountSST(solicitudId);
   } catch (error) {
-    console.error('[SST] Error al marcar mensajes como leídos:', error);
+    console.error('[SST] Error al abrir chat:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'No se pudo cargar el chat. Por favor intente nuevamente.'
+    });
   }
 }
 
-// Cerrar modal de chat
-window.closeChatModalSST = function() {
-  document.getElementById('chatModalSST').classList.add('hidden');
-  if (socketSST) {
-    socketSST.close();
-  }
-  currentSolicitudIdSST = null;
-  oldestMessageIdSST = null;
-};
-
-// Cargar los últimos 20 mensajes
-async function loadInitialMessagesSST(solicitudId) {
+// Función para manejar el evento de scroll
+function scrollHandlerSST() {
   const chatMessages = document.getElementById('chatMessagesSST');
-  chatMessages.innerHTML = ''; // Limpiar mensajes existentes
   
-  try {
-    const sstUserId = getSSUserId();
-    console.log("Usuario SST ID:", sstUserId);
-    
-    const response = await fetch(`/api/chat/${solicitudId}/sst?limit=20&userId=${sstUserId}`);
-    
-    if (!response.ok) {
-      throw new Error(`Error al cargar mensajes: ${response.status}`);
-    }
-    
-    const messages = await response.json();
-    console.log("Mensajes cargados:", messages);
-    
-    // Invertimos los mensajes para mostrar en orden cronológico (más antiguos primero)
-    const orderedMessages = [...messages].reverse();
-    
-    for (const message of orderedMessages) {
-      // No sobrescribimos la propiedad isSender que viene del servidor
-      displayMessageSST(message);
-    }
-    
-    if (messages.length > 0) {
-      oldestMessageIdSST = messages[0].id;
-    }
-    
-    // Scroll al final
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-  } catch (error) {
-    console.error('Error al cargar mensajes iniciales:', error);
-    chatMessages.innerHTML = '<div class="text-center p-3 text-red-500">Error al cargar mensajes. Por favor intente nuevamente.</div>';
+  // Si estamos cerca del principio del scroll (menos de 50px del tope)
+  if (chatMessages.scrollTop < 50 && oldestMessageIdSST && !isLoadingMoreSST) {
+    loadMoreMessagesSST(currentSolicitudIdSST);
   }
 }
+
+// Variable para controlar que no se disparen múltiples cargas simultáneas
+let isLoadingMoreSST = false;
 
 // Cargar más mensajes al hacer scroll hacia arriba
 async function loadMoreMessagesSST(solicitudId) {
-  if (!oldestMessageIdSST) return;
+  if (!oldestMessageIdSST || isLoadingMoreSST) return;
+  
+  isLoadingMoreSST = true;
   
   try {
     const sstUserId = getSSUserId();
+    
+    // Crear indicador de carga
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'text-center text-gray-500 text-sm py-2';
+    loadingIndicator.innerHTML = '<div class="spinner-border spinner-border-sm text-gray-500" role="status"></div> Cargando mensajes anteriores...';
+    
+    const chatMessages = document.getElementById('chatMessagesSST');
+    chatMessages.insertBefore(loadingIndicator, chatMessages.firstChild);
+    
     const response = await fetch(`/api/chat/${solicitudId}/sst?limit=20&before=${oldestMessageIdSST}&userId=${sstUserId}`);
     
     if (!response.ok) {
@@ -719,35 +677,94 @@ async function loadMoreMessagesSST(solicitudId) {
     
     const messages = await response.json();
     
+    // Eliminar el indicador de carga
+    loadingIndicator.remove();
+    
     if (messages.length > 0) {
-      const chatMessages = document.getElementById('chatMessagesSST');
       const scrollHeightBefore = chatMessages.scrollHeight;
       const scrollTopBefore = chatMessages.scrollTop;
       
-      // Mostrar mensajes en orden cronológico
-      const orderedMessages = [...messages].reverse();
+      // Ordenar por fecha para asegurar visualización cronológica
+      const sortedMessages = [...messages].sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB;
+      });
       
-      for (const message of orderedMessages) {
-        // No sobrescribimos isSender
-        displayMessageSST(message);
+      // Crear un fragmento para agregar todos los mensajes de una vez (mejor rendimiento)
+      const fragment = document.createDocumentFragment();
+      
+      // Insertar mensajes en el fragmento
+      sortedMessages.forEach(message => {
+        const messageDiv = document.createElement('div');
+        displayMessageSST(message, messageDiv);
+        fragment.appendChild(messageDiv);
+      });
+      
+      // Insertar el fragmento al principio del chat
+      if (chatMessages.firstChild) {
+        chatMessages.insertBefore(fragment, chatMessages.firstChild);
+      } else {
+        chatMessages.appendChild(fragment);
       }
       
-      oldestMessageIdSST = messages[0].id;
+      // Actualizar el ID del mensaje más antiguo
+      oldestMessageIdSST = messages.reduce((oldest, current) => {
+        return parseInt(current.id) < parseInt(oldest.id) ? current : oldest;
+      }, messages[0]).id;
       
-      // Mantener la posición del scroll
+      // Mantener la posición relativa del scroll
       chatMessages.scrollTop = scrollTopBefore + (chatMessages.scrollHeight - scrollHeightBefore);
     } else {
-      oldestMessageIdSST = null; // No hay más mensajes
+      // Si no hay más mensajes, mostrar un mensaje informativo discreto
+      const noMoreMsg = document.createElement('div');
+      noMoreMsg.className = 'text-center text-gray-500 text-xs py-1';
+      noMoreMsg.textContent = 'No hay más mensajes';
+      noMoreMsg.style.opacity = '0.7';
+      chatMessages.insertBefore(noMoreMsg, chatMessages.firstChild);
+      
+      // Indicar que no hay más mensajes para cargar
+      oldestMessageIdSST = null;
+      
+      // Eliminar automáticamente el mensaje después de unos segundos
+      setTimeout(() => {
+        if (noMoreMsg.parentNode) {
+          noMoreMsg.style.transition = 'opacity 0.5s';
+          noMoreMsg.style.opacity = '0';
+          setTimeout(() => {
+            if (noMoreMsg.parentNode) {
+              noMoreMsg.remove();
+            }
+          }, 500);
+        }
+      }, 3000);
     }
   } catch (error) {
     console.error('Error al cargar más mensajes:', error);
+    
+    // Mostrar mensaje de error discreto
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'text-center text-red-500 text-xs py-1';
+    errorMsg.textContent = 'Error al cargar mensajes anteriores';
+    
+    const chatMessages = document.getElementById('chatMessagesSST');
+    chatMessages.insertBefore(errorMsg, chatMessages.firstChild);
+    
+    // Eliminar automáticamente el mensaje después de unos segundos
+    setTimeout(() => {
+      if (errorMsg.parentNode) {
+        errorMsg.remove();
+      }
+    }, 5000);
+  } finally {
+    isLoadingMoreSST = false;
   }
 }
 
-// Corregir la función displayMessageSST 
-function displayMessageSST(message) {
+// Función auxiliar para displayMessageSST cuando se proporciona un contenedor
+function displayMessageSST(message, container = null) {
   const chatMessages = document.getElementById('chatMessagesSST');
-  const messageDiv = document.createElement('div');
+  const messageDiv = container || document.createElement('div');
   
   console.log("Mostrando mensaje:", message);
   
@@ -757,7 +774,7 @@ function displayMessageSST(message) {
   console.log(`El mensaje es de: ${message.usuario_id}, Usuario SST: ${sstUserId}, isSender: ${isSender}`);
   
   // Aplicar clase según el remitente
-  messageDiv.className = `p-3 my-2 rounded-lg ${isSender ? 
+  messageDiv.className = `chat-message p-3 my-2 rounded-lg ${isSender ? 
     'bg-blue-600 text-white ml-auto' : 
     'bg-gray-200 text-gray-800'} max-w-xs`;
   
@@ -781,34 +798,101 @@ function displayMessageSST(message) {
     messageContent = String(message.content || "Mensaje sin contenido");
   }
   
-  // Incluir hora del mensaje
-  const messageTime = new Date(message.created_at).toLocaleTimeString('es-ES', {
+  // IMPORTANTE: Asegurarnos de que created_at sea una fecha válida
+  let messageDate;
+  try {
+    // Si es un string, intentar crear un objeto Date
+    if (typeof message.created_at === 'string') {
+      messageDate = new Date(message.created_at);
+      // Verificar si la fecha es válida
+      if (isNaN(messageDate.getTime())) {
+        // Si no es válida, usar la fecha actual
+        console.warn('Fecha inválida en mensaje:', message.created_at);
+        messageDate = new Date();
+      }
+    } else {
+      // Si no es un string, usar la fecha actual
+      messageDate = new Date();
+    }
+  } catch (error) {
+    console.error('Error al procesar fecha:', error);
+    messageDate = new Date();
+  }
+  
+  // Formatear fecha y hora utilizando opciones para garantizar consistencia
+  const formattedDate = messageDate.toLocaleDateString('es-ES', {
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric'
+  });
+  
+  const formattedTime = messageDate.toLocaleTimeString('es-ES', {
     hour: '2-digit',
     minute: '2-digit'
   });
   
+  // Almacenar la fecha original como atributo de datos para futuras referencias
+  messageDiv.dataset.timestamp = messageDate.toISOString();
+  
+  // Determinar el indicador de estado para mensajes enviados
+  let statusIcon = '';
+  if (isSender) {
+    if (message.id === 'error') {
+      statusIcon = '<span class="status-icon-error">✓</span>';
+    } else if (message.id && message.id.toString().startsWith('temp-')) {
+      statusIcon = '<span class="status-icon-sent">✓</span>';
+    } else if (message.leido) {
+      statusIcon = '<span class="status-icon-read">✓✓</span>';
+    } else {
+      statusIcon = '<span class="status-icon-delivered">✓✓</span>';
+    }
+  }
+  
   // Crear contenido HTML para el mensaje
   messageDiv.innerHTML = `
     <div class="text-sm mb-1">${messageContent}</div>
-    <div class="text-xs text-${isSender ? 'white' : 'gray'}-500 text-right">${messageTime}</div>
+    <div class="text-xs text-${isSender ? 'white' : 'gray'}-500 text-right">
+      ${formattedDate} ${formattedTime} ${statusIcon}
+    </div>
   `;
   
-  // Almacenar el ID del usuario para referencia futura
+  // Almacenar datos del mensaje
+  messageDiv.dataset.messageId = message.id || '';
   messageDiv.dataset.userId = message.usuario_id;
   messageDiv.dataset.isSender = isSender;
   
-  // Insertar en el orden correcto 
-  if (chatMessages.firstChild) {
-    chatMessages.appendChild(messageDiv); // Añadir al final para mantener orden cronológico
-  } else {
-    chatMessages.appendChild(messageDiv);
-  }
+  // Insertar en orden cronológico
+  chatMessages.appendChild(messageDiv);
   
   // Auto-scroll si estamos cerca del fondo
   const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
   if (isNearBottom) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+}
+
+// Función para actualizar el estado de un mensaje en SST
+function updateMessageStatusSST(messageId, status) {
+  const messageElement = document.querySelector(`.chat-message[data-message-id="${messageId}"]`);
+  if (!messageElement) return;
+  
+  const statusContainer = messageElement.querySelector('.text-right');
+  if (!statusContainer) return;
+  
+  let statusIcon = '';
+  if (status === 'error') {
+    statusIcon = '<span class="status-icon-error">✓</span>';
+  } else if (status === 'sent') {
+    statusIcon = '<span class="status-icon-sent">✓</span>';
+  } else if (status === 'delivered') {
+    statusIcon = '<span class="status-icon-delivered">✓✓</span>';
+  } else if (status === 'read') {
+    statusIcon = '<span class="status-icon-read">✓✓</span>';
+  }
+  
+  // Extraer la fecha/hora y reemplazar el indicador manteniendo la fecha y hora
+  const timeText = statusContainer.textContent.trim().split(' ').slice(0, 2).join(' ');
+  statusContainer.innerHTML = `${timeText} ${statusIcon}`;
 }
 
 // Enviar mensaje
@@ -818,72 +902,65 @@ window.sendMessageSST = function() {
   if (!content || !currentSolicitudIdSST || !socketSST) return;
 
   const sstUserId = getSSUserId();
+  const tempId = 'temp-' + Date.now();
+  const timestamp = new Date().toISOString(); // Timestamp ISO para consistencia
   
-  // Crear el mensaje a enviar
-  const message = {
-    solicitudId: currentSolicitudIdSST,
-    type: 'sst',
-    content: content,
-    userId: sstUserId
-  };
-
-  console.log("[SST] Enviando mensaje:", message);
-  
-  // Enviar el mensaje al servidor
-  socketSST.send(JSON.stringify(message));
-  
-  // Crear representación local del mensaje enviado
+  // Crear mensaje local
   const localMessage = {
-    id: 'temp-' + Date.now(),
-    usuario_id: sstUserId, // Importante: usar el ID real
+    id: tempId,
+    usuario_id: sstUserId,
     content: content,
-    created_at: new Date().toISOString()
+    created_at: timestamp, // Usar formato ISO consistente
+    isSender: true
   };
   
-  // Aplicar explícitamente isSender = true al mensaje local
-  // para asegurar que se muestre correctamente como enviado
-  localMessage.isSender = true;
-  
-  // Mostrar mensaje inmediatamente en la interfaz
+  // Mostrar mensaje inmediatamente
   displayMessageSST(localMessage);
   
-  // Limpiar el input y hacer scroll al final
+  // Enviar mensaje al servidor
+  try {
+    // Preparar mensaje para enviar
+    const message = {
+      solicitudId: currentSolicitudIdSST,
+      type: 'sst',
+      content: content,
+      userId: sstUserId,
+      tempId: tempId,
+      timestamp: timestamp // Incluir timestamp en el mensaje
+    };
+    
+    // Enviar solo si el socket está abierto
+    if (socketSST.readyState === WebSocket.OPEN) {
+      socketSST.send(JSON.stringify(message));
+      
+      // Actualizar a estado enviado después de corto tiempo
+      setTimeout(() => {
+        updateMessageStatusSST(tempId, 'sent');
+      }, 500);
+      
+      // Simular actualización a entregado
+      setTimeout(() => {
+        updateMessageStatusSST(tempId, 'delivered');
+      }, 1500);
+    } else {
+      console.error('[SST] WebSocket no está abierto. Estado:', socketSST.readyState);
+      // Marcar mensaje con error
+      updateMessageStatusSST(tempId, 'error');
+      
+      // Intentar reconectar
+      iniciarSocketSST();
+    }
+  } catch (error) {
+    console.error('[SST] Error al enviar mensaje:', error);
+    // Marcar mensaje con error
+    updateMessageStatusSST(tempId, 'error');
+  }
+  
+  // Limpiar input y hacer scroll
   input.value = '';
   const chatMessages = document.getElementById('chatMessagesSST');
   chatMessages.scrollTop = chatMessages.scrollHeight;
 };
-
-// Actualizar contador de mensajes no leídos para SST
-async function updateUnreadCountSST(solicitudId) {
-  try {
-    // Obtener el ID del usuario SST actual
-    const sstUserId = getSSUserId();
-    console.log(`[SST] Actualizando contadores para solicitud ${solicitudId}, usuario SST: ${sstUserId}`);
-    
-    const response = await fetch(`/api/chat/${solicitudId}/sst/unread?userId=${sstUserId}`);
-    if (!response.ok) {
-      throw new Error('Error al obtener contador de mensajes no leídos');
-    }
-    
-    const data = await response.json();
-    console.log(`[SST] Contador recibido para solicitud ${solicitudId}:`, data);
-    
-    // Actualizar el contador visual solo para el usuario SST
-    const badge = document.querySelector(`.unread-count[data-solicitud-id="${solicitudId}"]`);
-    if (badge) {
-      // Solo mostrar el contador si hay mensajes no leídos
-      if (data.unreadCount > 0) {
-        badge.textContent = data.unreadCount;
-        badge.classList.remove('hidden');
-      } else {
-        badge.textContent = '0';
-        badge.classList.add('hidden');
-      }
-    }
-  } catch (error) {
-    console.error('[SST] Error al actualizar contador:', error);
-  }
-}
 
 // Obtener el ID del usuario SST actual
 function getSSUserId() {
@@ -895,68 +972,225 @@ function getSSUserId() {
   return sstUserId;
 }
 
-// Inicializar contadores al cargar la página
-document.addEventListener('DOMContentLoaded', async () => {
-  const solicitudIds = Array.from(document.querySelectorAll('.open-chat-btn')).map(btn => btn.dataset.solicitudId);
-  for (const id of solicitudIds) {
-    await updateUnreadCountSST(id);
-  }
-});
-
-// Reemplazar el código actual del formulario de negar
-$('#negarForm').on('submit', async function(e) {
-  e.preventDefault();
-  
-  const solicitudId = $(this).attr('action').split('/').pop();
-  const comentario = $('#comentario').val();
-  
-  if (!comentario) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Por favor ingrese un comentario'
-    });
-    return;
-  }
-  
+// Modificar updateUnreadCountSST para usar solo el badge externo (rojo)
+async function updateUnreadCountSST(solicitudId) {
   try {
-    Swal.fire({
-      title: 'Procesando...',
-      text: 'Por favor espere mientras se procesa la solicitud',
-      allowOutsideClick: false,
-      didOpen: () => { Swal.showLoading(); }
-    });
+    const sstUserId = getSSUserId();
+    console.log(`[SST] Actualizando contadores para solicitud ${solicitudId}, usuario SST: ${sstUserId}`);
     
-    const response = await fetch(`/negar-solicitud/${solicitudId}`, {
+    const response = await fetch(`/api/chat/${solicitudId}/sst/unread?userId=${sstUserId}`);
+    if (!response.ok) {
+      throw new Error('Error al obtener contador de mensajes no leídos');
+    }
+    
+    const data = await response.json();
+    console.log(`[SST] Contador recibido para solicitud ${solicitudId}:`, data);
+    
+    // Obtener el botón de chat para esta solicitud
+    const chatButton = document.querySelector(`.open-chat-btn[data-solicitud-id="${solicitudId}"]`);
+    if (!chatButton) return;
+    
+    // Asegurar que el botón tiene posición relativa
+    chatButton.style.position = 'relative';
+    
+    // Buscar o crear el badge externo
+    let externalBadge = chatButton.querySelector('.notification-badge');
+    if (!externalBadge) {
+      externalBadge = document.createElement('span');
+      externalBadge.className = 'notification-badge';
+      chatButton.appendChild(externalBadge);
+    }
+    
+    // Actualizar el badge externo
+    externalBadge.textContent = data.unreadCount;
+    
+    // Mostrar u ocultar según la cantidad de mensajes no leídos
+    if (data.unreadCount > 0) {
+      externalBadge.style.display = 'flex';
+    } else {
+      externalBadge.style.display = 'none';
+    }
+    
+    // Ocultar siempre el badge interno del botón
+    const internalBadge = chatButton.querySelector('.unread-count');
+    if (internalBadge) {
+      internalBadge.style.display = 'none';
+    }
+    
+  } catch (error) {
+    console.error('[SST] Error al actualizar contador:', error);
+  }
+}
+
+// Modificar la función para mostrar notificaciones fuera del botón en SST
+function updateSSTNotificationBadges() {
+  document.querySelectorAll('.open-chat-btn').forEach(btn => {
+    const solicitudId = btn.dataset.solicitudId;
+    
+    // Aplicar estilos para posición relativa al botón
+    btn.style.position = 'relative';
+    
+    // Ocultar el contador interno
+    const countBadge = btn.querySelector('.unread-count');
+    if (countBadge) {
+      countBadge.style.display = 'none';
+    }
+    
+    // Verificar si ya existe el badge externo
+    let externalBadge = btn.querySelector('.notification-badge');
+    if (!externalBadge) {
+      externalBadge = document.createElement('span');
+      externalBadge.className = 'notification-badge';
+      btn.appendChild(externalBadge);
+      
+      // Ocultar inicialmente el badge hasta que sepamos si hay mensajes
+      externalBadge.style.display = 'none';
+    }
+    
+    // Actualizar los contadores después de crear/verificar los badges
+    updateUnreadCountSST(solicitudId);
+  });
+}
+
+// Asegurar que los badges se muestren correctamente después de abrir el chat
+window.closeChatModalSST = function() {
+  document.getElementById('chatModalSST').classList.add('hidden');
+  if (socketSST) {
+    socketSST.close();
+  }
+  
+  // Actualizar el contador después de cerrar el chat
+  if (currentSolicitudIdSST) {
+    updateUnreadCountSST(currentSolicitudIdSST);
+  }
+  
+  currentSolicitudIdSST = null;
+  oldestMessageIdSST = null;
+};
+
+// Función para marcar mensajes como leídos
+async function markMessagesAsReadSST(solicitudId) {
+  try {
+    const sstUserId = getSSUserId();
+    
+    console.log(`[SST] Marcando mensajes como leídos para solicitud ${solicitudId}, usuario ${sstUserId}`);
+    
+    const response = await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ comentario })
+      body: JSON.stringify({ userId: sstUserId })
     });
     
-    const data = await response.json();
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error al marcar mensajes como leídos:', errorData);
+      throw new Error(errorData.message || 'Error al marcar mensajes como leídos');
+    }
     
-    if (data.success) {
-      Swal.fire({
-        icon: 'success',
-        title: 'Éxito',
-        text: 'La solicitud ha sido negada correctamente'
-      }).then(() => {
-        $('#modalNegar').modal('hide');
-        // Actualizar la UI para reflejar el cambio
-        const btnContainer = $(`tr[data-id="${solicitudId}"] td:nth-child(11)`);
-        btnContainer.html('<span class="badge badge-danger">Negada</span>');
-      });
-    } else {
-      throw new Error(data.message || 'Error al negar la solicitud');
+    // Actualizar contador visual - ocultar el badge
+    const chatButton = document.querySelector(`.open-chat-btn[data-solicitud-id="${solicitudId}"]`);
+    if (chatButton) {
+      const externalBadge = chatButton.querySelector('.notification-badge');
+      if (externalBadge) {
+        externalBadge.style.display = 'none';
+        externalBadge.textContent = '0';
+      }
     }
   } catch (error) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: error.message || 'No se pudo negar la solicitud'
+    console.error('[SST] Error al marcar mensajes como leídos:', error);
+  }
+}
+
+// Modificar el HTML del botón de chat para no mostrar el span interno
+document.addEventListener('DOMContentLoaded', function() {
+  // Actualizar la estructura HTML de los botones
+  document.querySelectorAll('.open-chat-btn').forEach(btn => {
+    // Buscar el span interno de contador
+    const internalBadge = btn.querySelector('.unread-count');
+    if (internalBadge) {
+      internalBadge.style.display = 'none';
+    }
+    
+    // Aplicar posición relativa para el badge externo
+    btn.style.position = 'relative';
+  });
+  
+  // Inicializar badges de notificación
+  updateSSTNotificationBadges();
+  
+  // Agregar el intervalo de actualización
+  setInterval(function() {
+    document.querySelectorAll('.open-chat-btn').forEach(btn => {
+      const solicitudId = btn.dataset.solicitudId;
+      updateUnreadCountSST(solicitudId);
     });
+  }, 5000);
+});
+
+// Cargar los últimos 20 mensajes para SST
+async function loadInitialMessagesSST(solicitudId) {
+  const chatMessages = document.getElementById('chatMessagesSST');
+  
+  // Mostrar indicador de carga mientras se obtienen los mensajes
+  chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-600"></div></div>';
+  
+  try {
+    const sstUserId = getSSUserId();
+  console.log("Usuario SST ID:", sstUserId);
+    
+    const response = await fetch(`/api/chat/${solicitudId}/sst?limit=20&userId=${sstUserId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error al cargar mensajes: ${response.status}`);
+    }
+    
+    const messages = await response.json();
+    console.log("Mensajes cargados:", messages);
+    
+    // Limpiar el área de mensajes antes de mostrarlos
+    chatMessages.innerHTML = '';
+    
+    if (messages.length === 0) {
+      // Mostrar mensaje cuando no hay historial
+      chatMessages.innerHTML = '<div class="text-center text-gray-500 p-4">No hay mensajes en esta conversación. Escribe para comenzar.</div>';
+    } else {
+      // Ordenar los mensajes por fecha para asegurar que se muestren cronológicamente
+      const sortedMessages = [...messages].sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB;
+      });
+      
+      // Mostrar los mensajes ordenados cronológicamente
+      sortedMessages.forEach(message => {
+        displayMessageSST(message);
+      });
+      
+      // Identificar el mensaje más antiguo para paginación
+      if (messages.length > 0) {
+        oldestMessageIdSST = messages.reduce((oldest, current) => {
+          return parseInt(current.id) < parseInt(oldest.id) ? current : oldest;
+        }, messages[0]).id;
+      }
+      
+      // Asegurar que siempre se desplace al final del chat
+      setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }, 100);
+    }
+  } catch (error) {
+    console.error('Error al cargar mensajes iniciales:', error);
+    chatMessages.innerHTML = '<div class="text-center text-red-500 p-3">Error al cargar mensajes. Por favor intente nuevamente.</div>';
+  }
+}
+
+// Configurar scroll para carga automática de mensajes antiguos
+document.addEventListener('DOMContentLoaded', function() {
+  const chatMessagesSST = document.getElementById('chatMessagesSST');
+  if (chatMessagesSST) {
+    chatMessagesSST.addEventListener('scroll', scrollHandlerSST);
   }
 });
   </script>

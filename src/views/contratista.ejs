@@ -26,6 +26,7 @@
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+  <meta name="user-id" content="<%= userId %>"> <!-- Agregar esta línea -->
   <style>
         .active {
         background-color: #CC9000; 
@@ -117,6 +118,26 @@
       white-space: nowrap;
       vertical-align: baseline;
       border-radius: .25rem;
+    }
+    
+    .status-icon-sent {
+      color: #d1d1d1;
+    }
+    
+    .status-icon-delivered {
+      color: #d1d1d1;
+    }
+    
+    .status-icon-read {
+      color: #53bdeb;
+    }
+    
+    .status-icon-error {
+      color: #f44336;
+    }
+    
+    .chat-message {
+      position: relative;
     }
   </style>
 </head>
@@ -275,6 +296,7 @@
 
 
  <!-- Modal de Chat -->
+<!-- Modal de Chat -->
 <div id="chatModal" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
   <div class="bg-white w-full max-w-4xl h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
     <!-- Header del chat -->
@@ -297,7 +319,7 @@
           </li>
           <li id="interventorContact" class="p-2 hover:bg-gray-200 cursor-pointer flex justify-between items-center" onclick="loadChat('interventor')">
             <span>Interventor: <span id="interventorName"></span></span>
-            <span class="badge badge-pill badge-danger unread-count hidden" data-type="interventor" id="unread-count-interventor">0</span>
+            <span class="badge badge-pill badge-danger unread-count hidden" data-type "interventor" id="unread-count-interventor">0</span>
           </li>
         </ul>
       </div>
@@ -305,7 +327,8 @@
       <div class="w-3/4 flex flex-col">
         <div class="bg-gray-50 border-b border-gray-200 px-4 py-2 text-ga-navy font-semibold" id="chatActiveContact">Selecciona un contacto</div>
         <div id="chatMessages" class="flex-1 p-4 overflow-y-auto"></div>
-        <div class="border-t border-gray-200 p-4">
+        <!-- Área de escritura (inicialmente oculta) -->
+        <div id="chatInputContainer" class="border-t border-gray-200 p-4 hidden">
           <div class="flex space-x-2">
             <textarea id="chatInput" class="flex-1 p-2 border border-gray-300 rounded-md resize-none" rows="2" placeholder="Escribe un mensaje..."></textarea>
             <button onclick="sendMessage()" class="bg-ga-gold text-ga-white px-4 py-2 rounded-md hover:bg-ga-navy">Enviar</button>
@@ -315,6 +338,8 @@
     </div>
   </div>
 </div>
+
+ 
     <!-- Listado de solicitudes -->
     <div class="flex-1 bg-gray-50 p-6 overflow-auto" id="personasListado">
       <div class="text-lg font-semibold mb-6">Solicitudes Realizadas</div>
@@ -1381,108 +1406,99 @@ let interventorName = '';
 
 // Corregir la inicialización del WebSocket para el contratista
 window.openChatWindow = async function(solicitudId) {
-  currentSolicitudId = solicitudId;
-  document.getElementById('chatSolicitudId').textContent = solicitudId;
-  document.getElementById('chatModal').classList.remove('hidden');
-
-  // Obtener nombre del interventor
   try {
-    console.log(`[Contratista] Intentando obtener interventor para solicitud ${solicitudId}`);
-    
-    const response = await fetch(`/api/solicitud/${solicitudId}/interventor`);
-    
-    if (!response.ok) {
-      throw new Error(`Error ${response.status}: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log("[Contratista] Datos del interventor recibidos:", data);
-    
-    // Actualizar este bloque para garantizar que se muestre el nombre del interventor
-    if (data && data.interventorName) {
-      interventorName = data.interventorName;
-      console.log(`[Contratista] Nombre del interventor asignado: ${interventorName}`);
-      document.getElementById('interventorName').textContent = interventorName;
-    } else {
-      interventorName = 'Sin asignar';
-      console.log("[Contratista] No se encontró el nombre del interventor");
-      document.getElementById('interventorName').textContent = interventorName;
-    }
-  } catch (error) {
-    console.error('[Contratista] Error al cargar interventor:', error);
-    interventorName = 'Error al cargar';
-    document.getElementById('interventorName').textContent = interventorName;
-  }
+    currentSolicitudId = solicitudId;
+    document.getElementById('chatSolicitudId').textContent = solicitudId;
 
-  // Asegurarnos de que se actualice inmediatamente en la interfaz
-  if (document.getElementById('interventorContact')) {
-    const interventorElement = document.getElementById('interventorContact');
-    const nameSpan = interventorElement.querySelector('#interventorName');
-    if (nameSpan) {
-      nameSpan.textContent = interventorName;
-    }
-  }
+    // Mostrar modal pero mantener el área de escritura oculta
+    document.getElementById('chatModal').classList.remove('hidden');
+    const chatInputContainer = document.getElementById('chatInputContainer');
+    chatInputContainer.classList.add('hidden'); // Asegurar que esté oculto al abrir
 
-  // Iniciar WebSocket - IMPORTANTE: Faltaba este bloque de código
-  if (socket) {
-    socket.close();
-  }
-  
-  // Crear la conexión WebSocket para este chat específico
-  socket = new WebSocket(`ws://${window.location.host}/ws/chat/${solicitudId}`);
-  
-  socket.onopen = function() {
-    console.log(`[Contratista] WebSocket conectado para solicitud ${solicitudId}`);
-  };
-  
-  socket.onmessage = function(event) {
+    // Obtener interventor
     try {
-      const message = JSON.parse(event.data);
-      console.log(`[Contratista] Mensaje recibido:`, message);
-      
-      // Verificar que no sea un mensaje que acabamos de enviar nosotros mismos
-      const isFromCurrentUser = parseInt(message.userId) === parseInt(getUserId());
-      const isFreshMessage = !document.querySelector(`[data-message-id="${message.id}"]`);
-      
-      // Solo procesar el mensaje si no lo envió el usuario actual o si no existe en la interfaz
-      if (!isFromCurrentUser || isFreshMessage) {
-        // Si el mensaje es de otro tipo que no estamos viendo actualmente
-        if (message.type !== currentChatType) {
-          updateUnreadCounter(message.solicitudId, message.type);
-        } else {
-          // Si es del tipo que estamos viendo, mostrar el mensaje
-          displayMessage(message);
-          
-          // Desplazar al final del chat
-          const chatMessages = document.getElementById('chatMessages');
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-          
-          // Marcar como leído
-          markMessagesAsRead(currentSolicitudId, currentChatType);
-        }
-      }
+      console.log(`[Contratista] Intentando obtener interventor para solicitud ${solicitudId}`);
+      const response = await fetch(`/api/solicitud/${solicitudId}/interventor`);
+      if (!response.ok) throw new Error(`Error ${response.status}: ${response.statusText}`);
+      const data = await response.json();
+      console.log("[Contratista] Datos del interventor recibidos:", data);
+      interventorName = data.interventorName || 'Sin asignar';
+      document.getElementById('interventorName').textContent = interventorName;
     } catch (error) {
-      console.error('[Contratista] Error al procesar mensaje recibido:', error);
+      console.error('[Contratista] Error al cargar interventor:', error);
+      interventorName = 'Error al cargar';
+      document.getElementById('interventorName').textContent = interventorName;
     }
-  };
-  
-  socket.onerror = function(error) {
-    console.error(`[Contratista] Error en WebSocket:`, error);
-  };
-  
-  socket.onclose = function() {
-    console.log(`[Contratista] WebSocket cerrado`);
-  };
-  
-  // No cargar ningún chat por defecto, esperar a que el usuario seleccione uno
-  document.getElementById('chatMessages').innerHTML = '';
-  document.getElementById('chatActiveContact').textContent = 'Selecciona un contacto';
-  document.getElementById('sstContact').classList.remove('bg-gray-300', 'active');
-  document.getElementById('interventorContact').classList.remove('bg-gray-300', 'active');
-  
-  // Actualizar los contadores de mensajes no leídos
-  await updateAllUnreadCounters(solicitudId);
+
+    // Inicializar WebSocket
+    if (socket) {
+      socket.close();
+      socket = null;
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/chat/${solicitudId}`;
+    console.log(`[Contratista] Conectando WebSocket: ${wsUrl}`);
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = function() {
+      console.log(`[Contratista] WebSocket conectado para solicitud ${solicitudId}`);
+    };
+
+    socket.onmessage = function(event) {
+      try {
+        const message = JSON.parse(event.data);
+        console.log(`[Contratista] Mensaje recibido:`, message);
+        if (message.solicitudId === currentSolicitudId) {
+          if (message.type === currentChatType) {
+            displayMessage(message);
+            const chatMessages = document.getElementById('chatMessages');
+            const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+            if (isNearBottom) {
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            markMessagesAsRead(currentSolicitudId, currentChatType);
+          } else {
+            updateUnreadCounter(currentSolicitudId, message.type);
+          }
+        }
+      } catch (error) {
+        console.error('[Contratista] Error al procesar mensaje recibido:', error);
+      }
+    };
+
+    socket.onerror = function(error) {
+      console.error(`[Contratista] Error en WebSocket:`, error);
+    };
+
+    socket.onclose = function() {
+      console.log(`[Contratista] WebSocket cerrado`);
+    };
+
+    // Limpiar y reiniciar vista
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+    chatMessages.removeEventListener('scroll', scrollHandler);
+    chatMessages.addEventListener('scroll', scrollHandler);
+
+    // Actualizar contadores
+    await updateAllUnreadCounters(solicitudId);
+
+    // Cargar chat de SST automáticamente y mostrar área de escritura después
+    await loadChat('sst'); // Cargar el chat de SST directamente
+    chatInputContainer.classList.remove('hidden'); // Mostrar área de escritura solo después de cargar
+
+    console.log('[Contratista] Ventana de chat abierta correctamente');
+  } catch (error) {
+    console.error('[Contratista] Error al abrir ventana de chat:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'Ocurrió un error al abrir el chat'
+    });
+  }
 };
+
 
 // Función para notificar nuevos mensajes cuando la ventana no está activa
 function notifyNewMessage(message) {
@@ -1515,19 +1531,62 @@ function notifyNewMessage(message) {
   }
 }
 
-// Cerrar modal de chat
 window.closeChatModal = function() {
-  document.getElementById('chatModal').classList.add('hidden');
+  // Cerrar WebSocket si está abierto
   if (socket) {
+    socket.onclose = null; // Evitar que se dispare el evento onclose
+    socket.onerror = null; // Limpiar manejador de errores
+    socket.onmessage = null; // Limpiar manejador de mensajes
     socket.close();
+    socket = null;
   }
+
+  // Eliminar listener de scroll
+  const chatMessages = document.getElementById('chatMessages');
+  if (chatMessages) {
+    chatMessages.removeEventListener('scroll', scrollHandler);
+  }
+
+  // Limpiar área de mensajes y estado visual
+  if (chatMessages) {
+    chatMessages.innerHTML = '';
+  }
+  document.getElementById('chatActiveContact').textContent = 'Selecciona un contacto';
+  document.getElementById('sstContact').classList.remove('active');
+  document.getElementById('interventorContact').classList.remove('active');
+
+  // Ocultar modal
+  document.getElementById('chatModal').classList.add('hidden');
+
+  // Reiniciar variables globales
   currentSolicitudId = null;
   currentChatType = null;
   oldestMessageId = null;
-};
+  interventorName = '';
 
-// Cargar conversación específica
+  console.log('[Contratista] Modal de chat cerrado y estado limpiado');
+};
+// Función para manejar errores cuando un elemento no existe en el DOM
+function safeQuerySelector(selector) {
+  const element = document.querySelector(selector);
+  if (!element) {
+    console.warn(`Elemento no encontrado: ${selector}`);
+  }
+  return element;
+}
+
+// Función para actualizar texto de manera segura
+function safeUpdateTextContent(element, text) {
+  if (element) {
+    element.textContent = text;
+    return true;
+  }
+  return false;
+}
+
+// Modificar loadChat para manejar errores de manera más robusta
 window.loadChat = async function(type) {
+  try {
   currentChatType = type;
   
   // Cambiar clases de los contactos
@@ -1538,12 +1597,28 @@ window.loadChat = async function(type) {
   document.getElementById('chatActiveContact').textContent = 
     type === 'sst' ? 'SST' : `Interventor: ${interventorName}`;
   
-  // Limpiar y cargar mensajes
-  document.getElementById('chatMessages').innerHTML = '';
+    // Limpiar el área de mensajes
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-ga-gold"></div></div>';
+    
+    // Eliminar listener previo si existe
+    chatMessages.removeEventListener('scroll', scrollHandler);
+    
+    // Agregar nuevo listener para scroll
+    chatMessages.addEventListener('scroll', scrollHandler);
+    
+    // Cargar mensajes
   await loadInitialMessages(currentSolicitudId, type);
   
-  // Marcar mensajes como leídos inmediatamente
+    // Marcar mensajes como leídos
   await markMessagesAsRead(currentSolicitudId, type);
+    
+    console.log(`[Contratista] Chat tipo ${type} cargado correctamente`);
+  } catch (error) {
+    console.error(`[Contratista] Error al cargar chat ${type}:`, error);
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '<div class="text-center text-red-500 p-3">Error al cargar el chat. Por favor intente nuevamente.</div>';
+  }
 };
 
 // Función para marcar mensajes como leídos
@@ -1562,15 +1637,22 @@ async function markMessagesAsRead(solicitudId, type) {
       throw new Error('Error al marcar mensajes como leídos');
     }
     
-    // Reiniciar contador visual
+    // Reiniciar contador visual - verificar que el badge existe
     const badge = document.getElementById(`unread-count-${type}`);
     if (badge) {
       badge.textContent = '0';
       badge.classList.add('hidden');
+    } else {
+      console.log(`Badge para ${type} no encontrado`);
     }
     
     // También actualizar contador global si es necesario
+    // Verificar si hay elementos antes de ejecutar
+    try {
     updateGlobalUnreadCounters();
+    } catch (counterError) {
+      console.error('Error al actualizar contadores globales:', counterError);
+    }
   } catch (error) {
     console.error('Error al marcar mensajes como leídos:', error);
   }
@@ -1581,144 +1663,48 @@ async function updateAllUnreadCounters(solicitudId) {
   try {
     const userId = getUserId();
     console.log(`[Contratista] Actualizando contadores para solicitud ${solicitudId}, usuario ${userId}`);
-    
-    // Actualizar contador para SST
+
+    // SST
     const sstResponse = await fetch(`/api/chat/${solicitudId}/sst/unread?userId=${userId}`);
     const sstData = await sstResponse.json();
     console.log(`[Contratista] Contador SST: ${sstData.unreadCount}`);
-    
-    const sstBadge = document.querySelector('.unread-count[data-type="sst"]');
+    const sstBadge = document.getElementById('unread-count-sst');
     if (sstBadge) {
       sstBadge.textContent = sstData.unreadCount;
-      // Solo mostrar si hay mensajes no leídos
-      if (sstData.unreadCount > 0) {
-        sstBadge.classList.remove('hidden');
-      } else {
-        sstBadge.classList.add('hidden');
-      }
+      sstBadge.classList.toggle('hidden', sstData.unreadCount === 0);
+    } else {
+      console.warn('[Contratista] Badge unread-count-sst no encontrado');
     }
-    
-    // Actualizar contador para interventor
+
+    // Interventor
     const interventorResponse = await fetch(`/api/chat/${solicitudId}/interventor/unread?userId=${userId}`);
     const interventorData = await interventorResponse.json();
     console.log(`[Contratista] Contador Interventor: ${interventorData.unreadCount}`);
-    
-    const interventorBadge = document.querySelector('.unread-count[data-type="interventor"]');
+    const interventorBadge = document.getElementById('unread-count-interventor');
     if (interventorBadge) {
       interventorBadge.textContent = interventorData.unreadCount;
-      // Solo mostrar si hay mensajes no leídos
-      if (interventorData.unreadCount > 0) {
-        interventorBadge.classList.remove('hidden');
-      } else {
-        interventorBadge.classList.add('hidden');
-      }
+      interventorBadge.classList.toggle('hidden', interventorData.unreadCount === 0);
+    } else {
+      console.warn('[Contratista] Badge unread-count-interventor no encontrado');
     }
   } catch (error) {
-    console.error('Error al actualizar contadores:', error);
+    console.error('[Contratista] Error al actualizar contadores:', error);
   }
 }
-
 // Función para manejar el scroll
 function scrollHandler() {
   const chatMessages = document.getElementById('chatMessages');
-  if (chatMessages.scrollTop === 0 && oldestMessageId) {
+  
+  // Si estamos cerca del principio del scroll (menos de 50px del tope)
+  if (chatMessages.scrollTop < 50 && oldestMessageId && !isLoadingMore) {
     loadMoreMessages(currentSolicitudId, currentChatType);
-  }
-}
-
-// Cargar los últimos 20 mensajes
-async function loadInitialMessages(solicitudId, type) {
-  const chatMessages = document.getElementById('chatMessages');
-  try {
-    const userId = getUserId();
-    console.log(`[Contratista] Cargando mensajes iniciales para chat ${type}, solicitud ${solicitudId}, usuario ${userId}`);
-    
-    const response = await fetch(`/api/chat/${solicitudId}/${type}?limit=20&userId=${userId}`);
-    if (!response.ok) {
-      throw new Error('Error al cargar mensajes');
-    }
-    
-    const messages = await response.json();
-    console.log(`[Contratista] Mensajes cargados: ${messages.length}`);
-    
-    // Limpiar el área de mensajes antes de mostrarlos
-    chatMessages.innerHTML = '';
-    
-    // Mostrar los mensajes en orden cronológico (más antiguos primero)
-    messages.reverse().forEach(message => {
-      // Verificar que isSender esté correctamente establecido
-      console.log(`Mensaje ID ${message.id}, Usuario: ${message.usuario_id}, isSender: ${message.isSender}`);
-      displayMessage(message);
-    });
-    
-    if (messages.length > 0) {
-      oldestMessageId = messages[0].id;
-    }
-    
-    // Desplazar al final del chat
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-    // IMPORTANTE: Marcar mensajes como leídos inmediatamente después de cargarlos
-    await markMessagesAsRead(solicitudId, type);
-    
-    // Actualizar explícitamente el contador local
-    const badge = document.querySelector(`.unread-count[data-type="${type}"]`);
-    if (badge) {
-      badge.textContent = "0";
-      badge.classList.add('hidden');
-    }
-  } catch (error) {
-    console.error('Error al cargar mensajes iniciales:', error);
-    chatMessages.innerHTML = '<div class="text-center text-red-500">Error al cargar mensajes. Intente nuevamente.</div>';
   }
 }
 
 // Función auxiliar para obtener el ID del usuario
 function getUserId() {
-  // ID 7 para el contratista (Limpieza sas)
-  return 7; // Este valor debe coincidir con el ID real del usuario
-}
-
-// Cargar más mensajes al hacer scroll hacia arriba
-async function loadMoreMessages(solicitudId, type) {
-  if (!oldestMessageId) return;
-  try {
-    const userId = getUserId(); // Obtener ID del usuario
-    const response = await fetch(`/api/chat/${solicitudId}/${type}?limit=20&before=${oldestMessageId}&userId=${userId}`);
-    
-    if (!response.ok) {
-      throw new Error('Error al cargar más mensajes');
-    }
-    
-    const messages = await response.json();
-    if (messages.length > 0) {
-      const chatMessages = document.getElementById('chatMessages');
-      const scrollHeightBefore = chatMessages.scrollHeight;
-      const scrollTopBefore = chatMessages.scrollTop;
-      
-      // Insertar mensajes al principio del chat (los más antiguos primero)
-      messages.reverse().forEach(message => {
-        const messageDiv = createMessageElement(message);
-        chatMessages.insertBefore(messageDiv, chatMessages.firstChild);
-      });
-      
-      oldestMessageId = messages[messages.length - 1].id;
-      
-      // Mantener la posición del scroll para que no salte
-      chatMessages.scrollTop = scrollTopBefore + (chatMessages.scrollHeight - scrollHeightBefore);
-    } else {
-      oldestMessageId = null; // No hay más mensajes
-    }
-  } catch (error) {
-    console.error('Error al cargar más mensajes:', error);
-  }
-}
-
-// Mostrar mensaje en el chat
-function displayMessage(message) {
-  const messageElement = createMessageElement(message);
-  const chatMessages = document.getElementById('chatMessages');
-  chatMessages.appendChild(messageElement); // Añadir al final para orden cronológico
+  // Obtener el ID del usuario de forma dinámica desde una variable global
+  return window.currentUserId || document.querySelector('meta[name="user-id"]').getAttribute('content');
 }
 
 // Función para crear elemento de mensaje (reutilizable)
@@ -1734,7 +1720,7 @@ function createMessageElement(message) {
   const messageDiv = document.createElement('div');
   
   // El estilo se basa en si el mensaje fue enviado por el usuario actual
-  messageDiv.className = `p-2 my-1 rounded-md ${isSender ? 
+  messageDiv.className = `chat-message p-2 my-1 rounded-md ${isSender ? 
     'bg-ga-gold text-ga-white ml-auto' : 
     'bg-gray-200 text-gray-800'} max-w-xs`;
   
@@ -1759,19 +1745,68 @@ function createMessageElement(message) {
     messageContent = "Mensaje sin contenido";
   }
   
-  // Agregar tiempo del mensaje
-  const timestamp = new Date(message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  // IMPORTANTE: Asegurarnos de que created_at sea una fecha válida
+  let messageDate;
+  try {
+    // Si es un string, intentar crear un objeto Date
+    if (typeof message.created_at === 'string') {
+      messageDate = new Date(message.created_at);
+      // Verificar si la fecha es válida
+      if (isNaN(messageDate.getTime())) {
+        // Si no es válida, usar la fecha actual
+        console.warn('Fecha inválida en mensaje:', message.created_at);
+        messageDate = new Date();
+      }
+    } else {
+      // Si no es un string, usar la fecha actual
+      messageDate = new Date();
+    }
+  } catch (error) {
+    console.error('Error al procesar fecha:', error);
+    messageDate = new Date();
+  }
   
-  // Usar estructura con tiempo del mensaje
+  // Formatear fecha y hora utilizando opciones para garantizar consistencia
+  const formattedDate = messageDate.toLocaleDateString('es-ES', {
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric'
+  });
+  
+  const formattedTime = messageDate.toLocaleTimeString('es-ES', {
+    hour: '2-digit', 
+    minute: '2-digit'
+  });
+  
+  // Almacenar la fecha original como atributo de datos para futuras referencias
+  messageDiv.dataset.timestamp = messageDate.toISOString();
+  
+  // Determinar el indicador de estado para mensajes enviados
+  let statusIcon = '';
+  if (isSender) {
+    if (message.id === 'error') {
+      statusIcon = '<span class="status-icon-error">✓</span>';
+    } else if (message.id && message.id.toString().startsWith('temp-')) {
+      statusIcon = '<span class="status-icon-sent">✓</span>';
+    } else if (message.leido) {
+      statusIcon = '<span class="status-icon-read">✓✓</span>';
+    } else {
+      statusIcon = '<span class="status-icon-delivered">✓✓</span>';
+    }
+  }
+  
+  // Usar estructura con tiempo y fecha del mensaje
   messageDiv.innerHTML = `
     <div>${messageContent}</div>
-    <div class="text-xs mt-1 text-right ${message.isSender ? 'text-gray-300' : 'text-gray-500'}">${timestamp}</div>
+    <div class="text-xs mt-1 text-right ${isSender ? 'text-gray-300' : 'text-gray-500'}">
+      ${formattedDate} ${formattedTime} ${statusIcon}
+    </div>
   `;
   
   // Almacenar información del mensaje para futuras referencias
   messageDiv.dataset.messageId = message.id;
   messageDiv.dataset.userId = message.usuario_id;
-  messageDiv.dataset.isSender = message.isSender;
+  messageDiv.dataset.isSender = isSender;
   
   // Añadir atributo de ID del mensaje para poder identificarlo
   if (message.id) {
@@ -1781,42 +1816,84 @@ function createMessageElement(message) {
   return messageDiv;
 }
 
-// Enviar mensaje
+// Enviar mensaje (modificado para incluir timestamp consistente)
 window.sendMessage = function() {
   const input = document.getElementById('chatInput');
   const content = input.value.trim();
   if (!content || !currentSolicitudId || !currentChatType) return;
   
+  const userId = getUserId();
+  const tempId = 'temp-' + Date.now();
+  const timestamp = new Date().toISOString(); // Timestamp ISO para consistencia
+  
+  // Mensaje local para mostrar inmediatamente
+  const localMessage = {
+    id: tempId,
+    content: content,
+    created_at: timestamp, // Usar formato ISO
+    usuario_id: userId,
+    isSender: true
+  };
+  
+  // Mostrar mensaje enviado localmente
+  displayMessage(localMessage);
+  
+  // Mensaje para enviar al servidor (incluir timestamp)
   const message = {
     solicitudId: currentSolicitudId,
     type: currentChatType,
     content: content,
-    userId: getUserId()
+    userId: userId,
+    tempId: tempId,
+    timestamp: timestamp // Incluir timestamp en el mensaje
   };
   
   // Enviar mensaje por WebSocket
   socket.send(JSON.stringify(message));
   
-  // Mostrar mensaje enviado localmente
-  const localMessage = {
-    id: 'temp-' + Date.now(),
-    content: content,
-    created_at: new Date().toISOString(),
-    usuario_id: getUserId(),
-    isSender: true
-  };
+  // Actualizar a estado enviado después de corto tiempo
+  setTimeout(() => {
+    updateMessageStatus(tempId, 'sent');
+  }, 500);
   
-  displayMessage(localMessage);
+  // Simular actualización a entregado
+  setTimeout(() => {
+    updateMessageStatus(tempId, 'delivered');
+  }, 1500);
+  
+  // Limpiar input
+  input.value = '';
   
   // Desplazar al final
   const chatMessages = document.getElementById('chatMessages');
   chatMessages.scrollTop = chatMessages.scrollHeight;
-  
-  // Limpiar input
-  input.value = '';
 };
 
-// Actualizar un contador específico de mensajes no leídos
+// Función para actualizar el estado de un mensaje
+function updateMessageStatus(messageId, status) {
+  const messageElement = document.querySelector(`.chat-message[data-message-id="${messageId}"]`);
+  if (!messageElement) return;
+  
+  const statusContainer = messageElement.querySelector('.text-right');
+  if (!statusContainer) return;
+  
+  let statusIcon = '';
+  if (status === 'error') {
+    statusIcon = '<span class="status-icon-error">✓</span>';
+  } else if (status === 'sent') {
+    statusIcon = '<span class="status-icon-sent">✓</span>';
+  } else if (status === 'delivered') {
+    statusIcon = '<span class="status-icon-delivered">✓✓</span>';
+  } else if (status === 'read') {
+    statusIcon = '<span class="status-icon-read">✓✓</span>';
+  }
+  
+  // Extraer la fecha/hora y reemplazar solo el indicador manteniendo la fecha
+  const timeText = statusContainer.textContent.trim().split(' ').slice(0, 2).join(' ');
+  statusContainer.innerHTML = `${timeText} ${statusIcon}`;
+}
+
+// Función para actualizar un contador específico de mensajes no leídos
 async function updateUnreadCounter(solicitudId, type) {
   try {
     // Si el chat actualmente visible es del mismo tipo que el mensaje recibido,
@@ -1969,12 +2046,229 @@ function updateGlobalUnreadCounters() {
   // Obtener todos los contadores de mensajes no leídos
   const sstBadge = document.getElementById('unread-count-sst');
   const interventorBadge = document.getElementById('unread-count-interventor');
+  const globalCounter = document.getElementById('unread-count-all');
+  
+  // Verificar si los elementos existen antes de intentar actualizar
+  if (!sstBadge || !interventorBadge || !globalCounter) {
+    console.log('Algunos elementos de contador no encontrados');
+    return;
+  }
   
   // Sumar los contadores
-  const totalUnread = (parseInt(sstBadge.textContent || '0') || 0) + (parseInt(interventorBadge.textContent || '0') || 0);
+  const totalUnread = (parseInt(sstBadge.textContent || '0') || 0) + 
+                     (parseInt(interventorBadge.textContent || '0') || 0);
   
   // Actualizar el contador global
-  document.getElementById('unread-count-all').textContent = totalUnread;
+  globalCounter.textContent = totalUnread;
+}
+
+// Añadir la función displayMessage que falta
+function displayMessage(message) {
+  try {
+    const messageElement = createMessageElement(message);
+    const chatMessages = document.getElementById('chatMessages');
+    
+    if (chatMessages && messageElement) {
+      chatMessages.appendChild(messageElement);
+      
+      // Scroll al final del chat si estamos cerca del final
+      const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+      if (isNearBottom) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    } else {
+      console.error('[Contratista] Error: No se pudo mostrar el mensaje, elementos faltantes', 
+                    { chatMessages: !!chatMessages, messageElement: !!messageElement });
+    }
+  } catch (error) {
+    console.error('[Contratista] Error al mostrar mensaje:', error, message);
+  }
+}
+
+// Función mejorada para cargar los últimos 20 mensajes
+async function loadInitialMessages(solicitudId, type) {
+  const chatMessages = document.getElementById('chatMessages');
+  try {
+    const userId = getUserId();
+    console.log(`[Contratista] Cargando mensajes iniciales para chat ${type}, solicitud ${solicitudId}, usuario ${userId}`);
+    
+    // Mostrar indicador de carga mientras se obtienen los mensajes
+    chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-ga-gold"></div></div>';
+    
+    const response = await fetch(`/api/chat/${solicitudId}/${type}?limit=20&userId=${userId}`);
+    if (!response.ok) {
+      throw new Error('Error al cargar mensajes');
+    }
+    
+    const messages = await response.json();
+    console.log(`[Contratista] Mensajes cargados: ${messages.length}`);
+    
+    // Limpiar el área de mensajes antes de mostrarlos
+    chatMessages.innerHTML = '';
+    
+    if (messages.length === 0) {
+      // Mostrar mensaje cuando no hay historial
+      chatMessages.innerHTML = '<div class="text-center text-gray-500 p-4">No hay mensajes en esta conversación. Escribe para comenzar.</div>';
+    } else {
+      // Ordenar los mensajes por fecha para asegurar que se muestren cronológicamente
+      const sortedMessages = [...messages].sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB;
+      });
+      
+      // Mostrar los mensajes ordenados cronológicamente
+      sortedMessages.forEach(message => {
+        const messageElement = createMessageElement(message);
+        chatMessages.appendChild(messageElement);
+      });
+      
+      // Identificar el mensaje más antiguo para paginación
+      if (messages.length > 0) {
+        oldestMessageId = messages.reduce((oldest, current) => {
+          return parseInt(current.id) < parseInt(oldest.id) ? current : oldest;
+        }, messages[0]).id;
+      }
+      
+      // Asegurar que siempre se desplace al final del chat
+      setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }, 100);
+    }
+    
+    // Marcar mensajes como leídos inmediatamente
+    await markMessagesAsRead(solicitudId, type);
+    
+    // Actualizar contador
+    const badge = document.querySelector(`.unread-count[data-type="${type}"]`);
+    if (badge) {
+      badge.textContent = "0";
+      badge.classList.add('hidden');
+    }
+  } catch (error) {
+    console.error('Error al cargar mensajes iniciales:', error);
+    chatMessages.innerHTML = '<div class="text-center text-red-500 p-3">Error al cargar mensajes. Por favor intente nuevamente.</div>';
+  }
+}
+
+// Variable para controlar que no se disparen múltiples cargas simultáneas
+let isLoadingMore = false;
+
+// Función para manejar el evento de scroll
+function scrollHandler() {
+  const chatMessages = document.getElementById('chatMessages');
+  
+  // Si estamos cerca del principio del scroll (menos de 50px del tope)
+  if (chatMessages.scrollTop < 50 && oldestMessageId && !isLoadingMore) {
+    loadMoreMessages(currentSolicitudId, currentChatType);
+  }
+}
+
+// Cargar más mensajes al hacer scroll hacia arriba
+async function loadMoreMessages(solicitudId, type) {
+  if (!oldestMessageId || isLoadingMore) return;
+  
+  isLoadingMore = true;
+  
+  try {
+    const userId = getUserId();
+    
+    // Crear indicador de carga
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'text-center text-gray-500 text-sm py-2';
+    loadingIndicator.innerHTML = '<div class="spinner-border spinner-border-sm text-gray-500" role="status"></div> Cargando mensajes anteriores...';
+    
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.insertBefore(loadingIndicator, chatMessages.firstChild);
+    
+    const response = await fetch(`/api/chat/${solicitudId}/${type}?limit=20&before=${oldestMessageId}&userId=${userId}`);
+    
+    if (!response.ok) {
+      throw new Error('Error al cargar más mensajes');
+    }
+    
+    const messages = await response.json();
+    
+    // Eliminar el indicador de carga
+    loadingIndicator.remove();
+    
+    if (messages.length > 0) {
+      const scrollHeightBefore = chatMessages.scrollHeight;
+      const scrollTopBefore = chatMessages.scrollTop;
+      
+      // Ordenar por fecha para asegurar visualización cronológica
+      const sortedMessages = [...messages].sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB;
+      });
+      
+      // Crear un fragmento para agregar todos los mensajes de una vez (mejor rendimiento)
+      const fragment = document.createDocumentFragment();
+      
+      // Insertar mensajes en el fragmento
+      sortedMessages.forEach(message => {
+        fragment.appendChild(createMessageElement(message));
+      });
+      
+      // Insertar el fragmento al principio del chat
+      if (chatMessages.firstChild) {
+        chatMessages.insertBefore(fragment, chatMessages.firstChild);
+      } else {
+        chatMessages.appendChild(fragment);
+      }
+      
+      // Actualizar el ID del mensaje más antiguo
+      oldestMessageId = messages.reduce((oldest, current) => {
+        return parseInt(current.id) < parseInt(oldest.id) ? current : oldest;
+      }, messages[0]).id;
+      
+      // Mantener la posición relativa del scroll
+      chatMessages.scrollTop = scrollTopBefore + (chatMessages.scrollHeight - scrollHeightBefore);
+    } else {
+      // Si no hay más mensajes, mostrar un mensaje informativo discreto
+      const noMoreMsg = document.createElement('div');
+      noMoreMsg.className = 'text-center text-gray-500 text-xs py-1';
+      noMoreMsg.textContent = 'No hay más mensajes';
+      noMoreMsg.style.opacity = '0.7';
+      chatMessages.insertBefore(noMoreMsg, chatMessages.firstChild);
+      
+      // Indicar que no hay más mensajes para cargar
+      oldestMessageId = null;
+      
+      // Eliminar automáticamente el mensaje después de unos segundos
+      setTimeout(() => {
+        if (noMoreMsg.parentNode) {
+          noMoreMsg.style.transition = 'opacity 0.5s';
+          noMoreMsg.style.opacity = '0';
+          setTimeout(() => {
+            if (noMoreMsg.parentNode) {
+              noMoreMsg.remove();
+            }
+          }, 500);
+        }
+      }, 3000);
+    }
+  } catch (error) {
+    console.error('Error al cargar más mensajes:', error);
+    
+    // Mostrar mensaje de error discreto
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'text-center text-red-500 text-xs py-1';
+    errorMsg.textContent = 'Error al cargar mensajes anteriores';
+    
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.insertBefore(errorMsg, chatMessages.firstChild);
+    
+    // Eliminar automáticamente el mensaje después de unos segundos
+    setTimeout(() => {
+      if (errorMsg.parentNode) {
+        errorMsg.remove();
+      }
+    }, 5000);
+  } finally {
+    isLoadingMore = false;
+  }
 }
 </script>
 </body>
