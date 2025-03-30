@@ -34,50 +34,62 @@ const s3Client = new S3Client({
 
 
 controller.vistaSst = async (req, res) => {
-  const token = req.cookies.token;
-
-  if (!token) {
-      return res.redirect('/login');
-  }
-
   try {
-      const decoded = jwt.verify(token, SECRET_KEY);
-      const { role } = decoded;
+    // Verificar token JWT
+    const token = req.cookies.token;
+    if (!token) {
+      return res.redirect('/login');
+    }
+    
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(token, process.env.JWT_SECRET || 'secreto');
+    } catch (error) {
+      console.error('Error al verificar token:', error);
+      return res.redirect('/login');
+    }
+    
+    // Obtener userId y verificar rol
+    const userId = decodedToken.id;
+    
+    if (!userId) {
+      console.error('❌ ERROR: No se pudo obtener userId del token:', decodedToken);
+      return res.redirect('/login');
+    }
+    
+    console.log('✅ userID obtenido del token:', userId);
+    
+    // Obtener las solicitudes
+    const [solicitud] = await connection.execute(`
+        SELECT s.*, us.username AS interventor 
+        FROM solicitudes s 
+        LEFT JOIN users us ON us.id = s.interventor_id 
+        WHERE us.username != "COA"  
+        ORDER BY id DESC
+    `);
 
-      if (role !== 'sst') {
-          return res.redirect('/login');
-      }
+    // Obtener las URLs de los documentos (si existen)
+    const [solicitud_url_download] = await connection.execute('SELECT * FROM sst_documentos WHERE solicitud_id IN (SELECT id FROM solicitudes)');
+    const [lugares] = await connection.execute('SELECT nombre_lugar FROM lugares ORDER BY nombre_lugar ASC'); // Cargar lugares
 
-      // Obtener las solicitudes
-      const [solicitud] = await connection.execute(`
-          SELECT s.*, us.username AS interventor 
-          FROM solicitudes s 
-          LEFT JOIN users us ON us.id = s.interventor_id 
-          WHERE us.username != "COA"  
-          ORDER BY id DESC
-      `);
+    // Formatear fechas
+    solicitud.forEach(solici => {
+        solici.inicio_obra = format(new Date(solici.inicio_obra), 'dd/MM/yyyy');
+        solici.fin_obra = format(new Date(solici.fin_obra), 'dd/MM/yyyy');
+    });
 
-      // Obtener las URLs de los documentos (si existen)
-      const [solicitud_url_download] = await connection.execute('SELECT * FROM sst_documentos WHERE solicitud_id IN (SELECT id FROM solicitudes)');
-      const [lugares] = await connection.execute('SELECT nombre_lugar FROM lugares ORDER BY nombre_lugar ASC'); // Cargar lugares
-
-      // Formatear fechas
-      solicitud.forEach(solici => {
-          solici.inicio_obra = format(new Date(solici.inicio_obra), 'dd/MM/yyyy');
-          solici.fin_obra = format(new Date(solici.fin_obra), 'dd/MM/yyyy');
-      });
-
-      // Pasar las URLs a la vista
-      res.render('sst', {
-          solicitud: solicitud,
-          title: 'SST - Grupo Argos',
-          solicitud_url_download: solicitud_url_download,
-          lugares: lugares
-      });
-
-  } catch (err) {
-      console.error('Error al verificar el token o al obtener solicitudes:', err);
-      res.redirect('/login');
+    // Al renderizar, asegurarse de que userId esté presente
+    res.render('sst', {
+      title: 'Vista SST',
+      userId: userId,
+      solicitud: solicitud,
+      solicitud_url_download: solicitud_url_download,
+      lugares: lugares
+    });
+    
+  } catch (error) {
+    console.error('Error en vistaSst:', error);
+    res.status(500).send('Error al cargar la vista SST');
   }
 };
 
@@ -699,94 +711,145 @@ controller.getColaboradores = async (req, res) => {
 // Filtrar solicitudes para SST
 
 controller.filtrarSolicitudesSst = async (req, res) => {
+    console.log('🔍 Iniciando filtrado de solicitudes SST');
     const token = req.cookies.token;
-    if (!token) return res.status(401).json({ message: 'No autorizado' });
+    if (!token) {
+        console.log('❌ No se encontró token en las cookies');
+        return res.status(401).json({ message: 'No autorizado' });
+    }
   
     try {
-      const decoded = jwt.verify(token, SECRET_KEY);
-      if (decoded.role !== 'sst') return res.status(403).json({ message: 'Acceso denegado' });
+        console.log('🔐 Verificando token...');
+        const decoded = jwt.verify(token, SECRET_KEY);
+        if (decoded.role !== 'sst') {
+            console.log('⛔ Usuario no tiene rol SST:', decoded.role);
+            return res.status(403).json({ message: 'Acceso denegado' });
+        }
+        console.log('✅ Token verificado correctamente para rol SST');
   
-      const { id, cedula, interventor, estado, fechaInicio, fechaFin, nit, empresa, lugar, vigencia, idColaborador } = req.body;
+        const params = req.method === 'GET' ? req.query : req.body;
+        console.log('📝 Parámetros recibidos:', params);
+      
+        const { id, cedula, interventor, estado, fechaInicio, fechaFin, nit, empresa, lugar, vigencia, idColaborador } = params;
   
-      let query = `
-        SELECT DISTINCT
-          s.id AS solicitud_id,
-          s.empresa,
-          s.nit,
-          DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
-          DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
-          s.dias_trabajo,
-          s.lugar,
-          s.labor,
-          us.username AS interventor,
-          s.estado AS solicitud_estado,
-          CASE
-            WHEN DATE(s.fin_obra) < CURDATE() THEN 'Vencida'
-            ELSE 'Vigente'
-          END AS estado_vigencia,
-          sd.url AS url_documento
-        FROM solicitudes s
-        LEFT JOIN users us ON us.id = s.interventor_id
-        LEFT JOIN colaboradores c ON c.solicitud_id = s.id
-        LEFT JOIN sst_documentos sd ON sd.solicitud_id = s.id
-        WHERE 1=1
-      `;
-      const params = [];
+        let query = `
+            SELECT DISTINCT
+                s.id AS solicitud_id,
+                s.empresa,
+                s.nit,
+                DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
+                DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
+                s.dias_trabajo,
+                s.lugar,
+                s.labor,
+                us.username AS interventor,
+                s.estado AS solicitud_estado,
+                CASE
+                    WHEN DATE(s.fin_obra) < CURDATE() THEN 'Vencida'
+                    ELSE 'Vigente'
+                END AS estado_vigencia
+            FROM solicitudes s
+            LEFT JOIN users us ON us.id = s.interventor_id
+            LEFT JOIN colaboradores c ON c.solicitud_id = s.id
+            WHERE 1=1
+        `;
+        const placeholders = [];
   
-      if (id) {
-        query += ' AND s.id = ?';
-        params.push(id);
-      }
-      if (idColaborador) {
-        query += ' AND c.id = ?';
-        params.push(idColaborador);
-      }
-      if (cedula) {
-        query += ' AND c.cedula LIKE ?';
-        params.push(`%${cedula}%`);
-      }
-      if (interventor) {
-        query += ' AND us.username LIKE ?';
-        params.push(`%${interventor}%`);
-      }
-      if (estado) {
-        query += ' AND s.estado = ?';
-        params.push(estado);
-      }
-      if (fechaInicio) {
-        query += ' AND s.inicio_obra >= ?';
-        params.push(fechaInicio);
-      }
-      if (fechaFin) {
-        query += ' AND s.fin_obra <= ?';
-        params.push(fechaFin);
-      }
-      if (nit) {
-        query += ' AND s.nit LIKE ?';
-        params.push(`%${nit}%`);
-      }
-      if (empresa) {
-        query += ' AND s.empresa LIKE ?';
-        params.push(`%${empresa}%`);
-      }
-      if (lugar) {
-        query += ' AND s.lugar = ?';
-        params.push(lugar);
-      }
-      if (vigencia) {
-        query += ' AND (CASE WHEN DATE(s.fin_obra) < CURDATE() THEN "Vencida" ELSE "Vigente" END) = ?';
-        params.push(vigencia);
-      }
+        // Agregar condiciones de filtrado con logs
+        if (id) {
+            query += ' AND s.id = ?';
+            placeholders.push(id);
+            console.log('🔍 Filtrando por ID:', id);
+        }
+        if (idColaborador) {
+            query += ' AND c.id = ?';
+            placeholders.push(idColaborador);
+            console.log('🔍 Filtrando por ID de colaborador:', idColaborador);
+        }
+        if (cedula) {
+            query += ' AND c.cedula LIKE ?';
+            placeholders.push(`%${cedula}%`);
+            console.log('🔍 Filtrando por cédula:', cedula);
+        }
+        if (interventor) {
+            query += ' AND us.username LIKE ?';
+            placeholders.push(`%${interventor}%`);
+            console.log('🔍 Filtrando por interventor:', interventor);
+        }
+        if (estado) {
+            query += ' AND s.estado = ?';
+            placeholders.push(estado);
+            console.log('🔍 Filtrando por estado:', estado);
+        }
+        if (fechaInicio) {
+            query += ' AND s.inicio_obra >= ?';
+            placeholders.push(fechaInicio);
+            console.log('🔍 Filtrando por fecha inicio:', fechaInicio);
+        }
+        if (fechaFin) {
+            query += ' AND s.fin_obra <= ?';
+            placeholders.push(fechaFin);
+            console.log('🔍 Filtrando por fecha fin:', fechaFin);
+        }
+        if (nit) {
+            query += ' AND s.nit LIKE ?';
+            placeholders.push(`%${nit}%`);
+            console.log('🔍 Filtrando por NIT:', nit);
+        }
+        if (empresa) {
+            query += ' AND s.empresa LIKE ?';
+            placeholders.push(`%${empresa}%`);
+            console.log('🔍 Filtrando por empresa:', empresa);
+        }
+        if (lugar) {
+            query += ' AND s.lugar = ?';
+            placeholders.push(lugar);
+            console.log('🔍 Filtrando por lugar:', lugar);
+        }
+        if (vigencia) {
+            query += ' AND (CASE WHEN DATE(s.fin_obra) < CURDATE() THEN "Vencida" ELSE "Vigente" END) = ?';
+            placeholders.push(vigencia);
+            console.log('🔍 Filtrando por vigencia:', vigencia);
+        }
   
-      query += ' ORDER BY s.id DESC';
+        query += ' ORDER BY s.id DESC';
+        console.log('📋 Query final:', query);
+        console.log('📋 Placeholders:', placeholders);
   
-      const [solicitudes] = await connection.execute(query, params);
-      res.json(solicitudes);
+        const [solicitudes] = await connection.execute(query, placeholders);
+        console.log(`✅ Se encontraron ${solicitudes.length} solicitudes`);
+      
+        // Obtener documentos
+        const solicitudesIds = solicitudes.map(s => s.solicitud_id);
+        
+        if (solicitudesIds.length > 0) {
+            console.log('📄 Buscando documentos para las solicitudes:', solicitudes.length);
+            const placeholdersDocs = solicitudesIds.map(() => '?').join(',');
+            const [documentos] = await connection.execute(
+                `SELECT solicitud_id, url FROM sst_documentos WHERE solicitud_id IN (${placeholdersDocs})`,
+                solicitudesIds
+            );
+            console.log(`✅ Se encontraron ${documentos.length} documentos`);
+            
+            // Agregar URLs de documentos
+            solicitudes.forEach(solicitud => {
+                const documento = documentos.find(d => d.solicitud_id === solicitud.solicitud_id);
+                solicitud.url_documento = documento ? documento.url : null;
+            });
+        }
+        
+        console.log('✅ Proceso completado exitosamente');
+        res.json(solicitudes);
     } catch (err) {
-      console.error('Error al filtrar solicitudes:', err);
-      res.status(500).json({ message: 'Error al filtrar solicitudes', error: err.message });
+        console.error('❌ Error al filtrar solicitudes:', err);
+        console.error('Stack trace:', err.stack);
+        res.status(500).json({ 
+            message: 'Error al filtrar solicitudes', 
+            error: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
     }
-  };
+};
   
   
 module.exports = controller;

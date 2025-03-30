@@ -62,4 +62,60 @@
 #interventorContact.active:hover {
     background-color: #CC9000;
     opacity: 0.9;
+}
+
+/* Estilos para tabla con header fijo */
+.table-container {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    padding: 20px;
+    margin-top: 2rem;
+    width: 100%;
+    position: relative; /* Necesario para el header fijo */
+}
+
+.table-responsive {
+    height: calc(100vh - 400px);
+    overflow-y: auto;
+    width: 100%;
+}
+
+.table {
+    margin-bottom: 0;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+/* Estilos para el header fijo */
+.table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table thead th {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    /* Agregar sombra sutil para separar visualmente */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Asegurar que las celdas del cuerpo no se superpongan */
+.table tbody td {
+    padding: 12px;
+    vertical-align: middle;
+    white-space: nowrap;
+    background-color: white; /* Fondo blanco para evitar transparencia */
+    position: relative; /* Para mantener el orden de apilamiento correcto */
+}
+
+/* Agregar un borde superior sutil al primer tr del tbody */
+.table tbody tr:first-child td {
+    border-top: 1px solid #dee2e6;
 } 

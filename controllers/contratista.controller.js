@@ -88,7 +88,7 @@ controller.vistaContratista = async (req, res) => {
         interventores: Array.isArray(interventores) ? interventores : [], 
         lugares,
         solicitud_url_download: solicitud_url_download,
-        userId: userId, // Asegúrate de que sea el ID correcto
+        userId: userId,
         interventores: interventores,
         empresa: empresa,
         nit: nit

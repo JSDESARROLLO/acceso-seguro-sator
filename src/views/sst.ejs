@@ -11,10 +11,9 @@
   <style>
     .vencido { color: #ff0000; }  
 
-    nav{
+    nav {
       display: flex;
       gap: 20px;
-
     }
 
     .notification-badge {
@@ -33,42 +32,168 @@
       font-weight: bold;
     }
     
-    .status-icon-sent {
-      color: #d1d1d1;
+    .status-icon-sent { color: #d1d1d1; }
+    .status-icon-delivered { color: #d1d1d1; }
+    .status-icon-read { color: #53bdeb; }
+    .status-icon-error { color: #f44336; }
+    .chat-message { position: relative; }
+
+    /* Estilos para optimizar diseño y tabla fija */
+    body {
+      background-color: #f4f6f9;
+      font-family: 'Arial', sans-serif;
     }
-    
-    .status-icon-delivered {
-      color: #d1d1d1;
+
+    .container {
+      max-width: 1400px;
     }
-    
-    .status-icon-read {
-      color: #53bdeb;
+
+    h1 {
+      font-size: 2rem;
+      color: #2d3748;
+      margin-bottom: 1.5rem;
     }
-    
-    .status-icon-error {
-      color: #f44336;
+
+    .table-container {
+      max-height: 500px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background-color: #fff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
-    
-    .chat-message {
-      position: relative;
+
+    .table thead th {
+      position: sticky;
+      top: 0;
+      background-color: #2d3748;
+      color: #fff;
+      z-index: 10;
+      padding: 12px;
+      border-bottom: 2px solid #4a5568;
+    }
+
+    .table tbody tr:hover {
+      background-color: #edf2f7;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.875rem;
+    }
+
+    /* Estilos para el formulario de filtros */
+    .filter-form {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      margin-bottom: 20px;
+    }
+
+    .filter-form .form-group {
+      margin-bottom: 15px;
+    }
+
+    .filter-form label {
+      font-weight: 600;
+      color: #4a5568;
+    }
+
+    .filter-form input,
+    .filter-form select {
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      padding: 8px;
+      width: 100%;
+    }
+
+    .filter-form button {
+      background-color: #2d3748;
+      color: #fff;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .filter-form button:hover {
+      background-color: #4a5568;
     }
   </style>
+
+  <script>
+    // Guardar el ID del usuario SST para todo el sitio
+    window.sstUserId = "<%= userId %>";
+    
+    console.log('✅ ID de usuario SST inicializado:', window.sstUserId);
+    
+    if (!window.sstUserId || window.sstUserId === 'undefined') {
+      console.error('❌ ERROR: No se pudo obtener el ID de usuario SST');
+    }
+  </script>
 </head>
 <body>
-  <nav class="flex   items-center bg-gray-800 text-white p-4" id="nav">
-    <a class="text-lg font-semibold" href="#">Vista SST -   <a href="/capacitacion/listado">Gestionar Capacitaciones</a>      </a>
-  
+  <nav class="flex items-center bg-gray-800 text-white p-4" id="nav">
+    <a class="text-lg font-semibold" href="#">Vista SST - <a href="/capacitacion/listado">Gestionar Capacitaciones</a></a>
     <a class="text-lg" href="/logout">Cerrar sesión</a>
   </nav>
 
   <div class="container mt-5">
     <h1>Solicitudes</h1>
-    <div class="mb-3">
-      <label for="filtroId" class="form-label">Filtrar por ID:</label>
-      <input type="text" class="form-control" id="filtroId" placeholder="Ingrese el ID de la solicitud">
+
+    <!-- Botón para mostrar/ocultar filtros -->
+    <button id="toggleFilters" class="btn btn-secondary mb-3">
+        <span id="toggleText">Ocultar filtros</span>
+    </button>
+
+    <!-- Formulario de filtros -->
+    <div class="filter-form" id="filtrosCollapse">
+      <form id="filterForm">
+        <div class="row">
+          <div class="col-md-3 form-group">
+            <label for="filtroId">ID Solicitud</label>
+            <input type="text" class="form-control" id="filtroId" placeholder="Ingrese el ID">
+          </div>
+          <div class="col-md-3 form-group">
+            <label for="filtroEmpresa">Empresa</label>
+            <input type="text" class="form-control" id="filtroEmpresa" placeholder="Nombre de la empresa">
+          </div>
+          <div class="col-md-3 form-group">
+            <label for="filtroNit">NIT</label>
+            <input type="text" class="form-control" id="filtroNit" placeholder="NIT de la empresa">
+          </div>
+          <div class="col-md-3 form-group">
+            <label for="filtroEstadoSolicitud">Estado</label>
+            <select class="form-control" id="filtroEstadoSolicitud">
+              <option value="">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="aprobada">Aprobado</option>
+              <option value="negada">Negada</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-3 form-group">
+            <label for="filtroFechaInicio">Inicio de Obra (desde)</label>
+            <input type="date" class="form-control" id="filtroFechaInicio">
+          </div>
+          <div class="col-md-3 form-group">
+            <label for="filtroFechaFin">Fin de Obra (hasta)</label>
+            <input type="date" class="form-control" id="filtroFechaFin">
+          </div>
+          <div class="col-md-3 form-group">
+            <label for="filtroLugar">Lugar</label>
+            <input type="text" class="form-control" id="filtroLugar" placeholder="Lugar de la obra">
+          </div>
+          <div class="col-md-3 form-group d-flex align-items-end">
+            <button type="submit" class="w-100">Filtrar</button>
+          </div>
+        </div>
+      </form>
     </div>
 
-    <div class="table-responsive">
+    <div class="table-container">
       <table class="table table-bordered">
         <thead>
           <tr>
@@ -82,7 +207,7 @@
             <th>Labor</th>
             <th>Interventor</th>
             <th>Documentos</th>
-            <th>Colaboradores</th> <!-- Nueva columna -->
+            <th>Colaboradores</th>
             <th>Acción</th>
             <th>Mensajes</th>
           </tr>
@@ -125,8 +250,6 @@
                     <% } %>
                   </td>
                   <td>
-              
-                    <!-- Botón Conversar añadido -->
                     <button class="btn btn-primary btn-sm ml-2 open-chat-btn" data-solicitud-id="<%= solicitud.id %>">
                       Conversar <span class="badge badge-light unread-count" data-solicitud-id="<%= solicitud.id %>">0</span>
                     </button>
@@ -217,30 +340,26 @@
   </div>
 
   <!-- Modal de Chat para SST -->
-<div id="chatModalSST" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
-  <div class="bg-white w-full max-w-4xl h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
-    <!-- Header del chat -->
-    <div class="bg-gray-800 text-white px-4 py-3 flex justify-between items-center">
-      <h5 class="text-lg font-semibold">Chat SST - Solicitud <span id="chatSolicitudIdSST"></span></h5>
-      <button type="button" onclick="closeChatModalSST()" class="text-white hover:text-yellow-500">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-    <!-- Cuerpo del chat -->
-    <div class="flex-1 p-4 overflow-y-auto" id="chatMessagesSST"></div>
-    <!-- Input para enviar mensajes -->
-    <div class="border-t border-gray-200 p-4">
-      <div class="flex space-x-2">
-        <textarea id="chatInputSST" class="flex-1 p-2 border border-gray-300 rounded-md resize-none" rows="2" placeholder="Escribe un mensaje..."></textarea>
-        <button onclick="sendMessageSST()" class="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-yellow-500">Enviar</button>
+  <div id="chatModalSST" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
+    <div class="bg-white w-full max-w-4xl h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
+      <div class="bg-gray-800 text-white px-4 py-3 flex justify-between items-center">
+        <h5 class="text-lg font-semibold">Chat SST - Solicitud <span id="chatSolicitudIdSST"></span></h5>
+        <button type="button" onclick="closeChatModalSST()" class="text-white hover:text-yellow-500">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="flex-1 p-4 overflow-y-auto" id="chatMessagesSST"></div>
+      <div class="border-t border-gray-200 p-4">
+        <div class="flex space-x-2">
+          <textarea id="chatInputSST" class="flex-1 p-2 border border-gray-300 rounded-md resize-none" rows="2" placeholder="Escribe un mensaje..."></textarea>
+          <button onclick="sendMessageSST()" class="bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-yellow-500">Enviar</button>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-  
   <!-- Modal para Definir Plantilla SS -->
   <div class="modal fade" id="definirPlantillaModal" tabindex="-1" role="dialog" aria-labelledby="definirPlantillaModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -305,18 +424,165 @@
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
   <script>
-    // Filtrar por ID
-    $('#filtroId').on('input', function() {
-      var idFiltro = $(this).val().toLowerCase();
-      $('#tablaSolicitudes .solicitud-item').each(function() {
-        var solicitudId = $(this).data('id').toString();
-        if (solicitudId.indexOf(idFiltro) !== -1) {
-          $(this).show();
-        } else {
-          $(this).hide();
+    // Nueva función para filtrar usando la API del interventor
+ 
+    $('#filterForm').on('submit', async function(e) {
+  e.preventDefault();
+
+  const filtros = {
+    id: $('#filtroId').val(),
+    empresa: $('#filtroEmpresa').val(),
+    nit: $('#filtroNit').val(),
+    estado: $('#filtroEstadoSolicitud').val(),
+    fechaInicio: $('#filtroFechaInicio').val(),
+    fechaFin: $('#filtroFechaFin').val(),
+    lugar: $('#filtroLugar').val()
+  };
+
+  console.log('Enviando filtros:', filtros);
+
+  try {
+    Swal.fire({
+      title: 'Cargando...',
+      text: 'Buscando solicitudes',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+
+    // CORRECCIÓN: Cambiamos a POST para coincidir con la definición en routes/sst.routes.js
+    const response = await fetch('/api/filtrar-solicitudes-sst', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include', // Mantener cookies para la autenticación
+      body: JSON.stringify(filtros) // Enviar filtros en el cuerpo JSON
+    });
+
+    console.log('Respuesta recibida:', response.status, response.statusText);
+    
+    const contentType = response.headers.get('content-type');
+    console.log('Tipo de contenido:', contentType);
+
+    if (contentType && contentType.includes('text/html')) {
+      console.error('Recibida respuesta HTML en lugar de JSON.');
+      
+      // Intentar obtener el HTML para depuración
+      const htmlText = await response.text();
+      console.log('Primeros 200 caracteres del HTML recibido:', htmlText.substring(0, 200));
+      
+      Swal.fire({
+        icon: 'error',
+        title: 'Error de comunicación',
+        text: 'Se recibió una respuesta inesperada del servidor.',
+        footer: 'Por favor, contacta al administrador si el problema persiste.',
+        confirmButtonText: 'Intentar de nuevo'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Simplemente cerrar el diálogo sin recargar
+          Swal.close();
         }
       });
+      return;
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al filtrar solicitudes');
+    }
+
+    const solicitudes = await response.json();
+    Swal.close();
+    actualizarTablaSolicitudes(solicitudes);
+
+  } catch (error) {
+    console.error('[SST] Error al filtrar solicitudes:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: error.message || 'No se pudieron filtrar las solicitudes.'
     });
+  }
+});
+    // Función para actualizar la tabla con los datos filtrados
+
+    function actualizarTablaSolicitudes(solicitudes) {
+    const tbody = $('#tablaSolicitudes');
+    tbody.empty();
+
+    if (solicitudes.length === 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin resultados',
+            text: 'No se encontraron solicitudes con los criterios especificados'
+        });
+        return;
+    }
+
+    solicitudes.forEach(solicitud => {
+        const estadoClass = solicitud.solicitud_estado === 'negada' ? 'badge-danger' : 'badge-success';
+        const estadoTexto = solicitud.solicitud_estado === 'negada' ? 'Negada' : 'Aprobado';
+
+        const row = `
+          <tr class="solicitud-item" data-id="${solicitud.solicitud_id}">
+            <td>${solicitud.solicitud_id}</td>
+            <td>${solicitud.empresa}</td>
+            <td>${solicitud.nit}</td>
+            <td>${solicitud.inicio_obra}</td>
+            <td>${solicitud.fin_obra}</td>
+            <td>${solicitud.dias_trabajo || '-'}</td>
+            <td>${solicitud.lugar}</td>
+            <td>${solicitud.labor || '-'}</td>
+            <td>${solicitud.interventor}</td>
+            <td>
+              ${solicitud.url_documento ? 
+                `<button class="btn btn-success btn-sm descargar-btn" data-url="${solicitud.url_documento}">Descargar Documentos</button>` : 
+                `<button class="btn btn-info btn-sm generar-btn" data-id="${solicitud.solicitud_id}">Generar Documentos</button>`}
+            </td>
+            <td>
+              <button class="btn btn-info btn-sm" onclick="verColaboradores('${solicitud.solicitud_id}')">Ver Colaboradores</button>
+            </td>
+            <td>
+              ${solicitud.solicitud_estado === 'pendiente' ? `
+                <form action="/aprobar-solicitud/${solicitud.solicitud_id}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-success btn-sm" id="aprobarBtn-${solicitud.solicitud_id}">Aprobar</button>
+                </form>
+                <button class="btn btn-danger btn-sm" data-toggle="modal" data-target="#modalNegar" 
+                        data-id="${solicitud.solicitud_id}" data-empresa="${solicitud.empresa}" data-nit="${solicitud.nit}">
+                  Negar
+                </button>
+              ` : `<span class="badge ${estadoClass}">${estadoTexto}</span>`}
+            </td>
+            <td>
+              <button class="btn btn-primary btn-sm ml-2 open-chat-btn" data-solicitud-id="${solicitud.solicitud_id}">
+                Conversar <span class="badge badge-light unread-count" data-solicitud-id="${solicitud.solicitud_id}">0</span>
+              </button>
+            </td>
+          </tr>
+        `;
+        tbody.append(row);
+    });
+
+    // Reasignar eventos a los botones dinámicos
+    $('.descargar-btn').off('click').on('click', function() {
+        const url = $(this).data('url');
+        descargarArchivo(url);
+    });
+
+    $('.generar-btn').off('click').on('click', function() {
+        const id = $(this).data('id');
+        generarDocumento(id);
+    });
+
+    // Reasignar eventos de chat
+    $('.open-chat-btn').off('click').on('click', function() {
+        const solicitudId = $(this).data('solicitud-id');
+        openChatModalSST(solicitudId);
+    });
+
+    // Reinicializar los badges de notificación
+    updateSSTNotificationBadges();
+}
 
     // Modal para negar solicitud
     $('#modalNegar').on('show.bs.modal', function(event) {
@@ -539,8 +805,6 @@ async function definirPlantilla(colaboradorId, solicitudId) {
       }
     }
 
-
-
     // Variables globales para el chat SST
 let currentSolicitudIdSST = null;
 let socketSST = null;
@@ -557,45 +821,122 @@ document.querySelectorAll('.open-chat-btn').forEach(btn => {
 // Abrir modal de chat
 async function openChatModalSST(solicitudId) {
   try {
-  currentSolicitudIdSST = solicitudId;
-  document.getElementById('chatSolicitudIdSST').textContent = solicitudId;
-  document.getElementById('chatModalSST').classList.remove('hidden');
+    currentSolicitudIdSST = solicitudId;
+    document.getElementById('chatSolicitudIdSST').textContent = solicitudId;
+    document.getElementById('chatModalSST').classList.remove('hidden');
 
-  // Iniciar WebSocket con protocolo seguro cuando es necesario
-  if (!socketSST || socketSST.readyState !== WebSocket.OPEN) {
-    // Detectar si estamos en HTTPS para usar WSS o WS
+    // Cerrar WebSocket existente si hay uno
+    if (socketSST && socketSST.readyState === WebSocket.OPEN) {
+      socketSST.close();
+    }
+
+    // Iniciar nuevo WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/chat/sst`;
     
-    console.log(`[SST] Conectando a WebSocket: ${wsUrl}`);
     socketSST = new WebSocket(wsUrl);
     
     socketSST.onopen = function() {
-      console.log('[SST] WebSocket conectado correctamente');
+      console.log('🔌 WebSocket SST conectado');
+      
+      // Obtener ID de usuario, con verificación
+      const sstUserId = getSSUserId();
+      
+      if (!sstUserId || sstUserId === 'undefined') {
+        console.error('❌ ERROR: ID de usuario no válido al identificarse:', sstUserId);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error de conexión',
+          text: 'No se pudo establecer su identidad. Por favor recargue la página.'
+        });
+        return;
+      }
+      
+      // Identificar al cliente CON USUARIO ID
+      console.log('🔑 Enviando identificación con usuario:', sstUserId);
+      
+      socketSST.send(JSON.stringify({
+        type: 'identify',
+        userId: sstUserId,
+        role: 'sst',
+        solicitudId: solicitudId
+      }));
     };
     
     socketSST.onmessage = function(event) {
-      const message = JSON.parse(event.data);
-      console.log("[SST] Mensaje recibido desde WebSocket:", message);
-      
-      // Solo procesar mensajes para la solicitud actual y de tipo SST
-      if (message.solicitudId === currentSolicitudIdSST && message.type === 'sst') {
-        // Mostrar el mensaje en el chat
-        displayMessageSST(message);
+      try {
+        const message = JSON.parse(event.data);
+        console.log("[SST] Mensaje recibido desde WebSocket:", message);
         
-        // Importante: Solo notificar si el mensaje NO fue enviado por este usuario
-        // y si la ventana no está visible
-        const sstUserId = getSSUserId();
-        if (parseInt(message.usuario_id) !== parseInt(sstUserId) && document.hidden) {
-          console.log("[SST] Enviando notificación de nuevo mensaje recibido");
-          notifyNewMessageSST(message);
+        if (message.type === 'identify_confirmation') return;
+        
+        if (message.type === 'status_update') {
+          const { tempId, status, messageId } = message;
+          
+          // Primero buscar por tempId
+          let existingMessage = document.querySelector(`.chat-message[data-message-id="${tempId}"]`);
+          
+          // Si no encontramos por tempId y tenemos messageId, buscar por messageId
+          if (!existingMessage && messageId) {
+            existingMessage = document.querySelector(`.chat-message[data-message-id="${messageId}"]`);
+          }
+          
+          if (existingMessage) {
+            // Si tenemos un messageId, actualizar el data-message-id
+            if (messageId) {
+              existingMessage.dataset.messageId = messageId;
+            }
+            
+            // Actualizar el estado del mensaje
+            updateMessageStatusSST(messageId || tempId, status);
+            
+            // Guardar la relación tempId -> messageId
+            if (tempId && messageId) {
+              sentMessages.set(tempId, messageId);
+            }
+            
+            // Registrar que el mensaje ya está en pantalla
+            if (messageId) {
+              displayedMessages.add(messageId);
+            }
+          }
+          return;
         }
-      }
-      
-      // Actualizar el contador de mensajes no leídos para esta solicitud
-      // pero solo si la solicitud no está abierta actualmente
-      if (message.solicitudId !== currentSolicitudIdSST || document.hidden) {
-        updateUnreadCountSST(message.solicitudId);
+
+        // Si es un mensaje de error
+        if (message.type === 'error') {
+            console.error('[SST] Error del servidor:', message.error);
+            return;
+        }
+        
+        // Solo procesar mensajes para la solicitud actual y que NO sean del remitente actual
+        const sstUserId = getSSUserId();
+        if (message.solicitudId === currentSolicitudIdSST && 
+            parseInt(message.usuario_id) !== parseInt(sstUserId)) {
+            
+            // Normalizar el mensaje para displayMessageSST
+            const messageToDisplay = {
+                id: message.id,
+                usuario_id: message.usuario_id,
+                content: message.content,
+                created_at: message.created_at,
+                leido: message.leido,
+                isSender: false // Siempre falso porque son mensajes recibidos
+            };
+            
+            // Mostrar el mensaje en el chat
+            displayMessageSST(messageToDisplay);
+            
+            // Notificar si es necesario
+            if (document.hidden) {
+                notifyNewMessageSST(messageToDisplay);
+            }
+            
+            // Actualizar contador
+            updateUnreadCountSST(message.solicitudId);
+        }
+      } catch (error) {
+        console.error('[SST] Error al procesar mensaje del WebSocket:', error);
       }
     };
     
@@ -606,17 +947,16 @@ async function openChatModalSST(solicitudId) {
     socketSST.onerror = function(error) {
       console.error('Error en WebSocket SST:', error);
     };
-  }
-    
+
     // Mostrar indicador de carga inicial
     const chatMessages = document.getElementById('chatMessagesSST');
     chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-600"></div></div>';
 
-  // Cargar los últimos 20 mensajes
-  await loadInitialMessagesSST(solicitudId);
-  
-  // Marcar mensajes como leídos
-  await markMessagesAsReadSST(solicitudId);
+    // Cargar los últimos 20 mensajes
+    await loadInitialMessagesSST(solicitudId);
+    
+    // Marcar mensajes como leídos
+    await markMessagesAsReadSST(solicitudId);
 
     // Asegurar que se realice el scroll al final
     setTimeout(() => {
@@ -761,17 +1101,16 @@ async function loadMoreMessagesSST(solicitudId) {
   }
 }
 
-// Función auxiliar para displayMessageSST cuando se proporciona un contenedor
+// Función para mostrar mensaje en el chat SST
 function displayMessageSST(message, container = null) {
   const chatMessages = document.getElementById('chatMessagesSST');
   const messageDiv = container || document.createElement('div');
   
-  console.log("Mostrando mensaje:", message);
+  console.log("🔍 Mostrando mensaje:", message);
   
   // IMPORTANTE: Determinar explícitamente si es un mensaje enviado por el usuario actual
   const sstUserId = getSSUserId();
   const isSender = parseInt(message.usuario_id) === parseInt(sstUserId);
-  console.log(`El mensaje es de: ${message.usuario_id}, Usuario SST: ${sstUserId}, isSender: ${isSender}`);
   
   // Aplicar clase según el remitente
   messageDiv.className = `chat-message p-3 my-2 rounded-lg ${isSender ? 
@@ -781,45 +1120,36 @@ function displayMessageSST(message, container = null) {
   // Extraer correctamente el contenido del mensaje
   let messageContent = '';
   
-  if (typeof message.content === 'string') {
-    try {
-      // Intentar analizar si es un JSON
-      const jsonContent = JSON.parse(message.content);
-      messageContent = jsonContent.text || jsonContent.value || JSON.stringify(jsonContent);
-    } catch (e) {
-      // Si no es un JSON válido, usar el string directamente
-      messageContent = message.content;
+  // Nueva lógica mejorada para extraer el contenido del mensaje
+  if (message.content) {
+    if (typeof message.content === 'string') {
+      try {
+        const parsed = JSON.parse(message.content);
+        messageContent = parsed.text || parsed.content || parsed.value || message.content;
+      } catch (e) {
+        messageContent = message.content;
+      }
+    } else if (typeof message.content === 'object') {
+      messageContent = message.content.text || message.content.content || message.content.value || JSON.stringify(message.content);
     }
-  } else if (message.content && message.content.text) {
-    messageContent = message.content.text;
-  } else if (message.content && typeof message.content === 'object') {
-    messageContent = message.content.text || message.content.value || JSON.stringify(message.content);
+  } else if (message.text) {
+    messageContent = message.text;
   } else {
-    messageContent = String(message.content || "Mensaje sin contenido");
+    messageContent = "Mensaje sin contenido";
   }
   
-  // IMPORTANTE: Asegurarnos de que created_at sea una fecha válida
-  let messageDate;
+  // Manejar la fecha del mensaje
+  let messageDate = new Date();
   try {
-    // Si es un string, intentar crear un objeto Date
-    if (typeof message.created_at === 'string') {
-      messageDate = new Date(message.created_at);
-      // Verificar si la fecha es válida
-      if (isNaN(messageDate.getTime())) {
-        // Si no es válida, usar la fecha actual
-        console.warn('Fecha inválida en mensaje:', message.created_at);
-        messageDate = new Date();
-      }
-    } else {
-      // Si no es un string, usar la fecha actual
+    messageDate = message.created_at ? new Date(message.created_at) : new Date();
+    if (isNaN(messageDate.getTime())) {
       messageDate = new Date();
     }
   } catch (error) {
     console.error('Error al procesar fecha:', error);
-    messageDate = new Date();
   }
   
-  // Formatear fecha y hora utilizando opciones para garantizar consistencia
+  // Formatear fecha y hora
   const formattedDate = messageDate.toLocaleDateString('es-ES', {
     day: '2-digit', 
     month: '2-digit', 
@@ -831,15 +1161,14 @@ function displayMessageSST(message, container = null) {
     minute: '2-digit'
   });
   
-  // Almacenar la fecha original como atributo de datos para futuras referencias
-  messageDiv.dataset.timestamp = messageDate.toISOString();
-  
   // Determinar el indicador de estado para mensajes enviados
   let statusIcon = '';
   if (isSender) {
-    if (message.id === 'error') {
-      statusIcon = '<span class="status-icon-error">✓</span>';
-    } else if (message.id && message.id.toString().startsWith('temp-')) {
+    // Convertir message.id a string para evitar el error
+    const messageIdStr = String(message.id || '');
+    if (messageIdStr === 'error') {
+      statusIcon = '<span class="status-icon-error">✗</span>';
+    } else if (messageIdStr.startsWith('temp-')) {
       statusIcon = '<span class="status-icon-sent">✓</span>';
     } else if (message.leido) {
       statusIcon = '<span class="status-icon-read">✓✓</span>';
@@ -861,13 +1190,15 @@ function displayMessageSST(message, container = null) {
   messageDiv.dataset.userId = message.usuario_id;
   messageDiv.dataset.isSender = isSender;
   
-  // Insertar en orden cronológico
-  chatMessages.appendChild(messageDiv);
-  
-  // Auto-scroll si estamos cerca del fondo
-  const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
-  if (isNearBottom) {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+  // Si no es un contenedor existente, agregar al chat
+  if (!container) {
+    chatMessages.appendChild(messageDiv);
+    
+    // Auto-scroll si estamos cerca del fondo
+    const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+    if (isNearBottom) {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
   }
 }
 
@@ -881,7 +1212,7 @@ function updateMessageStatusSST(messageId, status) {
   
   let statusIcon = '';
   if (status === 'error') {
-    statusIcon = '<span class="status-icon-error">✓</span>';
+    statusIcon = '<span class="status-icon-error">✗</span>';
   } else if (status === 'sent') {
     statusIcon = '<span class="status-icon-sent">✓</span>';
   } else if (status === 'delivered') {
@@ -891,91 +1222,103 @@ function updateMessageStatusSST(messageId, status) {
   }
   
   // Extraer la fecha/hora y reemplazar el indicador manteniendo la fecha y hora
-  const timeText = statusContainer.textContent.trim().split(' ').slice(0, 2).join(' ');
+  const timeText = statusContainer.textContent.trim().split(' ').slice(0, -1).join(' ');
   statusContainer.innerHTML = `${timeText} ${statusIcon}`;
 }
 
 // Enviar mensaje
 window.sendMessageSST = function() {
-  const input = document.getElementById('chatInputSST');
-  const content = input.value.trim();
-  if (!content || !currentSolicitudIdSST || !socketSST) return;
+    const input = document.getElementById('chatInputSST');
+    const content = input.value.trim();
+    if (!content || !currentSolicitudIdSST || !socketSST) return;
 
-  const sstUserId = getSSUserId();
-  const tempId = 'temp-' + Date.now();
-  const timestamp = new Date().toISOString(); // Timestamp ISO para consistencia
-  
-  // Crear mensaje local
-  const localMessage = {
-    id: tempId,
-    usuario_id: sstUserId,
-    content: content,
-    created_at: timestamp, // Usar formato ISO consistente
-    isSender: true
-  };
-  
-  // Mostrar mensaje inmediatamente
-  displayMessageSST(localMessage);
-  
-  // Enviar mensaje al servidor
-  try {
-    // Preparar mensaje para enviar
-    const message = {
-      solicitudId: currentSolicitudIdSST,
-      type: 'sst',
-      content: content,
-      userId: sstUserId,
-      tempId: tempId,
-      timestamp: timestamp // Incluir timestamp en el mensaje
+    const sstUserId = getSSUserId();
+    const tempId = 'temp-' + Date.now();
+    const timestamp = new Date().toISOString();
+    
+    // Mostrar mensaje local inmediatamente
+    const localMessage = {
+        id: tempId,
+        usuario_id: sstUserId,
+        content: content,
+        created_at: timestamp,
+        isSender: true
     };
     
-    // Enviar solo si el socket está abierto
-    if (socketSST.readyState === WebSocket.OPEN) {
-      socketSST.send(JSON.stringify(message));
-      
-      // Actualizar a estado enviado después de corto tiempo
-      setTimeout(() => {
-        updateMessageStatusSST(tempId, 'sent');
-      }, 500);
-      
-      // Simular actualización a entregado
-      setTimeout(() => {
-        updateMessageStatusSST(tempId, 'delivered');
-      }, 1500);
-    } else {
-      console.error('[SST] WebSocket no está abierto. Estado:', socketSST.readyState);
-      // Marcar mensaje con error
-      updateMessageStatusSST(tempId, 'error');
-      
-      // Intentar reconectar
-      iniciarSocketSST();
+    displayMessageSST(localMessage);
+    
+    // Enviar mensaje al servidor
+    try {
+        const message = {
+            solicitudId: currentSolicitudIdSST,
+            type: 'sst',
+            content: content,
+            userId: sstUserId,
+            tempId: tempId,
+            timestamp: timestamp
+        };
+        
+        if (socketSST.readyState === WebSocket.OPEN) {
+            socketSST.send(JSON.stringify(message));
+            
+            // Actualizar estado a enviado
+            setTimeout(() => {
+                updateMessageStatusSST(tempId, 'sent');
+            }, 100);
+            
+            // Actualizar estado a entregado
+            setTimeout(() => {
+                updateMessageStatusSST(tempId, 'delivered');
+            }, 1000);
+        } else {
+            console.error('[SST] WebSocket no está abierto. Estado:', socketSST.readyState);
+            updateMessageStatusSST(tempId, 'error');
+            iniciarSocketSST();
+        }
+    } catch (error) {
+        console.error('[SST] Error al enviar mensaje:', error);
+        updateMessageStatusSST(tempId, 'error');
     }
-  } catch (error) {
-    console.error('[SST] Error al enviar mensaje:', error);
-    // Marcar mensaje con error
-    updateMessageStatusSST(tempId, 'error');
-  }
-  
-  // Limpiar input y hacer scroll
-  input.value = '';
-  const chatMessages = document.getElementById('chatMessagesSST');
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // Limpiar input y hacer scroll
+    input.value = '';
+    const chatMessages = document.getElementById('chatMessagesSST');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 };
 
 // Obtener el ID del usuario SST actual
 function getSSUserId() {
-  // Como sabemos que el ID del usuario SST es 3 (según los logs)
-  // Este valor debe coincidir con tu usuario SST en la base de datos
-  const sstUserId = 3;
-  
-  console.log("Usuario SST ID:", sstUserId);
-  return sstUserId;
+    // Intentar obtener el ID de la variable global
+    if (window.sstUserId && window.sstUserId !== 'undefined') {
+        return window.sstUserId;
+    }
+    
+    // Intentar obtener de un atributo data en algún elemento
+    const userIdElement = document.querySelector('[data-sst-user-id]');
+    if (userIdElement && userIdElement.dataset.sstUserId) {
+        return userIdElement.dataset.sstUserId;
+    }
+    
+    // Intentar obtener de un meta tag
+    const metaTag = document.querySelector('meta[name="sst-user-id"]');
+    if (metaTag && metaTag.getAttribute('content')) {
+        return metaTag.getAttribute('content');
+    }
+    
+    console.error('❌ No se pudo obtener un ID de usuario SST válido');
+    return null;
 }
 
 // Modificar updateUnreadCountSST para usar solo el badge externo (rojo)
 async function updateUnreadCountSST(solicitudId) {
   try {
     const sstUserId = getSSUserId();
+    
+    if (!sstUserId || sstUserId === 'undefined') {
+      console.error('❌ Error al actualizar contador: userId no válido');
+      return;
+    }
+    
     console.log(`[SST] Actualizando contadores para solicitud ${solicitudId}, usuario SST: ${sstUserId}`);
     
     const response = await fetch(`/api/chat/${solicitudId}/sst/unread?userId=${sstUserId}`);
@@ -1073,6 +1416,11 @@ async function markMessagesAsReadSST(solicitudId) {
   try {
     const sstUserId = getSSUserId();
     
+    if (!sstUserId || sstUserId === 'undefined') {
+      console.error('❌ Error al marcar mensajes como leídos: userId no válido');
+      return;
+    }
+    
     console.log(`[SST] Marcando mensajes como leídos para solicitud ${solicitudId}, usuario ${sstUserId}`);
     
     const response = await fetch(`/api/chat/${solicitudId}/sst/mark-read`, { 
@@ -1138,7 +1486,22 @@ async function loadInitialMessagesSST(solicitudId) {
   
   try {
     const sstUserId = getSSUserId();
-  console.log("Usuario SST ID:", sstUserId);
+    console.log("Usuario SST ID:", sstUserId);
+    
+    // Intentar inicializar el chat si es necesario
+    try {
+      const initResponse = await fetch('/api/chat/iniciar/' + solicitudId + '/sst', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: sstUserId })
+      });
+      
+      if (initResponse.ok) {
+        console.log('Chat SST inicializado correctamente');
+      }
+    } catch (e) {
+      console.log('Error al inicializar chat SST (no crítico):', e);
+    }
     
     const response = await fetch(`/api/chat/${solicitudId}/sst?limit=20&userId=${sstUserId}`);
     
@@ -1182,7 +1545,7 @@ async function loadInitialMessagesSST(solicitudId) {
     }
   } catch (error) {
     console.error('Error al cargar mensajes iniciales:', error);
-    chatMessages.innerHTML = '<div class="text-center text-red-500 p-3">Error al cargar mensajes. Por favor intente nuevamente.</div>';
+    chatMessages.innerHTML = '<div class="text-center text-red-500 p-3">Error al cargar mensajes. <button onclick="loadInitialMessagesSST(\''+solicitudId+'\')" class="underline">Reintentar</button></div>';
   }
 }
 
@@ -1192,6 +1555,25 @@ document.addEventListener('DOMContentLoaded', function() {
   if (chatMessagesSST) {
     chatMessagesSST.addEventListener('scroll', scrollHandlerSST);
   }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const filtrosContent = document.getElementById('filtrosCollapse');
+    const toggleButton = document.getElementById('toggleFilters');
+    const toggleText = document.getElementById('toggleText');
+    let filtrosVisible = true;
+
+    toggleButton.addEventListener('click', function() {
+        filtrosVisible = !filtrosVisible;
+        
+        if (filtrosVisible) {
+            filtrosContent.style.display = 'block';
+            toggleText.textContent = 'Ocultar filtros';
+        } else {
+            filtrosContent.style.display = 'none';
+            toggleText.textContent = 'Mostrar filtros';
+        }
+    });
 });
   </script>
 </body>

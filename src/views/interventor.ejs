@@ -455,7 +455,7 @@
                   <% } %>
                   <td>
                     <button class="btn btn-primary btn-sm ml-2 open-chat-btn-interventor" data-solicitud-id="<%= accion.solicitud_id %>">
-                      Conversar <span class="badge badge-light unread-count" data-solicitud-id="<%= accion.solicitud_id %>">0</span>
+                      Conversar  
                     </button>
                   </td>
                 </tr>
@@ -1497,10 +1497,28 @@
      * Obtiene el ID del usuario interventor (ajustar según autenticación real).
      * @returns {number} ID del usuario interventor.
      */
-    function getInterventorUserId() {
-      return 2; // Reemplazar con lógica de autenticación real, ej: window.currentUserId
-    }
+     function getInterventorUserId() {
+  // Intentar obtener el ID de la variable directamente del backend
+  const userId = '<%= userId %>';
+  if (userId && userId !== 'undefined') {
+    return userId;
+  }
   
+  // Intentar obtener de un atributo data en algún elemento
+  const userIdElement = document.querySelector('[data-interventor-user-id]');
+  if (userIdElement && userIdElement.dataset.interventorUserId) {
+    return userIdElement.dataset.interventorUserId;
+  }
+  
+  // Intentar obtener de un meta tag
+  const metaTag = document.querySelector('meta[name="interventor-user-id"]');
+  if (metaTag && metaTag.getAttribute('content')) {
+    return metaTag.getAttribute('content');
+  }
+  
+  console.error('❌ No se pudo obtener un ID de usuario interventor válido');
+  return null;
+}  
     /**
      * Abre el modal de chat para una solicitud específica y solicita permisos de notificación.
      * @param {string} solicitudId - ID de la solicitud.
@@ -1526,48 +1544,111 @@
           const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           socketInterventor = new WebSocket(`${protocol}//${window.location.host}/ws/chat/interventor`);
   
-          socketInterventor.onopen = () => console.log('[Interventor] WebSocket conectado');
-          socketInterventor.onmessage = event => {
-            const message = JSON.parse(event.data);
+          socketInterventor.onopen = function() {
+            console.log('[Interventor] WebSocket conectado');
             
-            // Si es una actualización de estado
-            if (message.type === 'status_update') {
-                const messageDiv = document.querySelector(`[data-message-id="${message.messageId}"]`);
-                if (messageDiv) {
-                    const statusSpan = messageDiv.querySelector('.status');
-                    if (statusSpan) {
-                        switch (message.status) {
-                            case 'delivered':
-                                statusSpan.innerHTML = '<span class="status-icon-delivered text-gray-400">✓✓</span>';
-                                break;
-                            case 'read':
-                                statusSpan.innerHTML = '<span class="status-icon-read text-blue-400">✓✓</span>';
-                                break;
-                        }
+            // Obtener ID de usuario con verificación de errores
+            const interventorUserId = getInterventorUserId();
+            
+            if (!interventorUserId || interventorUserId === 'undefined') {
+              console.error('❌ ERROR: ID de usuario no válido al identificarse:', interventorUserId);
+              Swal.fire({
+                icon: 'error',
+                title: 'Error de conexión',
+                text: 'No se pudo establecer su identidad. Por favor recargue la página.'
+              });
+              return;
+            }
+            
+            // Identificar al cliente con el ID correcto y el rol
+            console.log('🔑 Enviando identificación con usuario:', interventorUserId);
+            socketInterventor.send(JSON.stringify({
+              type: 'identify',
+              userId: interventorUserId,
+              role: 'interventor',
+              solicitudId: solicitudId
+            }));
+          };
+          socketInterventor.onmessage = function(event) {
+            try {
+              const message = JSON.parse(event.data);
+              console.log("[Interventor] Mensaje recibido desde WebSocket:", message);
+              
+              // Ignorar mensajes de confirmación de identificación
+              if (message.type === 'identify_confirmation') {
+                console.log('✅ Identificación confirmada');
+                return;
+              }
+              
+              // Si es una actualización de estado
+              if (message.type === 'status_update') {
+                // Primero buscar por tempId o messageId
+                let messageElement = document.querySelector(`[data-message-id="${message.tempId || message.messageId}"]`);
+                
+                if (messageElement) {
+                  // Actualizar ID si necesario
+                  if (message.messageId && message.tempId) {
+                    messageElement.setAttribute('data-message-id', message.messageId);
+                  }
+                  
+                  // Actualizar estado
+                  const statusElement = messageElement.querySelector('.status');
+                  if (statusElement) {
+                    let statusIcon = '';
+                    
+                    switch (message.status) {
+                      case 'sent':
+                        statusIcon = '<span class="status-icon-sent text-gray-400">✓</span>';
+                        break;
+                      case 'delivered':
+                        statusIcon = '<span class="status-icon-delivered text-gray-400">✓✓</span>';
+                        break;
+                      case 'read':
+                        statusIcon = '<span class="status-icon-read text-blue-400">✓✓</span>';
+                        break;
+                      case 'error':
+                        statusIcon = '<span class="status-icon-error text-red-500">✗</span>';
+                        break;
                     }
+                    
+                    statusElement.innerHTML = statusIcon;
+                  }
                 }
                 return;
-            }
-  
-            // Para mensajes nuevos
-            if (message.solicitudId === currentSolicitudIdInterventor) {
-                displayMessageInterventor(message);
-                if (document.hidden) {
-                    notifyNewMessageInterventor(message);
-                }
+              }
+
+              // Para mensajes nuevos de chat
+              if (message.solicitudId === currentSolicitudIdInterventor) {
+                // Determinar si es mensaje propio o recibido
+                const interventorUserId = getInterventorUserId();
+                const isSenderMessage = message.usuario_id === interventorUserId;
                 
-                // Enviar confirmación de lectura si el chat está abierto
-                if (!document.hidden && socketInterventor.readyState === WebSocket.OPEN) {
+                displayMessageInterventor(message);
+                
+                if (!isSenderMessage) {
+                  // Si el mensaje no es del usuario actual y la ventana está oculta, mostrar notificación
+                  if (document.hidden) {
+                    notifyNewMessageInterventor(message);
+                  }
+                  
+                  // Enviar confirmación de lectura si el chat está abierto
+                  if (!document.hidden && socketInterventor.readyState === WebSocket.OPEN) {
                     socketInterventor.send(JSON.stringify({
-                        type: 'status_update',
-                        messageId: message.id,
-                        status: 'read',
-                        solicitudId: message.solicitudId,
-                        chatType: 'interventor'
+                      type: 'status_update',
+                      messageId: message.id,
+                      status: 'read',
+                      solicitudId: message.solicitudId,
+                      chatType: 'interventor'
                     }));
+                  }
                 }
+              }
+              
+              // Actualizar contador de mensajes no leídos para esta solicitud
+              updateUnreadCountInterventor(message.solicitudId);
+            } catch (error) {
+              console.error('[Interventor] Error al procesar mensaje del WebSocket:', error);
             }
-            updateUnreadCountInterventor(message.solicitudId);
           };
           socketInterventor.onerror = error => console.error('[Interventor] Error en WebSocket:', error);
           socketInterventor.onclose = () => console.log('[Interventor] WebSocket cerrado');
@@ -1599,32 +1680,69 @@
      * Envía un mensaje al WebSocket y lo muestra localmente con estado "enviado".
      */
     function sendMessageInterventor() {
-        const input = document.getElementById('chatInputInterventor');
-        const content = input.value.trim();
-        if (!content || !currentSolicitudIdInterventor || !socketInterventor) return;
-  
-        const interventorUserId = getInterventorUserId();
-        const messageId = Date.now().toString(); // ID temporal para seguimiento
+      const input = document.getElementById('chatInputInterventor');
+      const content = input.value.trim();
+      
+      if (!content || !currentSolicitudIdInterventor || !socketInterventor) {
+        console.warn('No se puede enviar mensaje: contenido vacío o no hay conexión');
+        return;
+      }
+
+      const interventorUserId = getInterventorUserId();
+      if (!interventorUserId) {
+        console.error('Error: No se pudo obtener el ID del usuario');
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'No se pudo enviar el mensaje. Por favor recargue la página e intente nuevamente.'
+        });
+        return;
+      }
+      
+      const tempId = 'temp-' + Date.now();
+      const timestamp = new Date().toISOString();
+      
+      // Mostrar mensaje local inmediatamente
+      const localMessage = {
+        id: tempId,
+        usuario_id: interventorUserId,
+        content: content,
+        created_at: timestamp,
+        isSender: true
+      };
+      
+      displayMessageInterventor(localMessage, true);
+      
+      // Enviar mensaje al servidor
+      try {
         const message = {
-            id: messageId,
-            solicitudId: currentSolicitudIdInterventor,
-            type: 'interventor',
-            content,
-            userId: interventorUserId.toString(),
-            timestamp: new Date().toISOString(),
-            leido: false,
-            isLocal: true
+          solicitudId: currentSolicitudIdInterventor,
+          type: 'interventor',
+          content: content,
+          userId: interventorUserId,
+          tempId: tempId,
+          timestamp: timestamp
         };
-  
+        
         if (socketInterventor.readyState === WebSocket.OPEN) {
-            socketInterventor.send(JSON.stringify(message));
-            displayMessageInterventor({ 
-                ...message, 
-                usuario_id: interventorUserId,
-                created_at: message.timestamp
-            }, true);
-            input.value = '';
+          socketInterventor.send(JSON.stringify(message));
+          
+          // Actualizar estado progresivamente
+          setTimeout(() => updateMessageStatusInterventor(tempId, 'sent'), 100);
+          setTimeout(() => updateMessageStatusInterventor(tempId, 'delivered'), 1000);
+        } else {
+          updateMessageStatusInterventor(tempId, 'error');
+          console.error('[Interventor] WebSocket no está abierto. Estado:', socketInterventor.readyState);
         }
+      } catch (error) {
+        console.error('[Interventor] Error al enviar mensaje:', error);
+        updateMessageStatusInterventor(tempId, 'error');
+      }
+      
+      // Limpiar input y hacer scroll
+      input.value = '';
+      const chatMessages = document.getElementById('chatMessagesInterventor');
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   
     /**
@@ -1680,7 +1798,7 @@
     function displayMessageInterventor(message, isLocal = false) {
       const chatMessages = document.getElementById('chatMessagesInterventor');
       const interventorUserId = getInterventorUserId();
-      const isSender = parseInt(message.usuario_id) === interventorUserId;
+      const isSender = parseInt(message.usuario_id) === parseInt(interventorUserId);
   
       // Si el mensaje ya existe, actualizamos su estado
       if (message.id && displayedMessagesInterventor.has(message.id)) {
@@ -1701,7 +1819,14 @@
       let messageContent = '';
       try {
         messageContent = typeof message.content === 'string' ? 
-          (JSON.parse(message.content).text || message.content) : 
+          (() => {
+            try {
+              const parsed = JSON.parse(message.content);
+              return parsed.text || message.content;
+            } catch (e) {
+              return message.content;
+            }
+          })() : 
           (message.content.text || message.content.value || JSON.stringify(message.content));
       } catch (e) {
         messageContent = message.content || 'Mensaje inválido';
@@ -1821,6 +1946,33 @@
       window.contadoresInterval = setInterval(() => {
         document.querySelectorAll('.open-chat-btn-interventor').forEach(btn => updateUnreadCountInterventor(btn.dataset.solicitudId));
       }, 5000);
+    }
+
+    // Añadir esta nueva función
+    function updateMessageStatusInterventor(messageId, status) {
+      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (!messageElement) return;
+      
+      const statusElement = messageElement.querySelector('.status');
+      if (!statusElement) return;
+      
+      let statusIcon = '';
+      switch (status) {
+        case 'sent':
+          statusIcon = '<span class="status-icon-sent text-gray-400">✓</span>';
+          break;
+        case 'delivered':
+          statusIcon = '<span class="status-icon-delivered text-gray-400">✓✓</span>';
+          break;
+        case 'read':
+          statusIcon = '<span class="status-icon-read text-blue-400">✓✓</span>';
+          break;
+        case 'error':
+          statusIcon = '<span class="status-icon-error text-red-500">✗</span>';
+          break;
+      }
+      
+      statusElement.innerHTML = statusIcon;
     }
   </script>
 

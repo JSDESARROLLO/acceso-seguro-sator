@@ -8,7 +8,7 @@ router.get('/api/sst/plantilla-ss/:colaboradorId', controller.getPlantillaSS);
 router.post('/api/sst/plantilla-ss', controller.guardarOActualizarPlantillaSS);
 router.put('/api/sst/plantilla-ss/:id', controller.guardarOActualizarPlantillaSS);
 router.get('/api/sst/historial-cursos/:colaboradorId', controller.getHistorialCursos);
-router.get('/api/filtrar-solicitudes-sst', controller.filtrarSolicitudesSst);
+router.post('/api/filtrar-solicitudes-sst', controller.filtrarSolicitudesSst);
 
 // Verificación de que la función 'vistaSst' está definida en el controlador
 console.log('Verificando controller.vistaSst...');

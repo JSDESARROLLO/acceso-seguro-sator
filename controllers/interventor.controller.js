@@ -115,6 +115,7 @@ controller.vistaInterventor = async (req, res) => {
       lugares: lugares.map(l => l.nombre_lugar), // Pasar solo los nombres de los lugares
       title: 'Interventor - Grupo Argos',
       username,
+      userId: id,
       format
     });
   } catch (err) {
@@ -526,24 +527,32 @@ controller.obtenerHistorialRegistros = async (req, res) => {
 };
 
 controller.filtrarSolicitudes = async (req, res) => {
+  console.log('[DEBUG] Iniciando filtrarSolicitudes');
   const token = req.cookies.token;
 
   if (!token) {
+    console.log('[DEBUG] No se encontró token');
     return res.status(401).json({ message: 'No autorizado' });
   }
 
   try {
+    console.log('[DEBUG] Verificando token');
     const decoded = jwt.verify(token, SECRET_KEY);
     const { role, id } = decoded;
+    console.log('[DEBUG] Role:', role, 'ID:', id);
 
+    console.log('[DEBUG] Consultando información del interventor');
     const [userInterventor] = await connection.execute('SELECT id, username FROM users WHERE id = ?', [id]);
     const username = userInterventor[0].username;
+    console.log('[DEBUG] Username:', username);
 
     if (role !== 'interventor') {
+      console.log('[DEBUG] Rol no autorizado:', role);
       return res.status(403).json({ message: 'Acceso denegado' });
     }
 
     const { id: filtroId, cedula, interventor, estado, fechaInicio, fechaFin, nit, empresa, lugar, vigencia, idColaborador } = req.body;
+    console.log('[DEBUG] Filtros recibidos:', { filtroId, cedula, interventor, estado, fechaInicio, fechaFin, nit, empresa, lugar, vigencia, idColaborador });
 
     let query = `
       SELECT DISTINCT
@@ -581,61 +590,76 @@ controller.filtrarSolicitudes = async (req, res) => {
         (a.accion IN ('aprobada', 'pendiente') OR s.estado IN ('en labor', 'labor detenida'))
     `;
     const params = [];
+    console.log('[DEBUG] Query base construida');
 
     // Filtros dinámicos
     if (filtroId) {
       query += ' AND a.solicitud_id = ?';
       params.push(filtroId);
+      console.log('[DEBUG] Añadido filtro ID:', filtroId);
     }
     if (idColaborador) {
       query += ' AND c.id = ?';
       params.push(idColaborador);
+      console.log('[DEBUG] Añadido filtro colaborador:', idColaborador);
     }
     if (cedula) {
       query += ' AND c.cedula LIKE ?';
       params.push(`%${cedula}%`);
+      console.log('[DEBUG] Añadido filtro cédula:', cedula);
     }
     if (interventor) {
       query += ' AND us.username LIKE ?';
       params.push(`%${interventor}%`);
+      console.log('[DEBUG] Añadido filtro interventor:', interventor);
     }
     if (estado) {
       if (estado === 'Aprobado por SST') {
         query += ' AND s.estado = "aprobada" AND a.accion = "pendiente"';
+        console.log('[DEBUG] Añadido filtro estado: Aprobado por SST');
       } else if (estado === 'Pendiente Ingreso') {
         query += ' AND s.estado = "aprobada" AND a.accion = "aprobada"';
+        console.log('[DEBUG] Añadido filtro estado: Pendiente Ingreso');
       } else {
         query += ' AND s.estado = ?';
         params.push(estado);
+        console.log('[DEBUG] Añadido filtro estado:', estado);
       }
     }
     if (fechaInicio) {
       query += ' AND s.inicio_obra >= ?';
       params.push(fechaInicio);
+      console.log('[DEBUG] Añadido filtro fecha inicio:', fechaInicio);
     }
     if (fechaFin) {
       query += ' AND s.fin_obra <= ?';
       params.push(fechaFin);
+      console.log('[DEBUG] Añadido filtro fecha fin:', fechaFin);
     }
     if (nit) {
       query += ' AND s.nit LIKE ?';
       params.push(`%${nit}%`);
+      console.log('[DEBUG] Añadido filtro NIT:', nit);
     }
     if (empresa) {
       query += ' AND s.empresa LIKE ?';
       params.push(`%${empresa}%`);
+      console.log('[DEBUG] Añadido filtro empresa:', empresa);
     }
     if (lugar) {
       query += ' AND s.lugar = ?';
       params.push(lugar);
+      console.log('[DEBUG] Añadido filtro lugar:', lugar);
     }
     if (vigencia) {
       query += ' AND (CASE WHEN DATE(s.fin_obra) < CURDATE() THEN "Vencida" ELSE "Vigente" END) = ?';
       params.push(vigencia);
+      console.log('[DEBUG] Añadido filtro vigencia:', vigencia);
     }
     if (username !== "COA") {
       query += ' AND s.interventor_id = ?';
       params.push(id);
+      console.log('[DEBUG] Añadido filtro por interventor_id:', id);
     }
 
     // Si hay algún filtro específico, entonces incluimos las negadas
@@ -644,11 +668,16 @@ controller.filtrarSolicitudes = async (req, res) => {
         "(a.accion IN ('aprobada', 'pendiente')", 
         "(a.accion IN ('aprobada', 'pendiente', 'negada')"
       );
+      console.log('[DEBUG] Modificada query para incluir acciones negadas');
     }
 
     query += ' ORDER BY a.id DESC';
+    console.log('[DEBUG] Query final:', query);
+    console.log('[DEBUG] Parámetros:', params);
 
     const [acciones] = await connection.execute(query, params);
+    console.log('[DEBUG] Número de resultados:', acciones.length);
+
     res.json(acciones);
   } catch (err) {
     console.error('[ERROR] Error al filtrar solicitudes:', err);
