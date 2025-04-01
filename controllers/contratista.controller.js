@@ -99,76 +99,7 @@ controller.vistaContratista = async (req, res) => {
   }
 };
 
-
-// controller.crearSolicitud = async (req, res) => {
-//   try {
-//       // Verifica el token
-//       const token = req.cookies.token;
-//       if (!token) {
-//           console.log('[CONTROLADOR] No se encontró el token, redirigiendo a login');
-//           return res.status(401).send('No se encontró el token');
-//       }
-
-//       // Decodifica el token para obtener el id
-//       const decoded = jwt.verify(token, SECRET_KEY);
-//       const { role, id } = decoded;  // 'id' es el ID del usuario
-
-//       if (!id) {
-//           console.log('[CONTROLADOR] El token no contiene un id válido');
-//           return res.status(400).send('Token inválido');
-//       }
-
-//       console.log('[CONTROLADOR] Usuario ID:', id);
-
-//       // Asegúrate de que los demás datos están presentes
-//       const { empresa, nit, lugar, labor, interventor_id, cedula, nombre, inicio_obra, fin_obra, dias_trabajo } = req.body;
-
-//       console.log("datos traidos del cliente: ",req.body)
-
-//       // Aquí va la lógica para crear la solicitud en la base de datos
-//       const query = `
-//           INSERT INTO solicitudes (usuario_id, empresa, nit, inicio_obra, fin_obra, dias_trabajo, lugar, labor,interventor_id)
-//           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-//       `;
-//       const [result] = await connection.execute(query, [
-//           id, empresa, nit, inicio_obra, fin_obra, dias_trabajo, lugar, labor, interventor_id
-//       ]);
-
-   
-
-//       // Aquí asociamos los colaboradores con la solicitud
-//       for (let i = 0; i < cedula.length; i++) {
-//           const cedulaColab = cedula[i];
-//           const nombreColab = nombre[i];
-//           const fotoColab = req.files['foto[]'] ? req.files['foto[]'][i].filename : null;
-//           const cedulaFotoColab = req.files['cedulaFoto[]'] ? req.files['cedulaFoto[]'][i].filename : null;
-
-//           const queryColaborador = `
-//               INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, cedulaFoto)
-//               VALUES (?, ?, ?, ?, ?);
-//           `;
-
-//           await connection.execute(queryColaborador, [
-//               result.insertId, cedulaColab, nombreColab, fotoColab, cedulaFotoColab
-//           ]);
-
-
-
-//       }
-
-      
-
-//       res.status(200).send('Solicitud creada correctamente');
-//   } catch (error) {
-//       console.error('[CONTROLADOR] Error al crear la solicitud:', error);
-//       res.status(500).send('Error al crear la solicitud');
-//   }
-// };
-
-
-
-// Controller for viewing the contractor's requests
-
+ 
 
 controller.obtenerSolicitudes = (req, res) => {
   console.log('[CONTROLADOR] Se está procesando la visualización de las solicitudes');

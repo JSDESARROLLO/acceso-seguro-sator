@@ -173,8 +173,12 @@
           </div>
           <div class="relative">
             <label for="lugar" class="block text-sm font-semibold text-gray-700">Lugar</label>
-            <input type="text" name="lugar" id="lugar" class="mt-1 p-2 border border-gray-300 rounded-md w-full" placeholder="Escribe para buscar..." required autocomplete="off">
-            <ul id="lugares-list" class="absolute w-full bg-white border border-gray-300 rounded-md mt-1 max-h-40 overflow-y-auto hidden"></ul>
+            <select name="lugar" id="lugar" class="mt-1 p-2 border border-gray-300 rounded-md w-full" required>
+              <option value="" disabled selected>Seleccione un lugar</option>
+              <% lugares.forEach(lugar => { %>
+                <option value="<%= lugar.id %>"><%= lugar.nombre_lugar %></option>
+              <% }); %>
+            </select>
             <p id="error-lugar" class="text-red-500 text-sm hidden">Debes seleccionar un lugar válido.</p>
           </div>
           <div>
@@ -256,6 +260,22 @@
           <p class="text-sm text-gray-600 mt-2">* Debe agregar al menos un colaborador</p>
         </div>
 
+
+                <!-- Vehículos -->
+        <div>
+          <div class="text-lg font-semibold mb-3">Vehículos</div>
+          <div id="vehiculos-container">
+            <!-- Los vehículos se agregarán aquí dinámicamente -->
+          </div>
+          <button type="button" id="add-vehiculo" class="mt-4 bg-ga-gold hover:bg-ga-navy text-ga-white font-bold py-2 px-4 rounded transition-colors duration-200 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            Agregar Vehículo
+          </button>
+          <p class="text-sm text-gray-600 mt-2">* Los vehículos son opcionales</p>
+        </div>
+
         <!-- Seguridad Social -->
         <div>
           <div class="text-lg font-semibold mb-3">Seguridad Social de Trabajadores</div>
@@ -328,6 +348,10 @@
             <span>Interventor: <span id="interventorName"></span></span>
             <span class="badge badge-pill badge-danger unread-count hidden" data-type="interventor" id="unread-count-interventor">0</span>
           </li>
+          <li id="soporteContact" class="p-2 hover:bg-gray-200 cursor-pointer flex justify-between items-center" onclick="loadChat('soporte')">
+            <span>Soporte</span>
+            <span class="badge badge-pill badge-danger unread-count hidden" data-type="soporte" id="unread-count-soporte">0</span>
+          </li>
         </ul>
       </div>
       <!-- Área de conversación (derecha) -->
@@ -363,6 +387,8 @@
             <p>Interventor: <%= solicitud.interventor %></p>
             <p>Estado: <span class="<%= getEstadoClass(solicitud.estado_actual) %>"><%= solicitud.estado_actual %></span></p>
             <p>Comentario: <span class="text-muted text-sm"><%= solicitud.comentario %></span></p>
+            <!-- Mostrar cantidad de vehículos -->
+            <p>Vehículos: <span id="vehiculos-count-<%= solicitud.id %>">Cargando...</span></p>
             <div class="mt-4 flex space-x-2">
               <% const doc = solicitud_url_download.find(d => d.solicitud_id === solicitud.id); %>
               <% if (doc) { %>
@@ -373,7 +399,6 @@
               <button type="button" onclick="window.renovarSolicitud('<%= solicitud.id %>')" class="bg-ga-gold text-ga-white py-2 px-4 rounded-md hover:bg-ga-navy text-xs">
                 Renovar Solicitud
               </button>
-              <!-- Botón Conversar -->
               <button type="button" onclick="window.openChatModal('<%= solicitud.id %>')" class="bg-ga-navy text-ga-white py-2 px-4 rounded-md hover:bg-ga-gold text-xs">
                 Conversar
                 <span class="badge badge-light unread-count hidden" data-solicitud-id="<%= solicitud.id %>" data-type="all">0</span>
@@ -409,1667 +434,1183 @@
     <p class="ml-4 text-white text-lg">Procesando archivos...</p>
   </div>
 
+
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    // Elementos del DOM
     const form = document.getElementById('formulario');
     const addPersonBtn = document.getElementById('add-person');
+    const addVehiculoBtn = document.getElementById('add-vehiculo');
     const personasContainer = document.getElementById('personas-container');
+    const vehiculosContainer = document.getElementById('vehiculos-container');
     const submitButton = document.getElementById('submitButton');
     const showDisabledBtn = document.getElementById('show-disabled-collaborators');
     const modalDisabled = document.getElementById('modalDisabledCollaborators');
-    const disabledList = document.getElementById('disabled-collaborators-list');
     const lugarInput = document.getElementById('lugar');
-    const lugaresList = document.getElementById('lugares-list');
     const errorLugar = document.getElementById('error-lugar');
+
+    // Estados globales
     let esRenovacion = false;
-    let lugarValido = false;
     let solicitudActualId = null;
 
-    // Lista de lugares desde el servidor
-    const lugares = <%- JSON.stringify(lugares || []) %>;
+    // Datos del servidor
+    const solicitudIds = <%- JSON.stringify(solicitudes?.map(s => s.id) || []) %>;
 
-    // Establecer texto inicial del botón
-    submitButton.textContent = 'Enviar Solicitud';
-
-    // Plantilla para nuevo colaborador (sin cambios)
+    // Plantillas
     const collaboratorTemplate = `
-      <div class="person-group mb-4 relative p-4 border border-ga-cream rounded-lg">
-        <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-          </svg>
-        </button>
-        <div class="mb-4">
-          <input type="number" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
-          <input type="text" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
-          <input type="hidden" name="estado[]" value="true">
+        <div class="person-group mb-4 relative p-4 border border-ga-cream rounded-lg">
+            <button type="button" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
+            <div class="mb-4">
+                <input type="number" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+                <input type="text" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2" required>
+                <input type="hidden" name="estado[]" value="true">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-ga-navy mb-2">Foto del colaborador</label>
+                    <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+                </div>
+                <div>
+                    <label class="block text-ga-navy mb-2">Foto de la cédula</label>
+                    <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+                </div>
+            </div>
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-ga-navy mb-2">Foto del colaborador</label>
-            <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
-          </div>
-          <div>
-            <label class="block text-ga-navy mb-2">Foto de la cédula</label>
-            <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
-          </div>
-        </div>
-      </div>
     `;
 
-    // Funciones existentes (sin cambios)
-    const addCollaborator = () => {
-      const newPerson = document.createElement('div');
-      newPerson.innerHTML = collaboratorTemplate;
-      personasContainer.appendChild(newPerson.firstElementChild);
-      updateRemoveButtons();
+    const vehiculoTemplate = `
+        <div class="vehiculo-group mb-4 relative p-4 border border-ga-cream rounded-lg">
+            <button type="button" class="remove-vehiculo absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Matrícula</label>
+                    <input type="text" name="matricula[]" class="mt-1 p-2 border border-ga-cream rounded-md w-full" placeholder="Ej: ABC123" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Foto del vehículo</label>
+                    <input type="file" name="foto_vehiculo[]" class="mt-1 p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Tecnomecánica</label>
+                    <input type="file" name="tecnomecanica[]" class="mt-1 p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">SOAT</label>
+                    <input type="file" name="soat[]" class="mt-1 p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Licencia de Conducción</label>
+                    <input type="file" name="licencia_conduccion[]" class="mt-1 p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700">Licencia de Tránsito</label>
+                    <input type="file" name="licencia_transito[]" class="mt-1 p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Funciones de utilidades
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toISOString().split('T')[0];
     };
 
     const updateRemoveButtons = () => {
-      const persons = personasContainer.querySelectorAll('.person-group');
-      persons.forEach(person => {
-        const removeBtn = person.querySelector('.remove-person');
-        if (removeBtn) {
-          if (persons.length === 1) {
-            removeBtn.classList.add('hidden');
-          } else {
-            removeBtn.classList.remove('hidden');
-          }
-        }
-      });
+        document.querySelectorAll('.remove-person').forEach(button => {
+            button.removeEventListener('click', confirmarEliminarColaborador);
+            button.addEventListener('click', () => confirmarEliminarColaborador(button));
+        });
+        document.querySelectorAll('.remove-vehiculo').forEach(button => {
+            button.removeEventListener('click', removeVehiculoHandler);
+            button.addEventListener('click', removeVehiculoHandler);
+        });
     };
 
-    // Autocompletado para el campo "Lugar"
-    lugarInput.addEventListener('input', function() {
-      const value = this.value.trim().toLowerCase();
-      lugaresList.innerHTML = '';
-
-        // Si estamos en modo renovación, mantener lugarValido como true
-        if (esRenovacion) {
-          lugarValido = true;
-          errorLugar.classList.add('hidden');
-          lugaresList.classList.add('hidden');
-          return;
-        }
-        
-        if (value.length > 0) {
-        const filteredLugares = lugares.filter(lugar => 
-          lugar.nombre_lugar.toLowerCase().includes(value)
-        );
-
-        if (filteredLugares.length > 0) {
-          filteredLugares.forEach(lugar => {
-            const li = document.createElement('li');
-            li.className = 'p-2 hover:bg-gray-200 cursor-pointer';
-            li.dataset.value = lugar.nombre_lugar;
-            li.textContent = lugar.nombre_lugar;
-            li.addEventListener('click', () => {
-              lugarInput.value = lugar.nombre_lugar;
-              lugarValido = true;
-              lugaresList.classList.add('hidden');
-              errorLugar.classList.add('hidden');
-            });
-            lugaresList.appendChild(li);
-          });
-          lugaresList.classList.remove('hidden');
-        } else {
-          lugaresList.classList.add('hidden');
-          lugarValido = false;
-          errorLugar.classList.remove('hidden');
-        }
-      } else {
-        lugaresList.classList.add('hidden');
-          lugarValido = false;
-          errorLugar.classList.add('hidden');
-      }
-    });
-
-      // Modificar también el event listener de click fuera
-    document.addEventListener('click', (e) => {
-      if (!lugarInput.contains(e.target) && !lugaresList.contains(e.target)) {
-        lugaresList.classList.add('hidden');
-          if (esRenovacion) {
-            lugarValido = true;
-            errorLugar.classList.add('hidden');
-          } else {
-            lugarValido = lugares.some(lugar => lugar.nombre_lugar === lugarInput.value.trim());
-            if (!lugarValido) {
-          errorLugar.classList.remove('hidden');
-        } else {
-          errorLugar.classList.add('hidden');
-            }
-        }
-      }
-    });
-
-      // En la función renovarSolicitud
-    window.renovarSolicitud = async function(solicitudId) {
-  try {
-    const response = await fetch(`/obtener-datos-solicitud/${solicitudId}`);
-    if (!response.ok) {
-      throw new Error('Error al obtener datos de la solicitud');
-    }
-    
-    const data = await response.json();
-    console.log('Datos recibidos:', data);
-    
-    if (data.solicitud && data.colaboradores) {
-      esRenovacion = true;
-      solicitudActualId = solicitudId;
-            
-            console.log("Estableciendo solicitudActualId:", solicitudId);
-            
-            // Mostrar y habilitar el botón de colaboradores deshabilitados
-            const btnColaboradores = document.getElementById('show-disabled-collaborators');
-            btnColaboradores.classList.remove('hidden');
-            btnColaboradores.style.display = 'inline-block';
-            btnColaboradores.disabled = false;
-            console.log("Botón mostrado:", btnColaboradores.style.display);
-      
-      // Campos existentes que ya están deshabilitados
-      document.getElementById('empresa').value = data.solicitud.empresa || '';
-      document.getElementById('nit').value = data.solicitud.nit || '';
-            
-            // Establecer el lugar y validarlo inmediatamente
-            const lugarInput = document.getElementById('lugar');
-            lugarInput.value = data.solicitud.lugar || '';
-            
-            // Marcar explícitamente como válido y ocultar el mensaje de error
-            lugarValido = true;
-            document.getElementById('error-lugar').classList.add('hidden');
-            
-            // Continuar con el establecimiento de otros campos
-      document.getElementById('labor').value = data.solicitud.labor || '';
-      document.getElementById('interventor_id').value = data.solicitud.interventor_id || '';
-      
-            // Continuar con el resto de atributos/estilos
-            lugarInput.setAttribute('readonly', true);
-            lugarInput.classList.add('bg-gray-100');
-      document.getElementById('labor').setAttribute('readonly', true);
-      document.getElementById('labor').classList.add('bg-gray-100');
-      document.getElementById('interventor_id').setAttribute('disabled', true);
-
-      // Formatear las fechas
-      const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toISOString().split('T')[0];
-      };
-      
-      // Asignar valores a los campos de fecha y deshabilitarlos
-      document.getElementById('inicio-obra').value = formatDate(data.solicitud.inicio_obra);
-      document.getElementById('fin-obra').value = formatDate(data.solicitud.fin_obra);
-      document.getElementById('dias').value = data.solicitud.dias_trabajo || '';
-
-      // Deshabilitar los campos de fecha
-      document.getElementById('inicio-obra').setAttribute('readonly', true);
-      document.getElementById('inicio-obra').classList.add('bg-gray-100');
-      document.getElementById('fin-obra').setAttribute('readonly', true);
-      document.getElementById('fin-obra').classList.add('bg-gray-100');
-
-      // Opcional: también podrías deshabilitar el campo de días si no debe cambiar
-      document.getElementById('dias').setAttribute('readonly', true);
-      document.getElementById('dias').classList.add('bg-gray-100');
-
-      submitButton.textContent = 'Guardar Cambios';
-      
-      // Resto del código sigue igual...
-      showDisabledBtn.removeAttribute('disabled');
-      
-      const arlPreview = document.getElementById('arl-preview');
-      const pasocialPreview = document.getElementById('pasocial-preview');
-      
-      if (data.solicitud.arl_documento) {
-        arlPreview.innerHTML = `
-          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-            <span class="text-sm">Documento ARL actual</span>
-            <div class="flex space-x-2">
-              <a href="${data.solicitud.arl_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
-            </div>
-          </div>
-        `;
-      }
-
-      if (data.solicitud.pasocial_documento) {
-        pasocialPreview.innerHTML = `
-          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-            <span class="text-sm">Planilla Social actual</span>
-            <div class="flex space-x-2">
-              <a href="${data.solicitud.pasocial_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
-            </div>
-          </div>
-        `;
-      }
-
-      personasContainer.innerHTML = '';
-      
-      if (data.colaboradores && data.colaboradores.length > 0) {
-        data.colaboradores.forEach(colaborador => {
-          const colaboradorDiv = document.createElement('div');
-          colaboradorDiv.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
-          colaboradorDiv.dataset.colaboradorId = colaborador.id;
-          colaboradorDiv.innerHTML = `
-            <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-              </svg>
-            </button>
-            <div class="mb-4">
-              <input type="text" value="${colaborador.nombre}" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
-              <input type="number" value="${colaborador.cedula}" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
-              <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
-              <input type="hidden" name="estado[]" value="true">
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-ga-navy mb-2">Foto actual del colaborador</label>
-                ${colaborador.foto ? `
-                  <div class="mb-2">
-                    <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
-                    <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
-                  </div>
-                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
-                <label class="block text-ga-navy mb-2">Actualizar foto (opcional)</label>
-                <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
-              </div>
-              <div>
-                <label class="block text-ga-navy mb-2">Cédula actual del colaborador</label>
-                ${colaborador.cedulaFoto ? `
-                  <div class="mb-2">
-                    <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
-                    <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
-                  </div>
-                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
-                <label class="block text-ga-navy mb-2">Actualizar cédula (opcional)</label>
-                <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
-              </div>
-            </div>
-          `;
-          personasContainer.appendChild(colaboradorDiv);
-        });
-        
-        updateRemoveButtons();
-      }
-
-      document.getElementById('contratistaFormulario').scrollIntoView({ behavior: 'smooth' });
-    }
-  } catch (error) {
-    console.error('Error al renovar solicitud:', error);
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Error al cargar los datos de la solicitud'
-    });
-  }
-};
-
-      // Reemplazar el event listener del botón show-disabled-collaborators con esta versión corregida
-      document.getElementById('show-disabled-collaborators').addEventListener('click', async function() {
-        try {
-          console.log("Botón colaboradores deshabilitados clickeado, ID:", solicitudActualId);
-          
-          if (!solicitudActualId) {
-            Swal.fire({
-              icon: 'error',
-              title: 'Error',
-              text: 'No se ha seleccionado ninguna solicitud'
-            });
-            return;
-          }
-          
-          // Mostrar loader o indicador de carga
-          Swal.fire({
-            title: 'Cargando colaboradores...',
-            allowOutsideClick: false,
-            didOpen: () => { Swal.showLoading() }
-          });
-          
-          const response = await fetch(`/obtener-colaboradores-todos/${solicitudActualId}`);
-          
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Error al obtener colaboradores');
-          }
-          
-          const data = await response.json();
-          console.log("Datos recibidos:", data);
-          
-          // Cerrar el loader
-          Swal.close();
-          
-          // Actualizar información del modal
-          document.getElementById('colaboradoresId').textContent = solicitudActualId;
-          document.getElementById('colaboradoresEmpresa').textContent = data.solicitud?.empresa || '';
-          
-          // Limpiar la tabla
-          const tbody = document.getElementById('tablaColaboradores');
-          tbody.innerHTML = '';
-          
-          if (!data.colaboradores || data.colaboradores.length === 0) {
-            tbody.innerHTML = `
-              <tr>
-                <td colspan="8" class="text-center">No hay colaboradores para mostrar</td>
-              </tr>
-            `;
-        } else {
-            data.colaboradores.forEach(colaborador => {
-              const accionBtn = colaborador.estado ? 
-                `<button class="btn btn-danger btn-sm accion-colaborador" data-colaborador-id="${colaborador.id}" data-nuevo-estado="false">Deshabilitar</button>` :
-                `<button class="btn btn-success btn-sm accion-colaborador" data-colaborador-id="${colaborador.id}" data-nuevo-estado="true">Restaurar</button>`;
-              
-              const row = document.createElement('tr');
-              row.setAttribute('data-colaborador-id', colaborador.id);
-              row.setAttribute('data-estado', colaborador.estado ? 'habilitado' : 'inhabilitado');
-              row.innerHTML = `
-                <td>${colaborador.id}</td>
-                <td>${colaborador.nombre}</td>
-                <td>${colaborador.cedula}</td>
-                <td class="estado-colaborador">${colaborador.estado ? 'Habilitado' : 'Inhabilitado'}</td>
-                <td>No definido</td>
-                <td>No definida</td>
-                <td class="acciones-colaborador">${accionBtn}</td>
-                <td><button class="btn btn-info btn-sm ver-historial" data-colaborador-id="${colaborador.id}">Ver</button></td>
-              `;
-              
-              tbody.appendChild(row);
-            });
-          }
-          
-          // Aplicar filtro inicial (mostrar todos)
-          document.getElementById('filtroEstado').value = 'todos';
-          aplicarFiltroEstado();
-          
-          // Mostrar el modal
-          $('#modalDisabledCollaborators').modal('show');
-          
-          // Vincular el evento de cambio del filtro
-          document.getElementById('filtroEstado').addEventListener('change', aplicarFiltroEstado);
-          
-          // Asignar eventos a los botones usando delegación de eventos
-          $('#tablaColaboradores').off('click').on('click', '.accion-colaborador', function(event) {
-            const colaboradorId = parseInt($(this).data('colaborador-id'));
-            const nuevoEstado = $(this).data('nuevo-estado') === true;
-            cambiarEstadoColaborador(colaboradorId, nuevoEstado, event);
-          });
-          
-          $('#tablaColaboradores').on('click', '.ver-historial', function(event) {
-            event.preventDefault();
-            const colaboradorId = parseInt($(this).data('colaborador-id'));
-            verHistorial(colaboradorId);
-          });
-          
-      } catch (error) {
-          console.error("Error al cargar colaboradores:", error);
+    const removeVehiculoHandler = (e) => {
+        const vehiculoGroup = e.target.closest('.vehiculo-group');
         Swal.fire({
-          icon: 'error',
-          title: 'Error',
-            text: error.message || 'Error al cargar colaboradores'
-        });
-      }
-    });
-
-      // Función para filtrar las filas de la tabla según el estado seleccionado
-      function aplicarFiltroEstado() {
-        const filtro = document.getElementById('filtroEstado').value;
-        console.log("Aplicando filtro:", filtro);
-        
-        const filas = document.querySelectorAll('#tablaColaboradores tr');
-        let contador = 0;
-        
-        filas.forEach(fila => {
-          const dataEstado = fila.getAttribute('data-estado');
-          if (!dataEstado) return; // Ignorar filas sin atributo de estado
-          
-          if (filtro === 'todos' || 
-              (filtro === 'habilitados' && dataEstado === 'habilitado') || 
-              (filtro === 'inhabilitados' && dataEstado === 'inhabilitado')) {
-            fila.style.display = '';
-            contador++;
-          } else {
-            fila.style.display = 'none';
-          }
-        });
-        
-        console.log(`Se muestran ${contador} filas de ${filas.length}`);
-      }
-
-      // Reemplazar la función verHistorial para manejar correctamente el foco
-      window.verHistorial = async function(colaboradorId) {
-        try {
-          console.log('Viendo historial del colaborador:', colaboradorId);
-          
-          const response = await fetch(`/obtener-historial-colaborador/${colaboradorId}`);
-          
-          if (!response.ok) {
-            throw new Error('Error al obtener el historial');
-          }
-          
-          const data = await response.json();
-          console.log('Historial recibido:', data);
-          
-          // Crear modal dinámicamente si no existe
-          let historialModal = document.getElementById('historialColaboradorModal');
-          
-          if (!historialModal) {
-            const modalHTML = `
-              <div class="modal fade" id="historialColaboradorModal" tabindex="-1" role="dialog">
-                <div class="modal-dialog modal-lg">
-                  <div class="modal-content">
-                    <div class="modal-header">
-                      <h5 class="modal-title">Historial de Ingresos y Salidas</h5>
-                      <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
-                        <span aria-hidden="true">×</span>
-                      </button>
-                    </div>
-                    <div class="modal-body">
-                      <div class="table-responsive">
-                        <table class="table table-bordered">
-                          <thead>
-                            <tr>
-                              <th>Fecha/Hora</th>
-                              <th>Estado</th>
-                              <th>Tipo</th>
-                              <th>Lugar</th>
-                              <th>Usuario</th>
-                            </tr>
-                          </thead>
-                          <tbody id="historialColaboradorBody"></tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div class="modal-footer">
-                      <button type="button" class="btn btn-secondary" id="cerrarHistorialBtn">Cerrar</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            `;
-            
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-            historialModal = document.getElementById('historialColaboradorModal');
-            
-            // Agregamos un event listener específico para este botón
-            document.getElementById('cerrarHistorialBtn').addEventListener('click', function() {
-              // Asegurar que no quede ningún elemento con foco dentro del modal
-              document.activeElement.blur();
-              // Cerrar el modal
-              $('#historialColaboradorModal').modal('hide');
-            });
-          }
-          
-          // Llenar la tabla con los datos
-          const historialBody = document.getElementById('historialColaboradorBody');
-          historialBody.innerHTML = '';
-          
-          if (data && data.length > 0) {
-            data.forEach(registro => {
-              // Determinar el tipo de registro (entrada o salida)
-              const tipoRegistro = registro.tipo || 'N/A';
-              const tipoClass = tipoRegistro.toLowerCase() === 'entrada' ? 'success' : 'danger';
-              
-              historialBody.innerHTML += `
-                <tr>
-                  <td>${registro.fecha_hora || 'N/A'}</td>
-                  <td><span class="badge badge-${registro.estado_actual === 'Ingreso' ? 'success' : 'danger'}">${registro.estado_actual || 'N/A'}</span></td>
-                  <td><span class="badge badge-${tipoClass}">${tipoRegistro}</span></td>
-                  <td>${registro.lugar || 'N/A'}</td>
-                  <td>${registro.usuario_registro || 'N/A'}</td>
-                </tr>
-              `;
-            });
-          } else {
-            historialBody.innerHTML = '<tr><td colspan="5" class="text-center">No hay registros de ingresos o salidas para este colaborador</td></tr>';
-          }
-          
-          // Prevenir que los eventos se solapen
-          setTimeout(() => {
-            // Mostrar el modal
-            $('#historialColaboradorModal').modal({
-              backdrop: 'static',
-              keyboard: false,
-              focus: true
-            });
-          }, 100);
-          
-          // Manejar el evento hidden.bs.modal para asegurar que el foco se libere
-          $('#historialColaboradorModal').off('hidden.bs.modal').on('hidden.bs.modal', function() {
-            document.activeElement.blur();
-          });
-          
-        } catch (error) {
-          console.error('Error al obtener historial:', error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'No se pudo obtener el historial: ' + error.message
-          });
-        }
-      };
-
-      // Reemplazar la función cambiarEstadoColaborador
-      window.cambiarEstadoColaborador = async function(colaboradorId, nuevoEstado, event) {
-        // Evitar propagación del evento
-        if (event) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        
-        try {
-          console.log(`Cambiando estado del colaborador ${colaboradorId} a ${nuevoEstado}`);
-          
-          // Desactivar el botón para evitar dobles clics
-          const boton = event && event.target ? event.target : document.querySelector(`button[data-colaborador-id="${colaboradorId}"]`);
-          if (boton) {
-            boton.disabled = true;
-            boton.textContent = 'Procesando...';
-          }
-          
-          const response = await fetch(`/actualizar-estado-colaborador/${colaboradorId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ estado: nuevoEstado })
-          });
-          
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || 'Error al actualizar el estado');
-          }
-          
-          console.log('Respuesta del servidor:', data);
-          
-          // Actualizar la fila en la tabla del modal
-          const fila = document.querySelector(`tr[data-colaborador-id="${colaboradorId}"]`);
-          if (fila) {
-            // Actualizar texto y atributos
-            fila.querySelector('.estado-colaborador').textContent = nuevoEstado ? 'Habilitado' : 'Inhabilitado';
-            fila.setAttribute('data-estado', nuevoEstado ? 'habilitado' : 'inhabilitado');
-            
-            // Actualizar botón
-            const nuevoBoton = nuevoEstado ? 
-              `<button class="btn btn-danger btn-sm accion-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="false">Deshabilitar</button>` :
-              `<button class="btn btn-success btn-sm accion-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="true">Restaurar</button>`;
-            
-            fila.querySelector('.acciones-colaborador').innerHTML = nuevoBoton;
-            
-            // Aplicar filtro actual
-            aplicarFiltroEstado();
-          }
-          
-          // Actualizar el formulario principal según el estado
-          if (nuevoEstado) {
-            // Si habilitamos, agregar al formulario
-            await agregarColaboradorAlFormulario(colaboradorId);
-          } else {
-            // Si deshabilitamos, quitar del formulario
-            quitarColaboradorDelFormulario(colaboradorId);
-          }
-          
-          // Reactivar el botón original si existe
-          if (boton) {
-            boton.disabled = false;
-            boton.textContent = nuevoEstado ? 'Deshabilitar' : 'Restaurar';
-          }
-          
-          // Mostrar mensaje de éxito
-          Swal.fire({
-            icon: 'success',
-            title: 'Éxito',
-            text: `Colaborador ${nuevoEstado ? 'habilitado' : 'deshabilitado'} correctamente`,
-            timer: 1500,
-            showConfirmButton: false
-          });
-
-        } catch (error) {
-          console.error('Error:', error);
-          // Reactivar el botón si existe
-          const boton = event && event.target ? event.target : document.querySelector(`button[data-colaborador-id="${colaboradorId}"]`);
-          if (boton) {
-            boton.disabled = false;
-            boton.textContent = nuevoEstado ? 'Deshabilitar' : 'Restaurar';
-          }
-          
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: error.message
-          });
-        }
-      };
-
-      // Agregar estas nuevas funciones para manejar los colaboradores en el formulario
-      async function agregarColaboradorAlFormulario(colaboradorId) {
-        if (!esRenovacion) return; // Solo aplicar en modo renovación
-        
-        try {
-          // Verificar que no exista ya en el formulario
-          const existente = document.querySelector(`.person-group[data-colaborador-id="${colaboradorId}"]`);
-          if (existente) return;
-          
-          // Obtener datos del colaborador
-          const response = await fetch(`/obtener-colaborador/${colaboradorId}`);
-          if (!response.ok) throw new Error("No se pudo obtener la información del colaborador");
-          
-          const colaborador = await response.json();
-          
-          // Crear el elemento del colaborador
-          const colaboradorDiv = document.createElement('div');
-          colaboradorDiv.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
-          colaboradorDiv.dataset.colaboradorId = colaborador.id;
-          colaboradorDiv.innerHTML = `
-            <button type="button" onclick="confirmarEliminarColaborador(this)" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-              </svg>
-            </button>
-            <div class="mb-4">
-              <input type="text" value="${colaborador.nombre}" placeholder="Nombre del colaborador" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
-              <input type="number" value="${colaborador.cedula}" placeholder="Cédula del Colaborador" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
-              <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
-              <input type="hidden" name="estado[]" value="true">
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-ga-navy mb-2">Foto actual del colaborador</label>
-                ${colaborador.foto ? `
-                  <div class="mb-2">
-                    <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
-                    <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
-                  </div>
-                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
-                <label class="block text-ga-navy mb-2">Actualizar foto (opcional)</label>
-                <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
-              </div>
-              <div>
-                <label class="block text-ga-navy mb-2">Cédula actual del colaborador</label>
-                ${colaborador.cedulaFoto ? `
-                  <div class="mb-2">
-                    <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
-                    <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
-                  </div>
-                ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
-                <label class="block text-ga-navy mb-2">Actualizar cédula (opcional)</label>
-                <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
-              </div>
-            </div>
-          `;
-          
-          // Agregar al contenedor
-          const personasContainer = document.getElementById('personas-container');
-          personasContainer.appendChild(colaboradorDiv);
-          
-          // Actualizar botones de eliminar
-          updateRemoveButtons();
-          
-        } catch (error) {
-          console.error("Error al agregar colaborador al formulario:", error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-            text: 'No se pudo agregar el colaborador al formulario'
-          });
-        }
-      }
-
-      function quitarColaboradorDelFormulario(colaboradorId) {
-        if (!esRenovacion) return; // Solo aplicar en modo renovación
-        
-        // Buscar el colaborador en el formulario
-        const colaboradorDiv = document.querySelector(`.person-group[data-colaborador-id="${colaboradorId}"]`);
-        if (!colaboradorDiv) return;
-        
-        // Verificar si hay más de un colaborador
-        const totalColaboradores = document.querySelectorAll('.person-group').length;
-        if (totalColaboradores <= 1) {
-                Swal.fire({
-            icon: 'info',
-            title: 'Información',
-            text: 'No se puede eliminar el último colaborador. Debe haber al menos uno.',
-            timer: 3000
-          });
-          return;
-        }
-        
-        // Eliminar del DOM
-        colaboradorDiv.remove();
-        
-        // Actualizar botones de eliminar
-        updateRemoveButtons();
-      }
-
-    const validateCollaborators = () => {
-      const persons = personasContainer.querySelectorAll('.person-group');
-      if (persons.length === 0) {
-        addCollaborator();
-      }
-      updateRemoveButtons();
-    };
-
-    validateCollaborators();
-    addPersonBtn.addEventListener('click', addCollaborator);
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
-      const fechaFin = new Date(document.getElementById('fin-obra').value);
-      
-      if (!fechaInicio || !fechaFin || isNaN(fechaInicio) || isNaN(fechaFin)) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Por favor seleccione fechas válidas'
-        });
-        return;
-      }
-
-      if (fechaFin < fechaInicio) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
-        });
-        return;
-      }
-
-      if (personasContainer.children.length === 0) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Debe agregar al menos un colaborador'
-        });
-        return;
-      }
-
-      const requiredFields = form.querySelectorAll('[required]');
-      let hasEmptyFields = false;
-      requiredFields.forEach(field => {
-        if (!field.value.trim()) {
-          hasEmptyFields = true;
-          field.classList.add('border-red-500');
-        } else {
-          field.classList.remove('border-red-500');
-        }
-      });
-
-      if (hasEmptyFields) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Por favor complete todos los campos requeridos'
-        });
-        return;
-      }
-
-      if (!lugarValido && !esRenovacion) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Por favor seleccione un lugar válido de la lista'
-        });
-        return;
-      }
-
-      const formData = new FormData(form);
-
-      try {
-        Swal.fire({
-          title: 'Procesando...',
-          text: 'Por favor espere mientras se procesa su solicitud',
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
-        });
-
-        const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
-        
-        console.log('Enviando solicitud a:', url);
-        console.log('FormData:', Object.fromEntries(formData));
-
-        const response = await fetch(url, {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) {
-          throw new Error('Error al procesar la solicitud');
-        }
-
-        const result = await response.json();
-        console.log('Respuesta del servidor:', result);
-
-        await Swal.fire({
-          icon: 'success',
-          title: 'Éxito',
-          text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente',
-          confirmButtonText: 'Aceptar'
-        });
-
-        window.location.reload();
-      } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Ocurrió un error al procesar la solicitud. Por favor intente nuevamente.'
-        });
-      }
-    });
-
-    function calcularDias() {
-      const fechaInicio = new Date(document.getElementById('inicio-obra').value);
-      const fechaFin = new Date(document.getElementById('fin-obra').value);
-      const diasInput = document.getElementById('dias');
-
-      if (fechaInicio && fechaFin && !isNaN(fechaInicio) && !isNaN(fechaFin)) {
-        const diferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
-        
-        if (diferencia < 1) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'La fecha de fin debe ser igual o posterior a la fecha de inicio'
-          });
-          document.getElementById('fin-obra').value = document.getElementById('inicio-obra').value;
-          diasInput.value = '1';
-        } else {
-          diasInput.value = diferencia;
-        }
-      } else {
-        diasInput.value = '';
-      }
-    }
-
-    document.getElementById('inicio-obra').addEventListener('change', function() {
-      const finObraInput = document.getElementById('fin-obra');
-      if (!finObraInput.value) {
-        finObraInput.value = this.value;
-      }
-      calcularDias();
-    });
-
-    document.getElementById('fin-obra').addEventListener('change', function() {
-      const inicioObraInput = document.getElementById('inicio-obra');
-      if (!inicioObraInput.value) {
-        inicioObraInput.value = this.value;
-      }
-      calcularDias();
-    });
-
-    document.getElementById('arl').addEventListener('change', function() {
-      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
-      document.getElementById('arl-filename').textContent = filename;
-    });
-
-    document.getElementById('pasocial').addEventListener('change', function() {
-      const filename = this.files[0]?.name || 'Ningún archivo seleccionado';
-      document.getElementById('pasocial-filename').textContent = filename;
-    });
-
-      // Agregar este código al final del script principal
-      document.addEventListener('DOMContentLoaded', function() {
-        // Configuración global para todos los modales de Bootstrap
-        $(document).on('hidden.bs.modal', '.modal', function() {
-          // Asegurar que no queden elementos con foco dentro del modal
-          document.activeElement.blur();
-          // Eliminar atributos aria-hidden que podrían causar problemas
-          document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
-            if (!el.classList.contains('modal')) {
-              el.removeAttribute('aria-hidden');
-            }
-          });
-        });
-        
-        // Prevenir que se propaguen clics desde botones dentro de modales
-        $(document).on('click', '.modal button', function(e) {
-          e.stopPropagation();
-        });
-      });
-
-      // Modificar la función confirmarEliminarColaborador para manejar ambos casos
-      window.confirmarEliminarColaborador = function(button) {
-        const personGroup = button.closest('.person-group');
-        const totalColaboradores = document.querySelectorAll('.person-group').length;
-        const colaboradorId = personGroup.dataset.colaboradorId;
-        
-        // Verificar si es el último colaborador
-        if (totalColaboradores <= 1) {
-          Swal.fire({
-            icon: 'info',
-            title: 'Información',
-            text: 'No se puede eliminar el último colaborador. Debe haber al menos uno.',
-            timer: 3000
-          });
-          return;
-        }
-        
-        // Comprobar si es un colaborador existente (en renovación) o uno nuevo
-        if (colaboradorId) {
-          // Es un colaborador existente en renovación, preguntar si deshabilitarlo
-          Swal.fire({
             title: '¿Está seguro?',
-            text: "Este colaborador será deshabilitado pero no eliminado de la solicitud",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#CC9000',
-            cancelButtonColor: '#011C3D',
-            confirmButtonText: 'Sí, deshabilitar',
-            cancelButtonText: 'Cancelar'
-          }).then((result) => {
-            if (result.isConfirmed) {
-              // Llamar a la función que deshabilita el colaborador
-              cambiarEstadoColaborador(parseInt(colaboradorId), false);
-              
-              // Quitar del formulario
-              personGroup.remove();
-              updateRemoveButtons();
-              
-              Swal.fire({
-                icon: 'success',
-                title: 'Deshabilitado',
-                text: 'El colaborador ha sido deshabilitado',
-                timer: 1500,
-                showConfirmButton: false
-              });
-            }
-          });
-        } else {
-          // Es un colaborador nuevo que no está registrado, simplemente quitarlo
-          Swal.fire({
-            title: '¿Está seguro?',
-            text: "¿Desea quitar este colaborador del formulario?",
+            text: "¿Desea quitar este vehículo del formulario?",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#CC9000',
             cancelButtonColor: '#011C3D',
             confirmButtonText: 'Sí, quitar',
             cancelButtonText: 'Cancelar'
-          }).then((result) => {
+        }).then((result) => {
             if (result.isConfirmed) {
-              // Eliminar el colaborador del formulario
-              personGroup.remove();
-              updateRemoveButtons();
-              
-              Swal.fire({
+                vehiculoGroup.remove();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Eliminado',
+                    text: 'El vehículo ha sido removido del formulario',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            }
+        });
+    };
+
+    // Funciones de colaboradores
+    const addCollaborator = () => {
+        const div = document.createElement('div');
+        div.innerHTML = collaboratorTemplate;
+        personasContainer.appendChild(div.firstElementChild);
+        updateRemoveButtons();
+    };
+
+    window.confirmarEliminarColaborador = (button) => {
+        const personGroup = button.closest('.person-group');
+        const totalColaboradores = document.querySelectorAll('.person-group').length;
+        const colaboradorId = personGroup.dataset.colaboradorId;
+
+        if (totalColaboradores <= 1) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Información',
+                text: 'No se puede eliminar el último colaborador.',
+                timer: 3000
+            });
+            return;
+        }
+
+        const action = colaboradorId ? 
+            {
+                title: '¿Deshabilitar colaborador?',
+                text: 'Este colaborador será deshabilitado pero no eliminado',
+                confirmText: 'Sí, deshabilitar',
+                onConfirm: () => cambiarEstadoColaborador(parseInt(colaboradorId), false)
+            } : 
+            {
+                title: '¿Quitar colaborador?',
+                text: '¿Desea quitar este colaborador del formulario?',
+                confirmText: 'Sí, quitar',
+                onConfirm: () => personGroup.remove()
+            };
+
+        Swal.fire({
+            title: action.title,
+            text: action.text,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#CC9000',
+            cancelButtonColor: '#011C3D',
+            confirmButtonText: action.confirmText,
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                action.onConfirm();
+                personGroup.remove();
+                updateRemoveButtons();
+                Swal.fire({
+                    icon: 'success',
+                    title: colaboradorId ? 'Deshabilitado' : 'Eliminado',
+                    text: colaboradorId ? 'El colaborador ha sido deshabilitado' : 'El colaborador ha sido removido',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            }
+        });
+    };
+
+    // Funciones de vehículos
+    const addVehiculo = () => {
+        const div = document.createElement('div');
+        div.innerHTML = vehiculoTemplate;
+        vehiculosContainer.appendChild(div.firstElementChild);
+        updateRemoveButtons();
+    };
+
+    const updateVehiculosCount = async () => {
+        for (const id of solicitudIds) {
+            try {
+                const response = await fetch(`/obtener-vehiculos-solicitud/${id}`);
+                const vehiculos = await response.json();
+                const countElement = document.getElementById(`vehiculos-count-${id}`);
+                if (countElement) {
+                    countElement.textContent = vehiculos.length > 0 ? `${vehiculos.length} registrado${vehiculos.length > 1 ? 's' : ''}` : 'Ninguno';
+                }
+            } catch (error) {
+                console.error(`Error al contar vehículos para solicitud ${id}:`, error);
+                const countElement = document.getElementById(`vehiculos-count-${id}`);
+                if (countElement) countElement.textContent = 'Error al cargar';
+            }
+        }
+    };
+
+    // Renovación de solicitud
+    window.renovarSolicitud = async (solicitudId) => {
+        try {
+            form.reset();
+            personasContainer.innerHTML = '';
+            vehiculosContainer.innerHTML = '';
+
+            const response = await fetch(`/obtener-datos-solicitud/${solicitudId}`);
+            if (!response.ok) throw new Error('Error al obtener datos');
+
+            const data = await response.json();
+            if (!data.solicitud || !data.colaboradores) throw new Error('Datos incompletos');
+
+            esRenovacion = true;
+            solicitudActualId = solicitudId;
+
+            showDisabledBtn.classList.remove('hidden');
+            showDisabledBtn.style.display = 'inline-block';
+            showDisabledBtn.disabled = false;
+
+            document.getElementById('empresa').value = data.solicitud.empresa || '';
+            document.getElementById('nit').value = data.solicitud.nit || '';
+            document.getElementById('lugar').value = data.solicitud.lugar || '';
+            document.getElementById('lugar').setAttribute('disabled', true);
+            document.getElementById('lugar').classList.add('bg-gray-100');
+
+            document.getElementById('labor').value = data.solicitud.labor || '';
+            document.getElementById('labor').setAttribute('readonly', true);
+            document.getElementById('labor').classList.add('bg-gray-100');
+
+            document.getElementById('interventor_id').value = data.solicitud.interventor_id || '';
+            document.getElementById('interventor_id').setAttribute('disabled', true);
+
+            const vehiculosResponse = await fetch(`/obtener-vehiculos-solicitud/${solicitudId}`);
+            if (!vehiculosResponse.ok) throw new Error('Error al cargar vehículos');
+            const vehiculos = await vehiculosResponse.json();
+
+            vehiculos.forEach(vehiculo => {
+                const div = document.createElement('div');
+                div.className = 'vehiculo-group mb-4 relative p-4 border border-ga-cream rounded-lg';
+                div.dataset.vehiculoId = vehiculo.id;
+                div.innerHTML = `
+                    <button type="button" class="remove-vehiculo absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700">Matrícula</label>
+                            <input type="text" name="matricula[]" class="mt-1 p-2 border border-gray-300 rounded-md w-full bg-gray-100" value="${vehiculo.matricula}" readonly required>
+                            <input type="hidden" name="vehiculo_id[]" value="${vehiculo.id}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700">Foto del vehículo</label>
+                            <input type="file" name="foto_vehiculo_${vehiculo.id}" class="mt-1 p-2 border border-gray-300 rounded-md w-full" accept="image/*">
+                            ${vehiculo.foto ? `<img src="${vehiculo.foto}" class="mt-2 w-32 h-32 object-cover rounded" alt="Foto actual">` : '<p class="text-gray-500 text-sm">Sin foto</p>'}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700">Tecnomecánica</label>
+                            <input type="file" name="tecnomecanica_${vehiculo.id}" class="mt-1 p-2 border border-gray-300 rounded-md w-full" accept="image/*,.pdf">
+                            ${vehiculo.tecnomecanica ? `<a href="${vehiculo.tecnomecanica}" target="_blank" class="text-blue-600 hover:text-blue-800">Ver actual</a>` : '<p class="text-gray-500 text-sm">Sin documento</p>'}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700">SOAT</label>
+                            <input type="file" name="soat_${vehiculo.id}" class="mt-1 p-2 border border-gray-300 rounded-md w-full" accept="image/*,.pdf">
+                            ${vehiculo.soat ? `<a href="${vehiculo.soat}" target="_blank" class="text-blue-600 hover:text-blue-800">Ver actual</a>` : '<p class="text-gray-500 text-sm">Sin documento</p>'}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700">Licencia de Conducción</label>
+                            <input type="file" name="licencia_conduccion_${vehiculo.id}" class="mt-1 p-2 border border-gray-300 rounded-md w-full" accept="image/*,.pdf">
+                            ${vehiculo.licencia_conduccion ? `<a href="${vehiculo.licencia_conduccion}" target="_blank" class="text-blue-600 hover:text-blue-800">Ver actual</a>` : '<p class="text-gray-500 text-sm">Sin documento</p>'}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700">Licencia de Tránsito</label>
+                            <input type="file" name="licencia_transito_${vehiculo.id}" class="mt-1 p-2 border border-gray-300 rounded-md w-full" accept="image/*,.pdf">
+                            ${vehiculo.licencia_transito ? `<a href="${vehiculo.licencia_transito}" target="_blank" class="text-blue-600 hover:text-blue-800">Ver actual</a>` : '<p class="text-gray-500 text-sm">Sin documento</p>'}
+                        </div>
+                    </div>
+                `;
+                vehiculosContainer.appendChild(div);
+            });
+
+            document.getElementById('inicio-obra').value = formatDate(data.solicitud.inicio_obra);
+            document.getElementById('fin-obra').value = formatDate(data.solicitud.fin_obra);
+            document.getElementById('dias').value = data.solicitud.dias_trabajo || '';
+            ['inicio-obra', 'fin-obra', 'dias'].forEach(id => {
+                const input = document.getElementById(id);
+                input.setAttribute('readonly', true);
+                input.classList.add('bg-gray-100');
+            });
+
+            submitButton.textContent = 'Guardar Cambios';
+
+            const arlPreview = document.getElementById('arl-preview');
+            const pasocialPreview = document.getElementById('pasocial-preview');
+            if (data.solicitud.arl_documento) {
+                arlPreview.innerHTML = `
+                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                        <span class="text-sm">Documento ARL actual</span>
+                        <a href="${data.solicitud.arl_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+                    </div>
+                `;
+            }
+            if (data.solicitud.pasocial_documento) {
+                pasocialPreview.innerHTML = `
+                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                        <span class="text-sm">Planilla Social actual</span>
+                        <a href="${data.solicitud.pasocial_documento}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
+                    </div>
+                `;
+            }
+
+            data.colaboradores.forEach(colaborador => {
+                const div = document.createElement('div');
+                div.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
+                div.dataset.colaboradorId = colaborador.id;
+                div.innerHTML = `
+                    <button type="button" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <div class="mb-4">
+                        <input type="text" name="nombre[]" value="${colaborador.nombre}" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+                        <input type="number" name="cedula[]" value="${colaborador.cedula}" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+                        <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
+                        <input type="hidden" name="estado[]" value="true">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-ga-navy mb-2">Foto actual</label>
+                            ${colaborador.foto ? `
+                                <div class="mb-2">
+                                    <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
+                                    <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
+                                </div>
+                            ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
+                            <label class="block text-ga-navy mb-2">Actualizar foto</label>
+                            <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                        </div>
+                        <div>
+                            <label class="block text-ga-navy mb-2">Cédula actual</label>
+                            ${colaborador.cedulaFoto ? `
+                                <div class="mb-2">
+                                    <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
+                                    <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
+                                </div>
+                            ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
+                            <label class="block text-ga-navy mb-2">Actualizar cédula</label>
+                            <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                        </div>
+                    </div>
+                `;
+                personasContainer.appendChild(div);
+            });
+
+            updateRemoveButtons();
+            document.getElementById('contratistaFormulario').scrollIntoView({ behavior: 'smooth' });
+        } catch (error) {
+            console.error('Error al renovar solicitud:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: `Error al cargar los datos: ${error.message}`
+            });
+        }
+    };
+
+    // Gestión de colaboradores deshabilitados
+    showDisabledBtn.addEventListener('click', async () => {
+        if (!solicitudActualId) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se ha seleccionado ninguna solicitud' });
+            return;
+        }
+
+        Swal.fire({ title: 'Cargando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        try {
+            const response = await fetch(`/obtener-colaboradores-todos/${solicitudActualId}`);
+            if (!response.ok) throw new Error('Error al obtener colaboradores');
+            const data = await response.json();
+
+            Swal.close();
+            document.getElementById('colaboradoresId').textContent = solicitudActualId;
+            document.getElementById('colaboradoresEmpresa').textContent = data.solicitud?.empresa || '';
+
+            const tbody = document.getElementById('tablaColaboradores');
+            tbody.innerHTML = data.colaboradores.length === 0 ? `
+                <tr><td colspan="8" class="text-center">No hay colaboradores para mostrar</td></tr>
+            ` : data.colaboradores.map(col => `
+                <tr data-colaborador-id="${col.id}" data-estado="${col.estado ? 'habilitado' : 'inhabilitado'}">
+                    <td>${col.id}</td>
+                    <td>${col.nombre}</td>
+                    <td>${col.cedula}</td>
+                    <td class="estado-colaborador">${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
+                    <td>No definido</td>
+                    <td>No definida</td>
+                    <td class="acciones-colaborador">
+                        <button class="btn btn-${col.estado ? 'danger' : 'success'} btn-sm accion-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="${!col.estado}">
+                            ${col.estado ? 'Deshabilitar' : 'Restaurar'}
+                        </button>
+                    </td>
+                    <td><button class="btn btn-info btn-sm ver-historial" data-colaborador-id="${col.id}">Ver</button></td>
+                </tr>
+            `).join('');
+
+            $('#modalDisabledCollaborators').modal('show');
+            aplicarFiltroEstado();
+
+            $('#tablaColaboradores').off('click').on('click', '.accion-colaborador', function() {
+                const colaboradorId = parseInt($(this).data('colaborador-id'));
+                const nuevoEstado = $(this).data('nuevo-estado');
+                cambiarEstadoColaborador(colaboradorId, nuevoEstado);
+            }).on('click', '.ver-historial', function(e) {
+                e.preventDefault();
+                verHistorial(parseInt($(this).data('colaborador-id')));
+            });
+        } catch (error) {
+            Swal.fire({ icon: 'error', title: 'Error', text: error.message || 'Error al cargar colaboradores' });
+        }
+    });
+
+    const aplicarFiltroEstado = () => {
+        const filtro = document.getElementById('filtroEstado').value;
+        document.querySelectorAll('#tablaColaboradores tr').forEach(fila => {
+            const estado = fila.getAttribute('data-estado');
+            if (!estado) return;
+            fila.style.display = filtro === 'todos' || filtro === estado ? '' : 'none';
+        });
+    };
+
+    document.getElementById('filtroEstado')?.addEventListener('change', aplicarFiltroEstado);
+
+    window.verHistorial = async (colaboradorId) => {
+        try {
+            const response = await fetch(`/obtener-historial-colaborador/${colaboradorId}`);
+            if (!response.ok) throw new Error('Error al obtener historial');
+            const data = await response.json();
+
+            let historialModal = document.getElementById('historialColaboradorModal');
+            if (!historialModal) {
+                document.body.insertAdjacentHTML('beforeend', `
+                    <div class="modal fade" id="historialColaboradorModal" tabindex="-1" role="dialog">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Historial de Ingresos y Salidas</h5>
+                                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered">
+                                            <thead>
+                                                <tr><th>Fecha/Hora</th><th>Estado</th><th>Tipo</th><th>Lugar</th><th>Usuario</th></tr>
+                                            </thead>
+                                            <tbody id="historialColaboradorBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" id="cerrarHistorialBtn">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                document.getElementById('cerrarHistorialBtn').addEventListener('click', () => {
+                    document.activeElement.blur();
+                    $('#historialColaboradorModal').modal('hide');
+                });
+            }
+
+            const historialBody = document.getElementById('historialColaboradorBody');
+            historialBody.innerHTML = data.length > 0 ? data.map(r => `
+                <tr>
+                    <td>${r.fecha_hora || 'N/A'}</td>
+                    <td><span class="badge badge-${r.estado_actual === 'Ingreso' ? 'success' : 'danger'}">${r.estado_actual || 'N/A'}</span></td>
+                    <td><span class="badge badge-${r.tipo?.toLowerCase() === 'entrada' ? 'success' : 'danger'}">${r.tipo || 'N/A'}</span></td>
+                    <td>${r.lugar || 'N/A'}</td>
+                    <td>${r.usuario_registro || 'N/A'}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5" class="text-center">No hay registros</td></tr>';
+
+            $('#historialColaboradorModal').modal({ backdrop: 'static', keyboard: false });
+            $('#historialColaboradorModal').off('hidden.bs.modal').on('hidden.bs.modal', () => document.activeElement.blur());
+        } catch (error) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo obtener el historial: ' + error.message });
+        }
+    };
+
+    window.cambiarEstadoColaborador = async (colaboradorId, nuevoEstado) => {
+        try {
+            const button = document.querySelector(`button[data-colaborador-id="${colaboradorId}"]`);
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Procesando...';
+            }
+
+            const response = await fetch(`/actualizar-estado-colaborador/${colaboradorId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ estado: nuevoEstado })
+            });
+
+            if (!response.ok) throw new Error((await response.json()).message || 'Error al actualizar estado');
+
+            const fila = document.querySelector(`tr[data-colaborador-id="${colaboradorId}"]`);
+            if (fila) {
+                fila.querySelector('.estado-colaborador').textContent = nuevoEstado ? 'Habilitado' : 'Inhabilitado';
+                fila.setAttribute('data-estado', nuevoEstado ? 'habilitado' : 'inhabilitado');
+                fila.querySelector('.acciones-colaborador').innerHTML = `
+                    <button class="btn btn-${nuevoEstado ? 'danger' : 'success'} btn-sm accion-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="${!nuevoEstado}">
+                        ${nuevoEstado ? 'Deshabilitar' : 'Restaurar'}
+                    </button>
+                `;
+                aplicarFiltroEstado();
+            }
+
+            if (nuevoEstado) await agregarColaboradorAlFormulario(colaboradorId);
+            else quitarColaboradorDelFormulario(colaboradorId);
+
+            if (button) {
+                button.disabled = false;
+                button.textContent = nuevoEstado ? 'Deshabilitar' : 'Restaurar';
+            }
+
+            Swal.fire({
                 icon: 'success',
-                title: 'Eliminado',
-                text: 'El colaborador ha sido removido del formulario',
+                title: 'Éxito',
+                text: `Colaborador ${nuevoEstado ? 'habilitado' : 'deshabilitado'} correctamente`,
                 timer: 1500,
                 showConfirmButton: false
-              });
+            });
+        } catch (error) {
+            const button = document.querySelector(`button[data-colaborador-id="${colaboradorId}"]`);
+            if (button) {
+                button.disabled = false;
+                button.textContent = nuevoEstado ? 'Deshabilitar' : 'Restaurar';
             }
-          });
+            Swal.fire({ icon: 'error', title: 'Error', text: error.message });
         }
-      };
-  });
+    };
 
-  // Variables globales para el chat
+    const agregarColaboradorAlFormulario = async (colaboradorId) => {
+        if (!esRenovacion) return;
+        if (document.querySelector(`.person-group[data-colaborador-id="${colaboradorId}"]`)) return;
+
+        try {
+            const response = await fetch(`/obtener-colaborador/${colaboradorId}`);
+            if (!response.ok) throw new Error('No se pudo obtener el colaborador');
+            const colaborador = await response.json();
+
+            const div = document.createElement('div');
+            div.className = 'person-group mb-4 relative p-4 border border-ga-cream rounded-lg';
+            div.dataset.colaboradorId = colaborador.id;
+            div.innerHTML = `
+                <button type="button" class="remove-person absolute -top-3 -right-3 w-8 h-8 bg-ga-gold hover:bg-ga-navy text-ga-white rounded-full flex items-center justify-center shadow-lg z-10 transition-colors duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <div class="mb-4">
+                    <input type="text" value="${colaborador.nombre}" name="nombre[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+                    <input type="number" value="${colaborador.cedula}" name="cedula[]" class="p-2 border border-ga-cream rounded-md w-full mb-2 bg-gray-100" readonly>
+                    <input type="hidden" name="colaborador_id[]" value="${colaborador.id}">
+                    <input type="hidden" name="estado[]" value="true">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-ga-navy mb-2">Foto actual</label>
+                        ${colaborador.foto ? `
+                            <div class="mb-2">
+                                <img src="${colaborador.foto}" alt="Foto actual" class="w-32 h-32 object-cover rounded-md">
+                                <a href="${colaborador.foto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver foto</a>
+                            </div>
+                        ` : '<p class="text-gray-500 text-sm mb-2">Sin foto</p>'}
+                        <label class="block text-ga-navy mb-2">Actualizar foto</label>
+                        <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                    </div>
+                    <div>
+                        <label class="block text-ga-navy mb-2">Cédula actual</label>
+                        ${colaborador.cedulaFoto ? `
+                            <div class="mb-2">
+                                <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
+                                <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
+                            </div>
+                        ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
+                        <label class="block text-ga-navy mb-2">Actualizar cédula</label>
+                        <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                    </div>
+                </div>
+            `;
+            personasContainer.appendChild(div);
+            updateRemoveButtons();
+        } catch (error) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo agregar el colaborador' });
+        }
+    };
+
+    const quitarColaboradorDelFormulario = (colaboradorId) => {
+        if (!esRenovacion) return;
+        const div = document.querySelector(`.person-group[data-colaborador-id="${colaboradorId}"]`);
+        if (div) div.remove();
+        updateRemoveButtons();
+    };
+
+    // Envío del formulario
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+        const fechaFin = new Date(document.getElementById('fin-obra').value);
+
+        if (isNaN(fechaInicio) || isNaN(fechaFin)) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Seleccione fechas válidas' });
+            return;
+        }
+
+        if (fechaFin < fechaInicio) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'La fecha de fin debe ser posterior o igual a la de inicio' });
+            return;
+        }
+
+        if (personasContainer.children.length === 0) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Agregue al menos un colaborador' });
+            return;
+        }
+
+        const requiredFields = form.querySelectorAll('[required]');
+        let hasEmptyFields = false;
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                hasEmptyFields = true;
+                field.classList.add('border-red-500');
+            } else {
+                field.classList.remove('border-red-500');
+            }
+        });
+
+        if (hasEmptyFields) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Complete todos los campos requeridos' });
+            return;
+        }
+
+        const formData = new FormData(form);
+        const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
+
+        try {
+            Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) throw new Error('Error al procesar la solicitud');
+
+            const result = await response.json();
+            await Swal.fire({
+                icon: 'success',
+                title: 'Éxito',
+                text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente'
+            });
+            window.location.reload();
+        } catch (error) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Error al procesar la solicitud: ' + error.message });
+        }
+    });
+
+    // Cálculo de días
+    const calcularDias = () => {
+        const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+        const fechaFin = new Date(document.getElementById('fin-obra').value);
+        const diasInput = document.getElementById('dias');
+
+        if (!isNaN(fechaInicio) && !isNaN(fechaFin)) {
+            const diferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+            if (diferencia < 1) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'La fecha de fin debe ser posterior o igual a la de inicio' });
+                document.getElementById('fin-obra').value = document.getElementById('inicio-obra').value;
+                diasInput.value = '1';
+            } else {
+                diasInput.value = diferencia;
+            }
+        } else {
+            diasInput.value = '';
+        }
+    };
+
+    ['inicio-obra', 'fin-obra'].forEach(id => {
+        document.getElementById(id).addEventListener('change', function() {
+            const otherId = id === 'inicio-obra' ? 'fin-obra' : 'inicio-obra';
+            const otherInput = document.getElementById(otherId);
+            if (!otherInput.value) otherInput.value = this.value;
+            calcularDias();
+        });
+    });
+
+    // Previsualización de archivos
+    ['arl', 'pasocial'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', function() {
+            document.getElementById(`${id}-filename`).textContent = this.files[0]?.name || 'Ningún archivo seleccionado';
+        });
+    });
+
+    // Inicialización
+    submitButton.textContent = 'Enviar Solicitud';
+    if (personasContainer.children.length === 0) addCollaborator();
+    updateVehiculosCount();
+    addPersonBtn.addEventListener('click', addCollaborator);
+    addVehiculoBtn.addEventListener('click', addVehiculo);
+
+    // Gestión de modales
+    $(document).on('hidden.bs.modal', '.modal', () => document.activeElement.blur());
+    $(document).on('click', '.modal button', e => e.stopPropagation());
+});
+
+// Chat Implementation (separado para mejor organización)
 let currentSolicitudId = null;
 let currentChatType = null;
 let socket = null;
 let oldestMessageId = null;
 let interventorName = '';
 let isLoadingMore = false;
- 
+const sentMessages = new Map();
+const displayedMessages = new Set();
 
-const sentMessages = new Map(); // Mapa para rastrear mensajes enviados por tempId -> messageId
-const displayedMessages = new Set(); // IDs de mensajes ya mostrados
+const getContratistaUserId = () => {
+    return window.contratistaUserId || document.querySelector('[data-contratista-user-id]')?.dataset.contratistaUserId || 
+           document.querySelector('meta[name="contratista-user-id"]')?.getAttribute('content') || null;
+};
 
-// Obtener el ID del usuario contratista
-function getContratistaUserId() {
-  if (window.contratistaUserId && window.contratistaUserId !== 'undefined') {
-    return window.contratistaUserId;
-  }
-  const userIdElement = document.querySelector('[data-contratista-user-id]');
-  if (userIdElement && userIdElement.dataset.contratistaUserId) {
-    return userIdElement.dataset.contratistaUserId;
-  }
-  const metaTag = document.querySelector('meta[name="contratista-user-id"]');
-  if (metaTag && metaTag.getAttribute('content')) {
-    return metaTag.getAttribute('content');
-  }
-  console.error('❌ No se pudo obtener un ID de usuario contratista válido');
-  return null;
-}
 
-function getUserId() {
-  return getContratistaUserId();
-}
+window.openChatModal = async (solicitudId) => {
+    try {
+        currentSolicitudId = solicitudId;
+        sentMessages.clear();
+        displayedMessages.clear();
 
-// Abrir el modal de chat
-window.openChatModal = async function(solicitudId) {
-  try {
-    console.log(`Abriendo modal de chat para solicitud ${solicitudId}`);
-    currentSolicitudId = solicitudId;
-    sentMessages.clear();
-    displayedMessages.clear();
-    
-    const solicitudIdElement = document.getElementById('chatSolicitudId');
-    if (solicitudIdElement) solicitudIdElement.textContent = solicitudId;
+        const modalElement = document.getElementById('chatModal');
+        if (!modalElement) throw new Error('No se encontró el modal de chat');
+        modalElement.style.display = 'flex';
+        modalElement.classList.remove('hidden');
+
+        document.getElementById('chatSolicitudId').textContent = solicitudId;
+
+        const userId = getContratistaUserId();
+        if (!userId) throw new Error('No se pudo obtener ID de usuario');
+
+        // Initialize both sst and soporte chats
+        await Promise.all([
+            fetch('/api/chat/iniciar/' + solicitudId + '/sst', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId })
+            }).catch(err => console.warn('Error al inicializar chat SST:', err)),
+            fetch('/api/chat/iniciar/' + solicitudId + '/soporte', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId })
+            }).catch(err => console.warn('Error al inicializar chat Soporte:', err))
+        ]);
+
+        if (socket?.readyState === WebSocket.OPEN) socket.close();
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        socket.onopen = () => {
+            socket.send(JSON.stringify({
+                type: 'identify',
+                userId,
+                role: 'contratista',
+                solicitudId
+            }));
+        };
+
+        socket.onmessage = (event) => {
+            console.log('Received WebSocket message:', event.data);
+            const message = JSON.parse(event.data);
+            if (message.type === 'identify_confirmation') return;
+
+            if (message.type === 'status_update') {
+                const { tempId, status, messageId } = message;
+                const existing = document.querySelector(`.chat-message[data-message-id="${tempId}"]`);
+                if (existing) {
+                    existing.dataset.messageId = messageId;
+                    updateMessageStatus(messageId, status);
+                    sentMessages.set(tempId, messageId);
+                    displayedMessages.add(messageId);
+                }
+                return;
+            }
+
+            if (message.id && message.solicitudId) {
+                const isSender = parseInt(message.usuario_id) === parseInt(userId);
+                if (isSender && sentMessages.has(message.tempId || String(message.id))) return;
+                if (displayedMessages.has(message.id)) return;
+
+                const normalizedMessage = {
+                    id: message.id,
+                    usuario_id: message.usuario_id,
+                    content: message.content,
+                    created_at: message.created_at,
+                    type: message.type || 'sst',
+                    leido: message.leido || false
+                };
+
+                if (message.solicitudId === currentSolicitudId && message.type === currentChatType) {
+                    displayMessage(normalizedMessage);
+                    displayedMessages.add(message.id);
+                    if (!isSender) markMessagesAsRead(currentSolicitudId, currentChatType);
+                } else {
+                    updateUnreadCounter(message.solicitudId, message.type);
+                    if (!isSender) notifyNewMessage(message);
+                }
+            }
+        };
+
+        socket.onerror = (error) => console.error('WebSocket error:', error);
+        socket.onclose = () => console.log('WebSocket cerrado');
+
+        await fetchInterventorInfo(solicitudId);
+        await loadChat('sst'); // Default to SST chat on open
+        document.getElementById('chatMessages').addEventListener('scroll', scrollHandler);
+    } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo abrir el chat: ' + error.message });
+    }
+};
+
+window.closeChatModal = () => {
+    if (socket) {
+        socket.close();
+        socket = null;
+    }
+
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        chatMessages.innerHTML = '';
+        chatMessages.removeEventListener('scroll', scrollHandler);
+    }
+
+    document.getElementById('chatInput').value = '';
+    ['sstContact', 'interventorContact'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+    document.getElementById('chatActiveContact').textContent = 'Selecciona un contacto';
     
     const modalElement = document.getElementById('chatModal');
-    if (!modalElement) throw new Error('No se encontró el elemento del modal de chat');
-    modalElement.style.display = 'flex';
-    modalElement.classList.remove('hidden');
-    
-    // Inicializar el chat antes de conectar WebSocket para evitar errores de duplicidad
-    const contratistaUserId = getContratistaUserId();
-    try {
-      const initResponse = await fetch('/api/chat/iniciar/' + solicitudId + '/sst', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: contratistaUserId })
-      });
-      
-      if (!initResponse.ok) {
-        console.warn('No se pudo inicializar el chat, pero continuaremos: ', await initResponse.text());
-      } else {
-        console.log('Chat inicializado correctamente');
-      }
-    } catch (initError) {
-      console.warn('Error al inicializar chat, pero continuaremos: ', initError);
-    }
-    
-    // Continuar con la conexión WebSocket
-    if (socket && socket.readyState === WebSocket.OPEN) socket.close();
-    
-    // Resto del código original...
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    console.log(`Conectando a WebSocket: ${wsUrl}`);
-    socket = new WebSocket(wsUrl);
-    
-    socket.onopen = function() {
-      console.log('🔌 WebSocket contratista conectado');
-      const contratistaUserId = getContratistaUserId();
-      if (!contratistaUserId) {
-        console.error('❌ ERROR: No se pudo obtener ID de usuario válido');
-        Swal.fire({
-          icon: 'error',
-          title: 'Error de conexión',
-          text: 'No se pudo establecer su identidad. Por favor recargue la página.'
-        });
-        return;
-      }
-      console.log('🔑 Enviando identificación de contratista con usuario:', contratistaUserId);
-      socket.send(JSON.stringify({
-        type: 'identify',
-        userId: contratistaUserId,
-        role: 'contratista',
-        solicitudId: solicitudId
-      }));
-    };
-    
-    socket.onmessage = function(event) {
-      try {
-        const message = JSON.parse(event.data);
-        console.log('📨 Mensaje recibido:', message);
-        
-        if (message.type === 'identify_confirmation') return;
-        
-        if (message.type === 'status_update') {
-          const { tempId, status, messageId } = message;
-          const existingMessage = document.querySelector(`.chat-message[data-message-id="${tempId}"]`);
-          if (existingMessage) {
-            existingMessage.dataset.messageId = messageId;
-            updateMessageStatus(messageId, status);
-            sentMessages.set(tempId, messageId); // Mapear tempId a messageId
-            displayedMessages.add(messageId); // Registrar como mostrado
-          }
-          return;
-        }
-        
-        if (message.id && message.solicitudId) {
-          const contratistaUserId = getContratistaUserId();
-          const isSender = parseInt(message.usuario_id) === parseInt(contratistaUserId);
-          
-          // Ignorar mensajes propios ya enviados (basado en sentMessages)
-          if (isSender && sentMessages.has(message.tempId || String(message.id))) {
-            console.log(`Ignorando mensaje propio ya enviado: ${message.id}`);
-            return;
-          }
-          
-          // Ignorar mensajes ya mostrados
-          if (displayedMessages.has(message.id)) {
-            console.log(`Mensaje ${message.id} ya mostrado, ignorando`);
-            return;
-          }
-          
-          if (message.solicitudId === currentSolicitudId && message.type === currentChatType) {
-            const normalizedMessage = {
-              id: message.id,
-              usuario_id: message.usuario_id,
-              content: message.content,
-              created_at: message.created_at,
-              type: message.type || 'sst',
-              leido: message.leido || false
-            };
-            
-            displayMessage(normalizedMessage);
-            displayedMessages.add(message.id);
-            
-            if (!isSender) {
-              markMessagesAsRead(currentSolicitudId, currentChatType);
-            }
-          } else {
-            updateUnreadCounter(message.solicitudId, message.type);
-            if (!isSender) {
-              notifyNewMessage(message); // Usar la función correcta
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error al procesar mensaje WebSocket:', error);
-      }
-    };
-    
-    socket.onerror = function(error) {
-      console.error('Error en la conexión WebSocket:', error);
-    };
-    
-    socket.onclose = function() {
-      console.log('La conexión WebSocket ha sido cerrada');
-    };
-    
-    await fetchInterventorInfo(solicitudId);
-    await loadChat('sst');
-    
-    const chatMessages = document.getElementById('chatMessages');
-    chatMessages.addEventListener('scroll', scrollHandler);
-    
-  } catch (error) {
-    console.error('Error al abrir el chat:', error);
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'No se pudo abrir el chat. Por favor intente nuevamente.'
-    });
-  }
-};
-
-
-// Cerrar el modal de chat
-window.closeChatModal = function() {
-  console.log('Cerrando modal de chat');
-  if (socket) {
-    socket.onclose = null;
-    socket.onerror = null;
-    socket.onmessage = null;
-    socket.onopen = null;
-    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-      socket.close();
-    }
-    socket = null;
-  }
-  
-  const chatMessages = document.getElementById('chatMessages');
-  if (chatMessages) {
-    chatMessages.innerHTML = '';
-    chatMessages.removeEventListener('scroll', scrollHandler);
-  }
-  
-  const chatInput = document.getElementById('chatInput');
-  if (chatInput) chatInput.value = '';
-  
-  const sstContact = document.getElementById('sstContact');
-  const interventorContact = document.getElementById('interventorContact');
-  const chatActiveContact = document.getElementById('chatActiveContact');
-  if (sstContact) sstContact.classList.remove('active');
-  if (interventorContact) interventorContact.classList.remove('active');
-  if (chatActiveContact) chatActiveContact.textContent = 'Selecciona un contacto';
-  
-  const modalElement = document.getElementById('chatModal');
-  if (modalElement) {
-    modalElement.style.display = 'none'; // Asegurar que se oculte
     modalElement.classList.add('hidden');
-  }
-  
-  currentSolicitudId = null;
-  currentChatType = null;
-  oldestMessageId = null;
-  interventorName = '';
-  
-  // Limpiar conjunto de mensajes mostrados
-  displayedMessages.clear();
-}
+    modalElement.style.display = 'none';
 
-// Cargar chat específico
-window.loadChat = async function(chatType) {
-  try {
-    // Limpiar el conjunto de mensajes mostrados
+    currentSolicitudId = null;
+    currentChatType = null;
+    oldestMessageId = null;
+    interventorName = '';
     displayedMessages.clear();
-    
-    // Resto del código original
-    console.log(`Cargando chat de tipo: ${chatType}`);
-    currentChatType = chatType;
-    
-    document.getElementById('chatActiveContact').textContent = chatType === 'sst' ? 'SST' : `Interventor: ${interventorName}`;
-    document.getElementById('sstContact').classList.remove('active');
-    document.getElementById('interventorContact').classList.remove('active');
-    document.getElementById(`${chatType}Contact`).classList.add('active');
-    
-    const messages = await loadInitialMessagesWithRetry(currentSolicitudId, chatType, getContratistaUserId(), 3);
-    const chatMessages = document.getElementById('chatMessages');
-    chatMessages.innerHTML = '';
-    
-    if (messages.length === 0) {
-      chatMessages.innerHTML = '<div class="text-center text-gray-500 p-4">No hay mensajes en esta conversación. Escribe para comenzar.</div>';
-    } else {
-      console.log('Mensajes cargados:');
-      messages.forEach(displayMessage);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-    
-    await markMessagesAsRead(currentSolicitudId, chatType);
-  } catch (error) {
-    console.error('Error al cargar chat:', error);
-    document.getElementById('chatMessages').innerHTML = `
-      <div class="flex justify-center my-4 p-4 bg-red-100 text-red-700 rounded-lg">
-        <p>Error al cargar mensajes. <button class="underline ml-2" onclick="loadChat('${chatType}')">Reintentar</button></p>
-      </div>
-    `;
-  }
 };
 
-// Cargar mensajes iniciales con reintentos
-async function loadInitialMessagesWithRetry(solicitudId, chatType, userId, maxRetries = 3) {
-  let retries = 0;
-  while (retries < maxRetries) {
+window.loadChat = async (chatType) => {
     try {
-      retries++;
-      console.log(`Intento ${retries} de cargar mensajes para solicitud ${solicitudId}, tipo ${chatType}, usuario ${userId}`);
-      
-      const chatMessages = document.getElementById('chatMessages');
-      chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-ga-gold"></div></div>';
-      
-      const response = await fetch(`/api/chat/${solicitudId}/${chatType}?userId=${userId}&limit=20`);
-      if (!response.ok) throw new Error(`Error al cargar mensajes: ${response.status}`);
-      
-      const messages = await response.json();
-      console.log(`✅ Mensajes recibidos del backend:`, messages);
-      
-      if (messages.length > 0) {
-        oldestMessageId = messages.reduce((oldest, current) => {
-          return parseInt(current.id) < parseInt(oldest.id) ? current : oldest;
-        }, messages[0]).id;
-      }
-      return messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-    } catch (err) {
-      console.error(`Error en intento ${retries}:`, err);
-      if (retries === maxRetries) throw err;
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries - 1)));
-    }
-  }
-}
-// Cargar más mensajes al hacer scroll
-async function loadMoreMessages(solicitudId, type) {
-  if (!oldestMessageId || isLoadingMore) return;
-  isLoadingMore = true;
-  
-  try {
-    const userId = getUserId();
-    const chatMessages = document.getElementById('chatMessages');
-    
-    const loadingIndicator = document.createElement('div');
-    loadingIndicator.className = 'text-center text-gray-500 text-sm py-2';
-    loadingIndicator.innerHTML = '<div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-ga-gold inline-block"></div> Cargando mensajes anteriores...';
-    chatMessages.insertBefore(loadingIndicator, chatMessages.firstChild);
-    
-    const response = await fetch(`/api/chat/${solicitudId}/${type}?limit=20&before=${oldestMessageId}&userId=${userId}`);
-    if (!response.ok) throw new Error('Error al cargar más mensajes');
-    
-    const messages = await response.json();
-    loadingIndicator.remove();
-    
-    if (messages.length > 0) {
-      const scrollHeightBefore = chatMessages.scrollHeight;
-      const scrollTopBefore = chatMessages.scrollTop;
-      
-      const fragment = document.createDocumentFragment();
-      messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).forEach(message => {
-        fragment.appendChild(createMessageElement(message));
-      });
-      
-      chatMessages.insertBefore(fragment, chatMessages.firstChild);
-      oldestMessageId = messages.reduce((oldest, current) => {
-        return parseInt(current.id) < parseInt(oldest.id) ? current : oldest;
-      }, messages[0]).id;
-      
-      chatMessages.scrollTop = scrollTopBefore + (chatMessages.scrollHeight - scrollHeightBefore);
-    } else {
-      oldestMessageId = null;
-      const noMoreMsg = document.createElement('div');
-      noMoreMsg.className = 'text-center text-gray-500 text-xs py-1';
-      noMoreMsg.textContent = 'No hay más mensajes';
-      chatMessages.insertBefore(noMoreMsg, chatMessages.firstChild);
-      setTimeout(() => noMoreMsg.remove(), 3000);
-    }
-  } catch (error) {
-    console.error('Error al cargar más mensajes:', error);
-  } finally {
-    isLoadingMore = false;
-  }
-}
+        displayedMessages.clear();
+        currentChatType = chatType;
 
-// Manejar scroll
-function scrollHandler() {
-  const chatMessages = document.getElementById('chatMessages');
-  if (chatMessages.scrollTop < 50 && oldestMessageId && !isLoadingMore) {
-    loadMoreMessages(currentSolicitudId, currentChatType);
-  }
-}
+        // Set the active contact name based on chat type
+        if (chatType === 'sst') {
+            document.getElementById('chatActiveContact').textContent = 'SST';
+        } else if (chatType === 'interventor') {
+            document.getElementById('chatActiveContact').textContent = `Interventor: ${interventorName}`;
+        } else if (chatType === 'soporte') {
+            document.getElementById('chatActiveContact').textContent = 'Soporte';
+        }
 
-// Función para mostrar un mensaje
-function displayMessage(message) {
-  const chatMessages = document.getElementById('chatMessages');
-  
-  // Si el mensaje ya tiene un ID permanente (no temporal) y ya está en nuestro conjunto, ignorar
-  if (message.id && !String(message.id).startsWith('temp-') && displayedMessages.has(message.id)) {
-    console.log(`Mensaje ${message.id} ya está en el DOM, no duplicando`);
-    return;
-  }
-  
-  // Para mensajes con ID temporal, verificar si ya existe en el DOM
-  if (message.id && String(message.id).startsWith('temp-')) {
-    const existingMessage = document.querySelector(`.chat-message[data-message-id="${message.id}"]`);
-    if (existingMessage) {
-      console.log(`Mensaje temporal ${message.id} ya está en el DOM, no duplicando`);
-      return;
-    }
-  }
-  
-  // Limpiar mensaje de "no hay mensajes" si existe
-  const emptyMessage = chatMessages.querySelector('.text-center.text-gray-500');
-  if (emptyMessage) chatMessages.innerHTML = '';
-  
-  // Crear y mostrar el mensaje
-  const messageElement = createMessageElement(message);
-  if (messageElement) {
-    chatMessages.appendChild(messageElement);
-    
-    // Si el mensaje tiene ID permanente, añadirlo al conjunto
-    if (message.id && !String(message.id).startsWith('temp-')) {
-      displayedMessages.add(message.id);
-    }
-    
-    // Auto-scroll si estamos cerca del final
-    const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
-    if (isNearBottom) {
-      setTimeout(() => chatMessages.scrollTop = chatMessages.scrollHeight, 100);
-    }
-  }
-}
+        ['sstContact', 'interventorContact', 'soporteContact'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+        document.getElementById(`${chatType}Contact`).classList.add('active');
 
-// Crear elemento de mensaje
-function createMessageElement(message) {
-  try {
-    const contratistaUserId = getContratistaUserId();
-    const isSender = parseInt(message.usuario_id) === parseInt(contratistaUserId);
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `chat-message p-3 my-2 rounded-lg ${isSender ? 'bg-ga-gold text-white ml-auto' : 'bg-gray-200 text-gray-800'} max-w-xs`;
-    
-    // Guardar ID del mensaje (puede ser temporal o permanente)
-    const messageId = message.id || '';
-    messageDiv.dataset.messageId = messageId;
-    messageDiv.dataset.userId = message.usuario_id;
-    messageDiv.dataset.isSender = isSender;
-    
-    // Extraer contenido del mensaje de manera segura
-    let messageContent;
-    if (typeof message.content === 'string') {
-      try {
-        // Intentar parsear como JSON
-        const parsed = JSON.parse(message.content);
-        messageContent = parsed.text || message.content;
-      } catch (e) {
-        // Si no es JSON válido, usar directamente
-        messageContent = message.content;
-      }
-    } else if (message.content && typeof message.content === 'object') {
-      // Si ya es un objeto, extraer el texto o convertirlo a string
-      messageContent = message.content.text || JSON.stringify(message.content);
-    } else {
-      // Valor por defecto
-      messageContent = "Mensaje sin contenido";
-    }
-    
-    // Formatear fecha
-    const date = new Date(message.created_at || Date.now());
-    const formattedTime = date.toLocaleString('es-ES', { 
-      dateStyle: 'short', 
-      timeStyle: 'short' 
-    });
-    
-    // Determinar icono de estado para mensajes enviados por el usuario
-    let statusIcon = '';
-    if (isSender) {
-      // Convertir ID a string de forma segura
-      const messageIdStr = String(messageId);
-      
-      // Determinar icono según el estado
-      if (messageIdStr.startsWith('temp-')) {
-        statusIcon = '<span class="status-icon-sent">✓</span>'; // Enviado
-      } else if (message.leido) {
-        statusIcon = '<span class="status-icon-read">✓✓</span>'; // Leído
-      } else {
-        statusIcon = '<span class="status-icon-delivered">✓✓</span>'; // Entregado
-      }
-    }
-    
-    // Crear contenido HTML
-    messageDiv.innerHTML = `
-      <div class="text-sm mb-1">${messageContent}</div>
-      <div class="text-xs ${isSender ? 'text-gray-200' : 'text-gray-500'} text-right">${formattedTime} ${statusIcon}</div>
-    `;
-    
-    return messageDiv;
-  } catch (error) {
-    console.error('Error al crear elemento de mensaje:', error);
-    return null;
-  }
-}
+        const messages = await loadInitialMessagesWithRetry(currentSolicitudId, chatType, getContratistaUserId());
+        const chatMessages = document.getElementById('chatMessages');
+        chatMessages.innerHTML = messages.length === 0 ? 
+            '<div class="text-center text-gray-500 p-4">No hay mensajes. Escribe para comenzar.</div>' : '';
+        
+        messages.forEach(displayMessage);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
 
-// Enviar mensaje
-function sendMessage() {
-  const input = document.getElementById('chatInput');
-  const content = input.value.trim();
-  if (!content || !currentSolicitudId || !currentChatType || !socket) return;
-  
-  const contratistaUserId = getContratistaUserId();
-  if (!contratistaUserId) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'No se pudo identificar su usuario. Por favor recargue la página.'
-    });
-    return;
-  }
-  
-  const tempId = 'temp-' + Date.now();
-  const timestamp = new Date().toISOString();
-  
-  const localMessage = {
-    id: tempId,
-    usuario_id: contratistaUserId,
-    content: content,
-    created_at: timestamp,
-    type: currentChatType
-  };
-  
-  displayMessage(localMessage);
-  sentMessages.set(tempId, tempId);
-  displayedMessages.add(tempId);
-  
-  const messageToSend = {
-    solicitudId: currentSolicitudId,
-    type: currentChatType,
-    content: content,
-    userId: contratistaUserId,
-    tempId: tempId,
-    timestamp: timestamp
-  };
-  
-  if (socket.readyState === WebSocket.OPEN) {
-    try {
-      socket.send(JSON.stringify(messageToSend));
-      setTimeout(() => updateMessageStatus(tempId, 'sent'), 300);
-      setTimeout(() => updateMessageStatus(tempId, 'delivered'), 1000);
+        await markMessagesAsRead(currentSolicitudId, chatType);
     } catch (error) {
-      console.error('Error al enviar mensaje:', error);
-      updateMessageStatus(tempId, 'error');
-      
-      Swal.fire({
-        icon: 'error',
-        title: 'Error al enviar mensaje',
-        text: 'No se pudo enviar el mensaje. Por favor intente nuevamente más tarde.',
-        timer: 3000,
-        showConfirmButton: false
-      });
+        document.getElementById('chatMessages').innerHTML = `
+            <div class="flex justify-center my-4 p-4 bg-red-100 text-red-700 rounded-lg">
+                Error al cargar mensajes. <button class="underline ml-2" onclick="loadChat('${chatType}')">Reintentar</button>
+            </div>
+        `;
     }
-  } else {
-    updateMessageStatus(tempId, 'error');
-    
-    // Reintentar conectar
-    Swal.fire({
-      icon: 'warning',
-      title: 'Conexión perdida',
-      text: 'Intentando reconectar...',
-      timer: 2000,
-      showConfirmButton: false
-    });
-    
-    // Reabrir el chat para reconectar
-    setTimeout(() => {
-      closeChatModal();
-      setTimeout(() => openChatModal(currentSolicitudId), 500);
-    }, 2000);
-  }
-  
-  input.value = '';
-}
-// Actualizar estado del mensaje
-function updateMessageStatus(messageId, status) {
-  const messageElement = document.querySelector(`.chat-message[data-message-id="${messageId}"]`);
-  if (!messageElement) return;
-  
-  const statusContainer = messageElement.querySelector('.text-right');
-  if (!statusContainer) return;
-  
-  const timeText = statusContainer.textContent.trim().split(' ').slice(0, 2).join(' ');
-  let statusIcon = status === 'error' ? '<span class="status-icon-error">!</span>' : 
-                   status === 'sent' ? '<span class="status-icon-sent">✓</span>' : 
-                   status === 'delivered' ? '<span class="status-icon-delivered">✓✓</span>' : 
-                   '<span class="status-icon-read">✓✓</span>';
-  
-  statusContainer.innerHTML = `${timeText} ${statusIcon}`;
-}
+};
 
-// Marcar mensajes como leídos
-async function markMessagesAsRead(solicitudId, type) {
-  try {
-    const contratistaUserId = getContratistaUserId();
-    if (!contratistaUserId) return;
-    
-    console.log(`Marcando mensajes como leídos para solicitud ${solicitudId}, usuario ${contratistaUserId}, tipo ${type}`);
-    
-    const response = await fetch(`/api/chat/${solicitudId}/${type}/mark-read`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: contratistaUserId })
-    });
-    
-    let data = await response.json().catch(() => ({ success: response.ok }));
-    if (!response.ok && data.error !== 'Chat no encontrado') {
-      throw new Error(data.message || 'Error al marcar mensajes como leídos');
-    }
-    
-    const badge = document.getElementById(`unread-count-${type}`);
-    if (badge) {
-      badge.textContent = '0';
-      badge.classList.add('hidden');
-    }
-  } catch (error) {
-    console.error(`Error al marcar mensajes como leídos (${type}):`, error);
-  }
-}
+const loadInitialMessagesWithRetry = async (solicitudId, chatType, userId, maxRetries = 3) => {
+    for (let retries = 0; retries < maxRetries; retries++) {
+        try {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '<div class="flex justify-center my-4"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-ga-gold"></div></div>';
 
-// Actualizar contador de mensajes no leídos
-async function updateUnreadCounter(solicitudId, type) {
-  try {
+            const response = await fetch(`/api/chat/${solicitudId}/${chatType}?userId=${userId}&limit=20`);
+            if (!response.ok) throw new Error('Error al cargar mensajes');
+
+            const messages = await response.json();
+            if (messages.length > 0) {
+                oldestMessageId = messages.reduce((min, curr) => parseInt(curr.id) < parseInt(min.id) ? curr : min).id;
+            }
+            return messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        } catch (err) {
+            if (retries === maxRetries - 1) throw err;
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+        }
+    }
+};
+
+const loadMoreMessages = async (solicitudId, type) => {
+    if (!oldestMessageId || isLoadingMore) return;
+    isLoadingMore = true;
+
+    try {
+        const chatMessages = document.getElementById('chatMessages');
+        const loading = document.createElement('div');
+        loading.className = 'text-center text-gray-500 text-sm py-2';
+        loading.innerHTML = '<div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-ga-gold inline-block"></div> Cargando...';
+        chatMessages.insertBefore(loading, chatMessages.firstChild);
+
+        const response = await fetch(`/api/chat/${solicitudId}/${type}?limit=20&before=${oldestMessageId}&userId=${getContratistaUserId()}`);
+        if (!response.ok) throw new Error('Error al cargar más mensajes');
+
+        const messages = await response.json();
+        loading.remove();
+
+        if (messages.length > 0) {
+            const scrollHeightBefore = chatMessages.scrollHeight;
+            const scrollTopBefore = chatMessages.scrollTop;
+
+            messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).forEach(displayMessage);
+            oldestMessageId = messages.reduce((min, curr) => parseInt(curr.id) < parseInt(min.id) ? curr : min).id;
+
+            chatMessages.scrollTop = scrollTopBefore + (chatMessages.scrollHeight - scrollHeightBefore);
+        } else {
+            oldestMessageId = null;
+            const noMore = document.createElement('div');
+            noMore.className = 'text-center text-gray-500 text-xs py-1';
+            noMore.textContent = 'No hay más mensajes';
+            chatMessages.insertBefore(noMore, chatMessages.firstChild);
+            setTimeout(() => noMore.remove(), 3000);
+        }
+    } catch (error) {
+        console.error('Error al cargar más mensajes:', error);
+    } finally {
+        isLoadingMore = false;
+    }
+};
+
+const scrollHandler = () => {
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages.scrollTop < 50 && oldestMessageId && !isLoadingMore) {
+        loadMoreMessages(currentSolicitudId, currentChatType);
+    }
+};
+
+const displayMessage = (message) => {
+    if (displayedMessages.has(message.id)) return;
+
+    const chatMessages = document.getElementById('chatMessages');
+    const emptyMessage = chatMessages.querySelector('.text-center.text-gray-500');
+    if (emptyMessage) chatMessages.innerHTML = '';
+
+    const userId = getContratistaUserId();
+    const isSender = parseInt(message.usuario_id) === parseInt(userId);
+
+    const div = document.createElement('div');
+    div.className = `chat-message p-3 my-2 rounded-lg ${isSender ? 'bg-ga-gold text-white ml-auto' : 'bg-gray-200 text-gray-800'} max-w-xs`;
+    div.dataset.messageId = message.id;
+    div.dataset.userId = message.usuario_id;
+
+    let content;
+    try {
+        // Intentar parsear como JSON si es string
+        if (typeof message.content === 'string') {
+            const parsed = JSON.parse(message.content);
+            content = parsed.text || message.content;
+        } else {
+            content = message.content.text || JSON.stringify(message.content);
+        }
+    } catch (e) {
+        // Si falla el parseo, usar el contenido directamente
+        content = message.content;
+    }
+
+    const date = new Date(message.created_at || Date.now());
+    const time = date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+
+    const statusIcon = isSender ? (
+        String(message.id).startsWith('temp-') ? '<span class="status-icon-sent">✓</span>' :
+        message.leido ? '<span class="status-icon-read">✓✓</span>' : '<span class="status-icon-delivered">✓✓</span>'
+    ) : '';
+
+    div.innerHTML = `
+        <div class="text-sm mb-1">${content}</div>
+        <div class="text-xs ${isSender ? 'text-gray-200' : 'text-gray-500'} text-right">${time} ${statusIcon}</div>
+    `;
+
+    chatMessages.appendChild(div);
+    displayedMessages.add(message.id);
+
+    const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+    if (isNearBottom) setTimeout(() => chatMessages.scrollTop = chatMessages.scrollHeight, 100);
+};
+
+const sendMessage = () => {
+    const input = document.getElementById('chatInput');
+    const content = input.value.trim();
+    if (!content || !currentSolicitudId || !currentChatType || !socket) return;
+
+    const userId = getContratistaUserId();
+    if (!userId) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo identificar usuario' });
+        return;
+    }
+
+    const tempId = 'temp-' + Date.now();
+    const timestamp = new Date().toISOString();
+
+    const localMessage = { id: tempId, usuario_id: userId, content, created_at: timestamp, type: currentChatType };
+    displayMessage(localMessage);
+    sentMessages.set(tempId, tempId);
+    displayedMessages.add(tempId);
+
+    const messageToSend = { solicitudId: currentSolicitudId, type: currentChatType, content, userId, tempId, timestamp };
+
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(messageToSend));
+        setTimeout(() => updateMessageStatus(tempId, 'sent'), 300);
+        setTimeout(() => updateMessageStatus(tempId, 'delivered'), 1000);
+    } else {
+        updateMessageStatus(tempId, 'error');
+        Swal.fire({ icon: 'warning', title: 'Conexión perdida', text: 'Reconectando...' });
+        setTimeout(() => { closeChatModal(); openChatModal(currentSolicitudId); }, 2000);
+    }
+
+    input.value = '';
+};
+
+const updateMessageStatus = (messageId, status) => {
+    const messageElement = document.querySelector(`.chat-message[data-message-id="${messageId}"]`);
+    if (!messageElement) return;
+
+    const statusContainer = messageElement.querySelector('.text-right');
+    if (!statusContainer) return;
+
+    const timeText = statusContainer.textContent.trim().split(' ').slice(0, 2).join(' ');
+    const statusIcon = status === 'error' ? '<span class="status-icon-error">!</span>' :
+                      status === 'sent' ? '<span class="status-icon-sent">✓</span>' :
+                      status === 'delivered' ? '<span class="status-icon-delivered">✓✓</span>' :
+                      '<span class="status-icon-read">✓✓</span>';
+
+    statusContainer.innerHTML = `${timeText} ${statusIcon}`;
+};
+
+const markMessagesAsRead = async (solicitudId, type) => {
+    const userId = getContratistaUserId();
+    if (!userId) return;
+
+    try {
+        const response = await fetch(`/api/chat/${solicitudId}/${type}/mark-read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            if (errorData.error === 'Chat no encontrado') {
+                console.log('Chat no encontrado, ignorando error');
+                return;
+            }
+            throw new Error(errorData.message || 'Error al marcar mensajes');
+        }
+        
+        const badge = document.getElementById(`unread-count-${type}`);
+        if (badge) {
+            badge.textContent = '0';
+            badge.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error al marcar mensajes como leídos:', error);
+    }
+};
+
+const updateUnreadCounter = async (solicitudId, type) => {
     if (currentSolicitudId === solicitudId && currentChatType === type) return;
-    
-    const userId = getUserId();
-    console.log(`Actualizando contador para chat ${type}, solicitud ${solicitudId}, usuario ${userId}`);
-    
-    const response = await fetch(`/api/chat/${solicitudId}/${type}/unread?userId=${userId}`);
-    if (!response.ok) throw new Error('Error al obtener contador de mensajes no leídos');
-    
-    const data = await response.json();
-    const badge = document.querySelector(`.unread-count[data-type="${type}"][data-solicitud-id="${solicitudId}"]`) ||
-                  document.getElementById(`unread-count-${type}`);
-    if (badge) {
-      badge.textContent = data.unreadCount;
-      badge.classList.toggle('hidden', data.unreadCount === 0);
+
+    try {
+        const userId = getContratistaUserId();
+        const response = await fetch(`/api/chat/${solicitudId}/${type}/unread?userId=${userId}`);
+        if (!response.ok) throw new Error('Error al obtener contador');
+
+        const data = await response.json();
+        const badge = document.querySelector(`.unread-count[data-type="${type}"][data-solicitud-id="${solicitudId}"]`) || 
+                     document.getElementById(`unread-count-${type}`);
+        if (badge) {
+            badge.textContent = data.unreadCount;
+            badge.classList.toggle('hidden', data.unreadCount === 0);
+        }
+    } catch (error) {
+        console.error('Error al actualizar contador:', error);
     }
-  } catch (error) {
-    console.error(`Error al actualizar contador para ${type}:`, error);
-  }
-}
+};
 
-// Obtener información del interventor
-async function fetchInterventorInfo(solicitudId) {
-  try {
-    const response = await fetch(`/api/solicitud/${solicitudId}/interventor`);
-    if (!response.ok) throw new Error('Error al obtener información del interventor');
+const fetchInterventorInfo = async (solicitudId) => {
+    try {
+        const response = await fetch(`/api/solicitud/${solicitudId}/interventor`);
+        if (!response.ok) throw new Error('Error al obtener interventor');
+        
+        const data = await response.json();
+        interventorName = data.interventorName || 'Sin asignar';
+        document.getElementById('interventorName').textContent = interventorName;
+    } catch (error) {
+        interventorName = 'Sin asignar';
+        document.getElementById('interventorName').textContent = interventorName;
+    }
+};
+
+const notifyNewMessage = (message) => {
+    if (parseInt(message.userId) === parseInt(getContratistaUserId())) return;
     
-    const data = await response.json();
-    interventorName = data.interventorName || 'Sin asignar';
-    document.getElementById('interventorName').textContent = interventorName;
-  } catch (error) {
-    console.error('Error al obtener interventor:', error);
-    interventorName = 'Sin asignar';
-    document.getElementById('interventorName').textContent = interventorName;
-  }
-}
+    updateUnreadCounter(message.solicitudId, message.type);
+    
+    if (!document.getElementById('chatModal').classList.contains('hidden') && 
+        currentSolicitudId === message.solicitudId && currentChatType === message.type) return;
 
-// Notificar nuevos mensajes
-function notifyNewMessage(message) {
-  if (parseInt(message.userId) === parseInt(getUserId())) return;
-  
-  updateUnreadCounter(message.solicitudId, message.type);
-  
-  const chatModalVisible = !document.getElementById('chatModal').classList.contains('hidden');
-  if (chatModalVisible && currentSolicitudId === message.solicitudId && currentChatType === message.type) return;
-  
-  if (Notification.permission === 'granted') {
-    const sender = message.type === 'sst' ? 'SST' : 'Interventor';
-    const notification = new Notification(`Nuevo mensaje de ${sender}`, {
-      body: message.content,
-      icon: '/img/logo.png',
-      tag: `chat-${message.solicitudId}-${message.type}`
-    });
-    notification.onclick = () => {
-      window.focus();
-      openChatModal(message.solicitudId);
-      loadChat(message.type);
-    };
-  }
-}
+    if (Notification.permission === 'granted') {
+        const sender = message.type === 'sst' ? 'SST' : 'Interventor';
+        const notification = new Notification(`Nuevo mensaje de ${sender}`, {
+            body: message.content,
+            icon: '/img/logo.png',
+            tag: `chat-${message.solicitudId}-${message.type}`
+        });
+        notification.onclick = () => {
+            window.focus();
+            openChatModal(message.solicitudId);
+            loadChat(message.type);
+        };
+    }
+};
 
-// Inicializar al cargar la página
 document.addEventListener('DOMContentLoaded', async () => {
-  if ("Notification" in window && Notification.permission !== "granted") {
-    Notification.requestPermission();
-  }
-  
-  const solicitudIds = Array.from(document.querySelectorAll('.unread-count[data-solicitud-id]'))
-    .map(el => el.dataset.solicitudId);
-  for (const solicitudId of solicitudIds) {
-    await updateUnreadCounter(solicitudId, 'sst');
-    await updateUnreadCounter(solicitudId, 'interventor');
-  }
+    if ("Notification" in window && Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+
+    const solicitudIds = Array.from(document.querySelectorAll('.unread-count[data-solicitud-id]'))
+        .map(el => el.dataset.solicitudId);
+    for (const id of solicitudIds) {
+        await updateUnreadCounter(id, 'sst');
+        await updateUnreadCounter(id, 'interventor');
+        await updateUnreadCounter(id, 'soporte');
+    }
+
+    document.getElementById('chatInput')?.parentElement.addEventListener('submit', (e) => {
+        e.preventDefault();
+        sendMessage();
+    });
 });
 </script>
 </body>
