@@ -51,7 +51,7 @@ controller.vistaInterventor = async (req, res) => {
     }
 
     const [userInterventor] = await connection.execute('SELECT id, username FROM users WHERE id = ?', [id]);
-    const [lugares] = await connection.execute('SELECT nombre_lugar FROM lugares ORDER BY nombre_lugar ASC'); // Cargar lugares
+    const [lugares] = await connection.execute('SELECT id, nombre_lugar FROM lugares ORDER BY nombre_lugar ASC'); // Cargar lugares
 
     let acciones;
     let query;

@@ -336,7 +336,7 @@
                 <select class="form-control" id="filtroLugar">
                   <option value="">Todos los lugares</option>
                   <% lugares.forEach(lugar => { %>
-                    <option value="<%= lugar %>"><%= lugar %></option>
+                    <option value="<%= lugar.id %>"><%= lugar.nombre_lugar %></option>
                   <% }); %>
                 </select>
               </div>

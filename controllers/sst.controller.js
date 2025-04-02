@@ -13,8 +13,26 @@ require('dotenv').config();
 const axios = require('axios');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const pdf = require('html-pdf');
-  
-  
+const { v4: uuidv4 } = require('uuid');
+const mime = require('mime-types');
+
+// Funciones de logging
+function logError(error, message) {
+    console.error(`[${new Date().toISOString()}] ${message}`);
+    if (error) {
+        console.error('Error details:', error);
+        if (error.stack) {
+            console.error('Stack trace:', error.stack);
+        }
+    }
+}
+
+function logInfo(message, data = {}) {
+    console.log(`[${new Date().toISOString()}] ${message}`);
+    if (Object.keys(data).length > 0) {
+        console.log('Data:', data);
+    }
+}
 
 const controller = {};
 
@@ -61,16 +79,17 @@ controller.vistaSst = async (req, res) => {
     
     // Obtener las solicitudes
     const [solicitud] = await connection.execute(`
-        SELECT s.*, us.username AS interventor 
+        SELECT s.*, us.username AS interventor, l.nombre_lugar 
         FROM solicitudes s 
         LEFT JOIN users us ON us.id = s.interventor_id 
+        LEFT JOIN lugares l ON s.lugar = l.id
         WHERE us.username != "COA"  
         ORDER BY id DESC
     `);
 
     // Obtener las URLs de los documentos (si existen)
     const [solicitud_url_download] = await connection.execute('SELECT * FROM sst_documentos WHERE solicitud_id IN (SELECT id FROM solicitudes)');
-    const [lugares] = await connection.execute('SELECT nombre_lugar FROM lugares ORDER BY nombre_lugar ASC'); // Cargar lugares
+    const [lugares] = await connection.execute('SELECT id, nombre_lugar FROM lugares ORDER BY nombre_lugar ASC'); // Cargar lugares
 
     // Formatear fechas
     solicitud.forEach(solici => {
@@ -93,25 +112,39 @@ controller.vistaSst = async (req, res) => {
   }
 };
 
-// Función para subir un archivo a DigitalOcean Spaces
-async function uploadToSpaces(filePath, fileName) {
-    const fileContent = fs.readFileSync(filePath);
-
+// Función para subir archivo a Spaces con reintentos
+async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitudes', retries = 3) {
+    const uuid = uuidv4();
+    const extension = path.extname(originalName);
+    const filename = `${uuid}${extension}`;
+    const spacesPath = `${folder}/${filename}`;
+    
+    const fileContent = await fs.promises.readFile(filePath);
     const command = new PutObjectCommand({
-        Bucket: 'gestion-contratistas-os',
-        Key: fileName,
+        Bucket: process.env.DO_SPACES_BUCKET,
+        Key: spacesPath,
         Body: fileContent,
-        ACL: 'public-read'
+        ACL: 'public-read',
+        ContentType: mime.lookup(filePath) || 'application/octet-stream'
     });
 
-    try {
-        const response = await s3Client.send(command);
-        const fileUrl = `https://gestion-contratistas-os.nyc3.digitaloceanspaces.com/${fileName}`;
-        console.log("Resultado de la subida del zip: ", { response, fileUrl });
-        return fileUrl;
-    } catch (error) {
-        console.error('Error al subir el archivo a DigitalOcean Spaces:', error);
-        return null;
+    let attempt = 0;
+    while (attempt < retries) {
+        try {
+            console.log('Subiendo archivo a Spaces:', { filePath, spacesPath, attempt: attempt + 1 });
+            await s3Client.send(command);
+            
+            // Construir la URL completa de DigitalOcean Spaces
+            const spacesUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${spacesPath}`;
+            
+            console.log('Archivo subido exitosamente:', { spacesUrl });
+            return spacesUrl;
+        } catch (error) {
+            attempt++;
+            console.error(`Error al subir archivo (intento ${attempt}/${retries}):`, error);
+            if (attempt === retries) throw new Error(`Fallo al subir archivo tras ${retries} intentos: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Espera exponencial
+        }
     }
 }
 
@@ -345,56 +378,87 @@ async function generateInformePDF({ solicitud, colaboradores, contractorName, in
 //     return pdfBuffer;
 // }
 
-async function downloadFromSpaces(fileUrl, localPath) {
-    if (!fileUrl) {
-        console.warn('URL vacía o inválida en downloadFromSpaces');
-        return false;
-    }
+async function downloadFromSpaces(fileUrl) {
+  if (!fileUrl) {
+    logInfo('No se proporcionó URL de archivo para descargar');
+    return null;
+  }
 
-    const fileName = fileUrl.split('/').pop();
-    if (!fileName) {
-        console.warn('No se pudo extraer el nombre del archivo de la URL:', fileUrl);
-        return false;
-    }
+  try {
+    // Extraer la clave del archivo de la URL completa
+    const urlParts = fileUrl.split('/');
+    const fileKey = urlParts.slice(3).join('/'); // Obtener la ruta después del bucket y endpoint
 
-    console.log(`Intentando descargar archivo desde Spaces: ${fileName}`);
-
-    const command = new GetObjectCommand({
-        Bucket: 'gestion-contratistas-os',
-        Key: fileName,
+    logInfo('Intentando descargar archivo desde Spaces:', { 
+      fileUrl, 
+      fileKey,
+      bucket: process.env.DO_SPACES_BUCKET,
+      endpoint: process.env.DO_SPACES_ENDPOINT
     });
 
-    try {
-        const response = await s3Client.send(command);
-        const chunks = [];
-        for await (const chunk of response.Body) {
-            chunks.push(chunk);
-        }
-        fs.writeFileSync(localPath, Buffer.concat(chunks));
-        console.log(`Archivo descargado exitosamente: ${localPath}`);
-        return true;
-    } catch (error) {
-        console.error(`Error al descargar el archivo ${fileName} desde ${fileUrl}:`, error.message);
-        if (error.code === 'NoSuchKey') {
-            console.error(`El archivo ${fileName} no existe en el bucket gestion-contratistas-os`);
-        }
-        return false;
+    const command = new GetObjectCommand({
+      Bucket: process.env.DO_SPACES_BUCKET,
+      Key: fileKey
+    });
+
+    const response = await s3Client.send(command);
+    
+    if (!response.Body) {
+      throw new Error('No se recibió el contenido del archivo');
     }
+
+    // Convertir el stream a buffer
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+
+    logInfo('Archivo descargado exitosamente:', { 
+      fileUrl,
+      size: buffer.length,
+      contentType: response.ContentType
+    });
+
+    return buffer;
+  } catch (error) {
+    logError(error, `Error al descargar el archivo ${fileUrl} desde ${fileUrl}: ${error.message}`);
+    if (error.$metadata) {
+      logInfo('Metadatos del error:', {
+        requestId: error.$metadata.requestId,
+        cfId: error.$metadata.cfId,
+        httpStatusCode: error.$metadata.httpStatusCode
+      });
+    }
+    return null;
+  }
 }
 
 
 // Función para generar el HTML
-async function generateInformeHTML({ solicitud, colaboradores, contractorName, interventorName }) {
+async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contractorName, interventorName }) {
     try {
+        // Formatear fechas de la solicitud
+        const solicitudFormateada = {
+            ...solicitud,
+            inicio_obra: format(new Date(solicitud.inicio_obra), 'dd/MM/yyyy'),
+            fin_obra: format(new Date(solicitud.fin_obra), 'dd/MM/yyyy')
+        };
+
         // Convertir las imágenes de los colaboradores a Base64
         for (const colaborador of colaboradores) {
             colaborador.fotoBase64 = colaborador.foto ? await convertWebPtoJpeg(colaborador.foto) : null;
             colaborador.cedulaFotoBase64 = colaborador.cedulaFoto ? await convertWebPtoJpeg(colaborador.cedulaFoto) : null;
             // Generar QR para el ID del colaborador
-            
             const qrData = `${process.env.BASE_URL}/vista-seguridad/${colaborador.id}`;
+            colaborador.qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
+        }
 
-            colaborador.qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 }); // Generar QR en Base64
+        // Procesar vehículos
+        for (const vehiculo of vehiculos) {
+            // Generar QR para el vehículo
+            const qrData = `${process.env.BASE_URL}/vista-seguridad/VH-${vehiculo.id}`;
+            vehiculo.qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
         }
 
         // Cargar la plantilla HTML
@@ -409,9 +473,10 @@ async function generateInformeHTML({ solicitud, colaboradores, contractorName, i
         // Datos para la plantilla
         const data = {
             logo: `data:image/jpeg;base64,${logoBase64}`,
-            fecha: new Date().toLocaleDateString(),
-            solicitud,
+            fecha: format(new Date(), 'dd/MM/yyyy'),
+            solicitud: solicitudFormateada,
             colaboradores,
+            vehiculos,
             contractorName,
             interventorName
         };
@@ -424,12 +489,11 @@ async function generateInformeHTML({ solicitud, colaboradores, contractorName, i
     }
 }
 
-// Controlador para descargar la solicitud (sin cambios relevantes aquí, solo se asegura que los datos incluyan el ID)
+// Controlador para descargar la solicitud
 controller.descargarSolicitud = async (req, res) => {
     const { id } = req.params;
-    const tempDir = path.join('/tmp', `solicitud_${id}`);
+    const tempDir = path.join(__dirname, '../temp', `solicitud_${id}`);
     const htmlPath = path.join(tempDir, `Informe_Solicitud_${id}.html`);
-    const zipPath = path.join(tempDir, `Solicitud_${id}.zip`);
 
     try {
         // Verificar si ya existe una URL en la tabla sst_documentos
@@ -442,61 +506,104 @@ controller.descargarSolicitud = async (req, res) => {
             });
         }
 
-        fs.mkdirSync(tempDir, { recursive: true });
+        // Crear directorio temporal
+        await fs.promises.mkdir(tempDir, { recursive: true });
 
-        const [solicitud] = await connection.execute('SELECT * FROM solicitudes WHERE id = ?', [id]);
-        if (!solicitud || solicitud.length === 0) {
+        // Obtener datos de la solicitud
+        const [solicitud] = await connection.execute(`
+            SELECT 
+                s.*,
+                u.empresa,
+                u.nit,
+                u2.username as interventor_nombre,
+                l.nombre_lugar as lugar,
+                l.id as lugar_id
+            FROM solicitudes s
+            JOIN users u ON s.usuario_id = u.id
+            LEFT JOIN users u2 ON s.interventor_id = u2.id
+            LEFT JOIN lugares l ON s.lugar = l.id
+            WHERE s.id = ?
+        `, [id]);        if (!solicitud || solicitud.length === 0) {
             return res.status(404).json({
                 success: false,
                 error: 'Solicitud no encontrada'
             });
         }
+        
 
         // Obtener datos necesarios para generar el documento
         const [colaboradores] = await connection.execute(
             'SELECT id, cedula, nombre, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ? and estado = true',
             [id]
         );
-        const [contratista] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].usuario_id]);
-        const [interventor] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].interventor_id]);
 
-        solicitud.forEach(solici => {
-            solici.inicio_obra = format(new Date(solici.inicio_obra), 'dd/MM/yyyy');
-            solici.fin_obra = format(new Date(solici.fin_obra), 'dd/MM/yyyy');
-        });
+        // Obtener vehículos con todos sus documentos
+        const [vehiculos] = await connection.execute(
+            'SELECT v.id, v.matricula as placa, v.estado, v.foto, v.tecnomecanica, v.soat, v.licencia_conduccion, v.licencia_transito FROM vehiculos v WHERE v.solicitud_id = ?',
+            [id]
+        );
 
-        const htmlContent = await generateInformeHTML({
+        // Obtener nombres del contratista e interventor
+        const [contractorInfo] = await connection.execute(
+            'SELECT u.username AS contractorName, i.username AS interventorName FROM solicitudes s LEFT JOIN users u ON s.usuario_id = u.id LEFT JOIN users i ON s.interventor_id = i.id WHERE s.id = ?',
+            [id]
+        );
+
+        // Generar el HTML
+        const html = await generateInformeHTML({
             solicitud: solicitud[0],
             colaboradores,
-            contractorName: contratista[0].username,
-            interventorName: interventor[0].username,
+            vehiculos,
+            contractorName: contractorInfo[0]?.contractorName || 'No especificado',
+            interventorName: contractorInfo[0]?.interventorName || 'No especificado'
         });
 
-        fs.writeFileSync(htmlPath, htmlContent);
+        // Guardar el HTML
+        await fs.promises.writeFile(htmlPath, html);
 
+        // Crear el archivo ZIP
+        const zipFileName = `Solicitud_${solicitud[0].empresa}_${id}.zip`;
+        const zipPath = path.join(tempDir, zipFileName);
         const output = fs.createWriteStream(zipPath);
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        const archive = archiver('zip', {
+            zlib: { level: 9 }
+        });
 
         output.on('close', async () => {
-            const zipFileName = `sst-documents/Solicitud_${id}.zip`;
-            const zipUrl = await uploadToSpaces(zipPath, zipFileName);
-            if (zipUrl) {
-                await connection.execute(
-                    'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
-                    [id, zipUrl]
-                );
-                res.json({
-                    success: true,
-                    url: zipUrl,
-                    message: 'Documento generado y subido correctamente'
-                });
-            } else {
+            try {
+                // Subir el archivo ZIP a DigitalOcean Spaces
+                const fileUrl = await uploadToSpacesFromDisk(zipPath, zipFileName);
+
+                if (fileUrl) {
+                    // Guardar la URL en la base de datos
+                    await connection.execute(
+                        'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
+                        [id, fileUrl]
+                    );
+
+                    res.json({
+                        success: true,
+                        url: fileUrl,
+                        message: 'Documento generado y subido correctamente'
+                    });
+                } else {
+                    throw new Error('Error al subir el archivo a DigitalOcean Spaces');
+                }
+            } catch (error) {
+                console.error('Error al procesar el archivo:', error);
                 res.status(500).json({
                     success: false,
-                    error: 'Error al subir el archivo ZIP'
+                    error: 'Error al procesar el archivo',
+                    details: error.message
                 });
+            } finally {
+                // Limpiar archivos temporales
+                try {
+                    await fs.promises.rm(tempDir, { recursive: true, force: true });
+                } catch (error) {
+                    console.error('Error al limpiar archivos temporales:', error);
+                }
             }
-            fs.rmSync(tempDir, { recursive: true, force: true });
         });
 
         archive.on('error', (err) => {
@@ -504,30 +611,74 @@ controller.descargarSolicitud = async (req, res) => {
         });
 
         archive.pipe(output);
+
+        // Agregar el HTML al ZIP
         archive.file(htmlPath, { name: `Informe_Solicitud_${id}.html` });
 
+        // Procesar documentos de la solicitud
         if (solicitud[0].arl_documento) {
-            const arlPath = path.join(tempDir, `ARL_${id}${path.extname(solicitud[0].arl_documento)}`);
-            await downloadFromSpaces(solicitud[0].arl_documento, arlPath);
-            archive.file(arlPath, { name: `ARL_${id}${path.extname(solicitud[0].arl_documento)}` });
+            const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
+            if (arlBuffer) {
+                archive.append(arlBuffer, { name: `ARL_${id}${path.extname(solicitud[0].arl_documento)}` });
+            }
         }
 
         if (solicitud[0].pasocial_documento) {
-            const pasocialPath = path.join(tempDir, `Pago_Seguridad_Social_${id}${path.extname(solicitud[0].pasocial_documento)}`);
-            await downloadFromSpaces(solicitud[0].pasocial_documento, pasocialPath);
-            archive.file(pasocialPath, { name: `Pago_Seguridad_Social_${id}${path.extname(solicitud[0].pasocial_documento)}` });
+            const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
+            if (pasocialBuffer) {
+                archive.append(pasocialBuffer, { name: `Pasocial_${id}${path.extname(solicitud[0].pasocial_documento)}` });
+            }
+        }
+
+        // Procesar documentos de vehículos
+        for (const vehiculo of vehiculos) {
+            const vehiculoDir = `${vehiculo.placa}/`;
+            
+            if (vehiculo.foto) {
+                const fotoBuffer = await downloadFromSpaces(vehiculo.foto);
+                if (fotoBuffer) {
+                    archive.append(fotoBuffer, { name: `${vehiculoDir}${vehiculo.placa}_foto${path.extname(vehiculo.foto)}` });
+                }
+            }
+
+            if (vehiculo.tecnomecanica) {
+                const tecnomecanicaBuffer = await downloadFromSpaces(vehiculo.tecnomecanica);
+                if (tecnomecanicaBuffer) {
+                    archive.append(tecnomecanicaBuffer, { name: `${vehiculoDir}${vehiculo.placa}_tecnomecanica${path.extname(vehiculo.tecnomecanica)}` });
+                }
+            }
+
+            if (vehiculo.soat) {
+                const soatBuffer = await downloadFromSpaces(vehiculo.soat);
+                if (soatBuffer) {
+                    archive.append(soatBuffer, { name: `${vehiculoDir}${vehiculo.placa}_soat${path.extname(vehiculo.soat)}` });
+                }
+            }
+
+            if (vehiculo.licencia_conduccion) {
+                const licenciaConduccionBuffer = await downloadFromSpaces(vehiculo.licencia_conduccion);
+                if (licenciaConduccionBuffer) {
+                    archive.append(licenciaConduccionBuffer, { name: `${vehiculoDir}${vehiculo.placa}_licencia_conduccion${path.extname(vehiculo.licencia_conduccion)}` });
+                }
+            }
+
+            if (vehiculo.licencia_transito) {
+                const licenciaTransitoBuffer = await downloadFromSpaces(vehiculo.licencia_transito);
+                if (licenciaTransitoBuffer) {
+                    archive.append(licenciaTransitoBuffer, { name: `${vehiculoDir}${vehiculo.placa}_licencia_transito${path.extname(vehiculo.licencia_transito)}` });
+                }
+            }
         }
 
         archive.finalize();
 
     } catch (error) {
-        console.error('[RUTA] Error al generar el archivo ZIP:', error);
+        console.error('Error al generar el archivo ZIP:', error);
         res.status(500).json({
             success: false,
             error: 'Error al generar el archivo ZIP',
             details: error.message
         });
-        if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
     }
 };
 
@@ -575,64 +726,88 @@ exports.descargarDocumentos = async (req, res) => {
 controller.getColaboradores = async (req, res) => {
     const { solicitudId } = req.params;
     try {
-      const [solicitud] = await connection.execute(
-        'SELECT s.id, s.empresa, u.username AS contratista FROM solicitudes s LEFT JOIN users u ON s.usuario_id = u.id WHERE s.id = ?',
-        [solicitudId]
-      );
-      if (!solicitud.length) return res.status(404).json({ message: 'Solicitud no encontrada' });
-  
-      const [colaboradores] = await connection.execute(
-        'SELECT c.id, c.nombre, c.cedula, c.estado FROM colaboradores c WHERE c.solicitud_id = ?',
-        [solicitudId]
-      );
-  
-      const colaboradoresConDatos = await Promise.all(colaboradores.map(async col => {
-        // Curso SISO con fecha_vencimiento
-        const [cursoSiso] = await connection.execute(
-          `SELECT rc.estado, rc.fecha_vencimiento 
-           FROM resultados_capacitaciones rc 
-           JOIN capacitaciones cap ON rc.capacitacion_id = cap.id 
-           WHERE rc.colaborador_id = ? AND cap.nombre = 'Curso SISO' 
-           ORDER BY rc.created_at DESC LIMIT 1`,
-          [col.id]
+        const [solicitud] = await connection.execute(
+            'SELECT s.id, s.empresa, u.username AS contratista FROM solicitudes s LEFT JOIN users u ON s.usuario_id = u.id WHERE s.id = ?',
+            [solicitudId]
         );
-  
-        // Determinar estado del curso SISO
-        let cursoSisoEstado = 'No'; // Valor por defecto si no hay resultados
-        if (cursoSiso.length) {
-          if (cursoSiso[0].estado === 'APROBADO') {
-            const fechaVencimiento = new Date(cursoSiso[0].fecha_vencimiento);
-            const hoy = new Date();
-            cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
-          } else {
-            cursoSisoEstado = 'Perdido';
-          }
-        }
-  
-        // Plantilla SS
-        const [plantillaSS] = await connection.execute(
-          'SELECT id, fecha_inicio, fecha_fin FROM plantilla_seguridad_social WHERE colaborador_id = ? ORDER BY created_at DESC LIMIT 1',
-          [col.id]
+        if (!solicitud.length) return res.status(404).json({ message: 'Solicitud no encontrada' });
+
+        const [colaboradores] = await connection.execute(
+            'SELECT c.id, c.nombre, c.cedula, c.estado FROM colaboradores c WHERE c.solicitud_id = ?',
+            [solicitudId]
         );
-  
-        return {
-          ...col,
-          cursoSiso: cursoSisoEstado, // Siempre será un string: "No", "Aprobado", "Perdido" o "Vencido"
-          plantillaSS: plantillaSS.length ? plantillaSS[0] : null
-        };
-      }));
-  
-      res.json({
-        id: solicitud[0].id,
-        empresa: solicitud[0].empresa,
-        contratista: solicitud[0].contratista,
-        colaboradores: colaboradoresConDatos
-      });
+
+        const [vehiculos] = await connection.execute(
+            'SELECT v.id, v.matricula as placa, v.estado FROM vehiculos v WHERE v.solicitud_id = ?',
+            [solicitudId]
+        );
+
+        const colaboradoresConDatos = await Promise.all(colaboradores.map(async col => {
+            // Curso SISO con fecha_vencimiento
+            const [cursoSiso] = await connection.execute(
+                `SELECT rc.estado, rc.fecha_vencimiento 
+                FROM resultados_capacitaciones rc 
+                JOIN capacitaciones cap ON rc.capacitacion_id = cap.id 
+                WHERE rc.colaborador_id = ? AND cap.nombre = 'Curso SISO'`,
+                [col.id]
+            );
+
+            // Determinar estado del curso SISO
+            let cursoSisoEstado = 'No'; // Valor por defecto si no hay resultados
+            if (cursoSiso.length) {
+                if (cursoSiso[0].estado === 'APROBADO') {
+                    const fechaVencimiento = new Date(cursoSiso[0].fecha_vencimiento);
+                    const hoy = new Date();
+                    cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
+                } else {
+                    cursoSisoEstado = 'Perdido';
+                }
+            }
+
+            // Plantilla SS
+            const [plantillaSS] = await connection.execute(
+                'SELECT id, fecha_inicio, fecha_fin FROM plantilla_seguridad_social WHERE colaborador_id = ? ORDER BY created_at DESC LIMIT 1',
+                [col.id]
+            );
+
+            return {
+                ...col,
+                cursoSiso: cursoSisoEstado,
+                plantillaSS: plantillaSS.length ? plantillaSS[0] : null
+            };
+        }));
+
+        const vehiculosConDatos = await Promise.all(vehiculos.map(async veh => {
+            // Obtener documentos del vehículo
+            const [soat] = await connection.execute(
+                'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "soat" ORDER BY created_at DESC LIMIT 1',
+                [veh.id]
+            );
+
+            const [tecnomecanica] = await connection.execute(
+                'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "tecnomecanica" ORDER BY created_at DESC LIMIT 1',
+                [veh.id]
+            );
+
+            return {
+                ...veh,
+                soat: soat.length ? soat[0] : null,
+                tecnomecanica: tecnomecanica.length ? tecnomecanica[0] : null
+            };
+        }));
+
+        res.json({
+            id: solicitud[0].id,
+            empresa: solicitud[0].empresa,
+            contratista: solicitud[0].contratista,
+            colaboradores: colaboradoresConDatos,
+            vehiculos: vehiculosConDatos
+        });
     } catch (error) {
-      console.error('Error al obtener colaboradores:', error);
-      res.status(500).json({ message: 'Error interno del servidor' });
+        console.error('Error al obtener colaboradores:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
-  };
+};
 
 
   // Obtener Plantilla SS existente
@@ -802,7 +977,7 @@ controller.filtrarSolicitudesSst = async (req, res) => {
             console.log('🔍 Filtrando por empresa:', empresa);
         }
         if (lugar) {
-            query += ' AND s.lugar = ?';
+            query += ' AND s.lugar = (SELECT id FROM lugares WHERE nombre_lugar = ?)';
             placeholders.push(lugar);
             console.log('🔍 Filtrando por lugar:', lugar);
         }

@@ -1,7 +1,7 @@
 // services/email.service.js
 const nodemailer = require('nodemailer');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 const handlebars = require('handlebars');
 const { format } = require('date-fns');
 const { Upload } = require('@aws-sdk/lib-storage');
@@ -20,11 +20,6 @@ const s3Client = new S3Client({
 
 class EmailService {
     constructor() {
-        this.transporter = null;
-        this.initializeTransporter();
-    }
-
-    initializeTransporter() {
         this.transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
@@ -33,17 +28,52 @@ class EmailService {
             }
         });
     }
-
-    setTransporter(credentials) {
-        this.transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: credentials.user,
-                pass: credentials.pass
-            }
-        });
-    }
-
+ 
+    async sendEmail(to, subject, options = {}) {
+        try {
+          console.log('[EMAIL SERVICE] Enviando correo a:', to);
+      
+          let htmlContent;
+      
+          if (options.template) {
+            // Si se proporciona un template, leer y compilar el archivo
+            const templatePath = path.join(__dirname, '../templates/emails', `${options.template}.html`);
+            const templateContent = await fs.readFile(templatePath, 'utf-8');
+            const template = handlebars.compile(templateContent);
+            htmlContent = template(options.context || {});
+          } else if (options.html) {
+            // Si se proporciona HTML directamente
+            htmlContent = options.html;
+          } else if (typeof options === 'string') {
+            // Si se proporciona un string, usarlo como mensaje
+            htmlContent = options;
+          } else {
+            throw new Error('Se debe proporcionar un template, html o un mensaje de texto');
+          }
+      
+          const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: to,
+            subject: subject,
+            html: htmlContent,
+            headers: {
+              'Content-Type': 'text/html; charset=UTF-8',
+            },
+            ...options, // Permite sobrescribir cualquier opción adicional
+          };
+      
+          if (options.attachments) {
+            mailOptions.attachments = options.attachments;
+          }
+      
+          await this.transporter.sendMail(mailOptions);
+          console.log('[EMAIL SERVICE] Correo enviado correctamente a:', to);
+          return true;
+        } catch (error) {
+          console.error('[EMAIL SERVICE] Error al enviar correo:', error);
+          throw error;
+        }
+      }
     async sendApprovalEmail(to, data) {
         try {
             const templatePath = path.join(__dirname, '../templates/emails/approval.html');

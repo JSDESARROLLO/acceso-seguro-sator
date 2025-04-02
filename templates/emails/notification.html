@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+ 
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #011C3D;
+            margin: 0;
+            padding: 0;
+            background-color: #FDFDFD;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px;
+            background-color: #011C3D;
+            color: #FDFDFD;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .section {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .info-section {
+            background-color: #FDF1E6;
+        }
+        .changes-section {
+            background-color: #FBFBF0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #CC9000;
+            color: #666;
+            font-size: 12px;
+        }
+        h2, h3, h4 {
+            color: #011C3D;
+            margin-top: 0;
+        }
+        .label {
+            color: #CC9000;
+            font-weight: bold;
+        }
+        ul {
+            color: #011C3D;
+            margin: 0;
+            padding-left: 20px;
+        }
+        .empty-section {
+            display: none;
+        }
+        .changes-content {
+            margin-top: 10px;
+        }
+        .changes-content h4 {
+            margin-bottom: 5px;
+            color: #CC9000;
+        }
+        .changes-content ul {
+            margin-bottom: 15px;
+        }
+        .no-changes {
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>{{asunto}}</h2>
+    </div>
+    <div class="section info-section">
+        <h3>Información de la Solicitud</h3>
+        <p><span class="label">Empresa:</span> {{empresa}}</p>
+        <p><span class="label">NIT:</span> {{nit}}</p>
+        <p><span class="label">ID de Solicitud:</span> {{solicitudId}}</p>
+        <p><span class="label">Tipo de Operación:</span> {{tipoOperacion}}</p>
+        <p><span class="label">Fecha de Modificación:</span> {{fechaModificacion}}</p>
+    </div>
+    <div class="section changes-section">
+        <h3>Detalles de los Cambios</h3>
+        <div class="changes-content">
+            {{{detallesCambios}}}
+        </div>
+    </div>
+    <div class="footer">
+        <p>Este es un correo automático de Acceso Seguro SATOR. Por favor, no responder.</p>
+        <p>© {{currentYear}} COA - Todos los derechos reservados.</p>
+    </div>
+</body>
+</html> 

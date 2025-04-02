@@ -25,7 +25,7 @@ controller.vistaSeguridad = async (req, res) => {
             s.nit, 
             s.estado, 
             us.username AS interventor, 
-            s.lugar, 
+            s.lugar,
             l.nombre_lugar,
             DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
             DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
@@ -49,9 +49,9 @@ controller.vistaSeguridad = async (req, res) => {
         JOIN 
             users us ON us.id = s.interventor_id
         JOIN 
-            lugares l ON l.nombre_lugar = s.lugar
+            lugares l ON s.lugar = l.id
         JOIN 
-            users seguridad ON l.nombre_lugar = seguridad.username
+            users seguridad ON l.id = (SELECT id FROM lugares WHERE nombre_lugar = seguridad.username)
         WHERE 
             s.estado IN ('aprobada', 'en labor', 'labor detenida')
             AND a.accion = 'aprobada'
@@ -303,7 +303,7 @@ controller.qrAccesosModal = async (req, res) => {
                 s.nit, 
                 s.estado, 
                 us.username AS interventor, 
-                s.lugar, 
+                s.lugar,
                 l.nombre_lugar,
                 DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
                 DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
@@ -318,8 +318,8 @@ controller.qrAccesosModal = async (req, res) => {
             FROM solicitudes s
             JOIN acciones a ON s.id = a.solicitud_id
             JOIN users us ON us.id = s.interventor_id
-            JOIN lugares l ON l.nombre_lugar = s.lugar
-            JOIN users seguridad ON l.nombre_lugar = seguridad.username
+            JOIN lugares l ON s.lugar = l.id
+            JOIN users seguridad ON l.id = (SELECT id FROM lugares WHERE nombre_lugar = seguridad.username)
             WHERE s.estado IN ('aprobada', 'en labor', 'labor detenida')
             AND a.accion = 'aprobada'
             AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
@@ -579,7 +579,7 @@ controller.vistaSeguridadDetalle = async (req, res) => {
                 s.nit, 
                 s.estado, 
                 us.username AS interventor, 
-                s.lugar, 
+                s.lugar,
                 l.nombre_lugar,
                 DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
                 DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
@@ -594,8 +594,8 @@ controller.vistaSeguridadDetalle = async (req, res) => {
             FROM solicitudes s
             JOIN acciones a ON s.id = a.solicitud_id
             JOIN users us ON us.id = s.interventor_id
-            JOIN lugares l ON l.nombre_lugar = s.lugar
-            JOIN users seguridad ON l.nombre_lugar = seguridad.username
+            JOIN lugares l ON s.lugar = l.id
+            JOIN users seguridad ON l.id = (SELECT id FROM lugares WHERE nombre_lugar = seguridad.username)
             WHERE s.estado IN ('aprobada', 'en labor', 'labor detenida')
             AND a.accion = 'aprobada'
             AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')

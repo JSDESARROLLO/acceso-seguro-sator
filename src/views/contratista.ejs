@@ -434,6 +434,66 @@
     <p class="ml-4 text-white text-lg">Procesando archivos...</p>
   </div>
 
+<!-- Modal de Confirmación de Cambios -->
+<div class="modal fade" id="confirmarCambiosModal" tabindex="-1" aria-labelledby="confirmarCambiosModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmarCambiosModalLabel">Confirmar Cambios</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Se han detectado los siguientes cambios. Revise y deshaga los que no desee aplicar.
+                </div>
+                
+                <!-- Colaboradores -->
+                <div class="mb-4" id="cambiosColaboradores">
+                    <h6 class="mb-3">Colaboradores</h6>
+                    <div class="nuevos-colaboradores">
+                        <h6 class="text-success">Nuevos</h6>
+                        <div class="list-group mb-2" id="listaNuevosColaboradores"></div>
+                    </div>
+                    <div class="modificados-colaboradores">
+                        <h6 class="text-warning">Modificados</h6>
+                        <div class="list-group mb-2" id="listaModificadosColaboradores"></div>
+                    </div>
+                    <div class="eliminados-colaboradores">
+                        <h6 class="text-danger">Eliminados</h6>
+                        <div class="list-group mb-2" id="listaEliminadosColaboradores"></div>
+                    </div>
+                </div>
+
+                <!-- Vehículos -->
+                <div class="mb-4" id="cambiosVehiculos">
+                    <h6 class="mb-3">Vehículos</h6>
+                    <div class="nuevos-vehiculos">
+                        <h6 class="text-success">Nuevos</h6>
+                        <div class="list-group mb-2" id="listaNuevosVehiculos"></div>
+                    </div>
+                    <div class="modificados-vehiculos">
+                        <h6 class="text-warning">Modificados</h6>
+                        <div class="list-group mb-2" id="listaModificadosVehiculos"></div>
+                    </div>
+                    <div class="eliminados-vehiculos">
+                        <h6 class="text-danger">Eliminados</h6>
+                        <div class="list-group mb-2" id="listaEliminadosVehiculos"></div>
+                    </div>
+                </div>
+
+                <!-- Documentos -->
+                <div class="mb-4" id="cambiosDocumentos">
+                    <h6 class="mb-3">Documentos</h6>
+                    <div class="list-group" id="listaCambiosDocumentos"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="confirmarCambios">Confirmar Cambios</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
@@ -1054,70 +1114,203 @@
         updateRemoveButtons();
     };
 
-    // Envío del formulario
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+ // Envío del formulario
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-        const fechaInicio = new Date(document.getElementById('inicio-obra').value);
-        const fechaFin = new Date(document.getElementById('fin-obra').value);
+    // Validación de fechas
+    const fechaInicio = new Date(document.getElementById('inicio-obra').value);
+    const fechaFin = new Date(document.getElementById('fin-obra').value);
 
-        if (isNaN(fechaInicio) || isNaN(fechaFin)) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Seleccione fechas válidas' });
-            return;
-        }
+    if (isNaN(fechaInicio) || isNaN(fechaFin)) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Seleccione fechas válidas' });
+        return;
+    }
 
-        if (fechaFin < fechaInicio) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'La fecha de fin debe ser posterior o igual a la de inicio' });
-            return;
-        }
+    if (fechaFin < fechaInicio) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'La fecha de fin debe ser posterior o igual a la de inicio' });
+        return;
+    }
 
-        if (personasContainer.children.length === 0) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Agregue al menos un colaborador' });
-            return;
-        }
+    // Validación de colaboradores mínimos
+    if (personasContainer.children.length === 0) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Agregue al menos un colaborador' });
+        return;
+    }
 
-        const requiredFields = form.querySelectorAll('[required]');
-        let hasEmptyFields = false;
-        requiredFields.forEach(field => {
-            if (!field.value.trim()) {
-                hasEmptyFields = true;
-                field.classList.add('border-red-500');
-            } else {
-                field.classList.remove('border-red-500');
-            }
-        });
-
-        if (hasEmptyFields) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Complete todos los campos requeridos' });
-            return;
-        }
-
-        const formData = new FormData(form);
-        const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
-
-        try {
-            Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-            const response = await fetch(url, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) throw new Error('Error al procesar la solicitud');
-
-            const result = await response.json();
-            await Swal.fire({
-                icon: 'success',
-                title: 'Éxito',
-                text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente'
-            });
-            window.location.reload();
-        } catch (error) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Error al procesar la solicitud: ' + error.message });
+    // Validación de campos requeridos
+    const requiredFields = form.querySelectorAll('[required]');
+    let hasEmptyFields = false;
+    requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+            hasEmptyFields = true;
+            field.classList.add('border-red-500');
+        } else {
+            field.classList.remove('border-red-500');
         }
     });
 
-    // Cálculo de días
+    if (hasEmptyFields) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Complete todos los campos requeridos' });
+        return;
+    }
+
+    // Detectar cambios específicos
+    const cambios = {
+        colaboradores: {
+            nuevos: [],
+            modificados: [],
+            eliminados: []
+        },
+        vehiculos: {
+            nuevos: [],
+            modificados: [],
+            eliminados: []
+        },
+        documentos: {
+            arl: false,
+            pasocial: false
+        }
+    };
+
+    // Verificar cambios en colaboradores
+    document.querySelectorAll('.person-group').forEach((grupo) => {
+        const colaboradorId = grupo.dataset.colaboradorId;
+        const fotoInput = grupo.querySelector(`input[name="foto_${colaboradorId}"]`);
+        const cedulaFotoInput = grupo.querySelector(`input[name="cedula_foto_${colaboradorId}"]`);
+        
+        if (colaboradorId) {
+            if (fotoInput?.files.length > 0 || cedulaFotoInput?.files.length > 0) {
+                cambios.colaboradores.modificados.push({
+                    id: parseInt(colaboradorId),
+                    cambios: {
+                        foto: fotoInput?.files.length > 0,
+                        cedula: cedulaFotoInput?.files.length > 0
+                    }
+                });
+            }
+        } else {
+            cambios.colaboradores.nuevos.push({
+                cedula: grupo.querySelector('input[name="cedula[]"]').value.trim(),
+                nombre: grupo.querySelector('input[name="nombre[]"]').value.trim()
+            });
+        }
+    });
+
+    // Verificar cambios en vehículos
+    document.querySelectorAll('.vehiculo-group').forEach((grupo) => {
+        const vehiculoId = grupo.dataset.vehiculoId;
+        const inputs = grupo.querySelectorAll('input[type="file"]');
+        const hasChanges = Array.from(inputs).some(input => input.files.length > 0);
+        
+        if (vehiculoId) {
+            if (hasChanges) {
+                cambios.vehiculos.modificados.push({
+                    id: parseInt(vehiculoId),
+                    cambios: {
+                        foto: grupo.querySelector('input[name^="foto_vehiculo_"]')?.files.length > 0,
+                        tecnomecanica: grupo.querySelector('input[name^="tecnomecanica_"]')?.files.length > 0,
+                        soat: grupo.querySelector('input[name^="soat_"]')?.files.length > 0,
+                        licencia_conduccion: grupo.querySelector('input[name^="licencia_conduccion_"]')?.files.length > 0,
+                        licencia_transito: grupo.querySelector('input[name^="licencia_transito_"]')?.files.length > 0
+                    }
+                });
+            }
+        } else {
+            cambios.vehiculos.nuevos.push({
+                matricula: grupo.querySelector('input[name="matricula[]"]').value.trim().toUpperCase()
+            });
+        }
+    });
+
+    // Verificar cambios en documentos
+    cambios.documentos.arl = document.getElementById('arl')?.files.length > 0;
+    cambios.documentos.pasocial = document.getElementById('pasocial')?.files.length > 0;
+
+    // Determinar si hay cambios reales
+    const hayCambios = 
+        cambios.colaboradores.nuevos.length > 0 ||
+        cambios.colaboradores.modificados.length > 0 ||
+        cambios.colaboradores.eliminados.length > 0 ||
+        cambios.vehiculos.nuevos.length > 0 ||
+        cambios.vehiculos.modificados.length > 0 ||
+        cambios.vehiculos.eliminados.length > 0 ||
+        cambios.documentos.arl ||
+        cambios.documentos.pasocial ||
+        solicitudActualId === null;
+
+    // Preparar datos para enviar
+    const formData = new FormData(form);
+    formData.append('cambios', JSON.stringify(cambios));
+    formData.append('renovacion', esRenovacion ? 'true' : 'false');
+
+    // Determinar la URL y método según si es nueva o actualización
+    const isNewRequest = solicitudActualId === null;
+    const url = isNewRequest ? '/generar-solicitud' : `/actualizar-solicitud/${solicitudActualId}`;
+    const method = 'POST';
+
+    try {
+        // Mostrar loading hasta que termine el proceso
+        Swal.fire({
+            title: 'Procesando...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading(),
+            showConfirmButton: false // Evitar que aparezca un botón mientras carga
+        });
+        // Si no hay cambios en una solicitud existente, mostrar alerta temporal
+        if (!isNewRequest && !hayCambios) {
+            Swal.close(); // Cerrar el loader
+
+            await Swal.fire({
+                icon: 'info',
+                title: 'Sin cambios',
+                text: 'No se detectaron cambios en la solicitud',
+                timer: 2000,
+                showConfirmButton: false,
+                allowOutsideClick: false
+            });
+
+            window.location.reload();
+            return;
+        }
+
+        // Enviar solicitud al backend
+        const response = await fetch(url, {
+            method: method,
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al procesar la solicitud');
+        }
+
+        const result = await response.json();
+
+        // Cerrar el loader y mostrar mensaje de éxito
+        Swal.close();
+        await Swal.fire({
+            icon: 'success',
+            title: 'Éxito',
+            text: isNewRequest ? 'Solicitud creada correctamente' : 'Solicitud actualizada correctamente',
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        // Recargar la página
+        window.location.reload();
+    } catch (error) {
+        console.error('Error al procesar solicitud:', error);
+        Swal.close(); // Cerrar el loader en caso de error
+        await Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: `Error al procesar la solicitud: ${error.message}`
+        });
+    }
+});    
+
+// Cálculo de días
     const calcularDias = () => {
         const fechaInicio = new Date(document.getElementById('inicio-obra').value);
         const fechaFin = new Date(document.getElementById('fin-obra').value);
@@ -1612,6 +1805,736 @@ document.addEventListener('DOMContentLoaded', async () => {
         sendMessage();
     });
 });
+
+let cambiosDetectados = {
+    colaboradores: {
+        nuevos: [],
+        modificados: [],
+        eliminados: []
+    },
+    vehiculos: {
+        nuevos: [],
+        modificados: [],
+        eliminados: []
+    },
+    documentos: {
+        arl: false,
+        pasocial: false
+    }
+};
+
+function mostrarConfirmacionCambios() {
+    const modal = document.getElementById('confirmacionCambiosModal');
+    const listaCambios = document.getElementById('listaCambios');
+    listaCambios.innerHTML = '';
+
+    // Verificar si hay cambios
+    const hayCambios = Object.values(cambiosDetectados).some(categoria => 
+        Object.values(categoria).some(cambios => 
+            Array.isArray(cambios) ? cambios.length > 0 : cambios
+        )
+    );
+
+    if (!hayCambios) {
+        confirmarCambios();
+        return;
+    }
+
+    // Generar HTML para cada tipo de cambio
+    let html = '';
+
+    // Cambios en colaboradores
+    if (cambiosDetectados.colaboradores.nuevos.length > 0) {
+        html += `
+            <div class="mb-4">
+                <h4 class="font-semibold text-blue-600">Nuevos Colaboradores:</h4>
+                <ul class="list-disc pl-5">
+                    ${cambiosDetectados.colaboradores.nuevos.map(col => `
+                        <li class="flex justify-between items-center">
+                            <span>${col.nombre}</span>
+                            <button onclick="deshacerCambio('colaborador', 'nuevo', ${col.id})" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Deshacer
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (cambiosDetectados.colaboradores.modificados.length > 0) {
+        html += `
+            <div class="mb-4">
+                <h4 class="font-semibold text-yellow-600">Colaboradores Modificados:</h4>
+                <ul class="list-disc pl-5">
+                    ${cambiosDetectados.colaboradores.modificados.map(col => `
+                        <li class="flex justify-between items-center">
+                            <span>${col.nombre}</span>
+                            <button onclick="deshacerCambio('colaborador', 'modificado', ${col.id})" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Deshacer
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (cambiosDetectados.colaboradores.eliminados.length > 0) {
+        html += `
+            <div class="mb-4">
+                <h4 class="font-semibold text-red-600">Colaboradores Eliminados:</h4>
+                <ul class="list-disc pl-5">
+                    ${cambiosDetectados.colaboradores.eliminados.map(col => `
+                        <li class="flex justify-between items-center">
+                            <span>${col.nombre}</span>
+                            <button onclick="deshacerCambio('colaborador', 'eliminado', ${col.id})" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Restaurar
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    // Cambios en vehículos
+    if (cambiosDetectados.vehiculos.nuevos.length > 0) {
+        html += `
+            <div class="mb-4">
+                <h4 class="font-semibold text-blue-600">Nuevos Vehículos:</h4>
+                <ul class="list-disc pl-5">
+                    ${cambiosDetectados.vehiculos.nuevos.map(veh => `
+                        <li class="flex justify-between items-center">
+                            <span>${veh.placa}</span>
+                            <button onclick="deshacerCambio('vehiculo', 'nuevo', ${veh.id})" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Deshacer
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (cambiosDetectados.vehiculos.modificados.length > 0) {
+        html += `
+            <div class="mb-4">
+                <h4 class="font-semibold text-yellow-600">Vehículos Modificados:</h4>
+                <ul class="list-disc pl-5">
+                    ${cambiosDetectados.vehiculos.modificados.map(veh => `
+                        <li class="flex justify-between items-center">
+                            <span>${veh.placa}</span>
+                            <button onclick="deshacerCambio('vehiculo', 'modificado', ${veh.id})" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Deshacer
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (cambiosDetectados.vehiculos.eliminados.length > 0) {
+        html += `
+            <div class="mb-4">
+                <h4 class="font-semibold text-red-600">Vehículos Eliminados:</h4>
+                <ul class="list-disc pl-5">
+                    ${cambiosDetectados.vehiculos.eliminados.map(veh => `
+                        <li class="flex justify-between items-center">
+                            <span>${veh.placa}</span>
+                            <button onclick="deshacerCambio('vehiculo', 'eliminado', ${veh.id})" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Restaurar
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    // Cambios en documentos
+    if (cambiosDetectados.documentos.arl || cambiosDetectados.documentos.pasocial) {
+        html += `
+            <div class="mb-4">
+                <h4 class="font-semibold text-yellow-600">Documentos Modificados:</h4>
+                <ul class="list-disc pl-5">
+                    ${cambiosDetectados.documentos.arl ? `
+                        <li class="flex justify-between items-center">
+                            <span>ARL</span>
+                            <button onclick="deshacerCambio('documento', 'arl')" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Deshacer
+                            </button>
+                        </li>
+                    ` : ''}
+                    ${cambiosDetectados.documentos.pasocial ? `
+                        <li class="flex justify-between items-center">
+                            <span>Pasocial</span>
+                            <button onclick="deshacerCambio('documento', 'pasocial')" 
+                                    class="text-red-600 hover:text-red-800 text-sm">
+                                Deshacer
+                            </button>
+                        </li>
+                    ` : ''}
+                </ul>
+            </div>
+        `;
+    }
+
+    listaCambios.innerHTML = html;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function deshacerCambio(tipo, accion, id) {
+    switch(tipo) {
+        case 'colaborador':
+            if (accion === 'nuevo') {
+                // Eliminar el colaborador de la lista de nuevos
+                cambiosDetectados.colaboradores.nuevos = cambiosDetectados.colaboradores.nuevos.filter(c => c.id !== id);
+                // Eliminar el elemento del DOM
+                document.querySelector(`#colaborador-${id}`)?.remove();
+            } else if (accion === 'modificado') {
+                // Restaurar los datos originales del colaborador
+                const colaboradorOriginal = colaboradoresOriginales.find(c => c.id === id);
+                if (colaboradorOriginal) {
+                    const elemento = document.querySelector(`#colaborador-${id}`);
+                    if (elemento) {
+                        elemento.querySelector('.nombre-colaborador').textContent = colaboradorOriginal.nombre;
+                        elemento.querySelector('.cedula-colaborador').textContent = colaboradorOriginal.cedula;
+                    }
+                }
+                cambiosDetectados.colaboradores.modificados = cambiosDetectados.colaboradores.modificados.filter(c => c.id !== id);
+            } else if (accion === 'eliminado') {
+                // Restaurar el colaborador eliminado
+                const colaboradorEliminado = cambiosDetectados.colaboradores.eliminados.find(c => c.id === id);
+                if (colaboradorEliminado) {
+                    agregarColaborador(colaboradorEliminado);
+                    cambiosDetectados.colaboradores.eliminados = cambiosDetectados.colaboradores.eliminados.filter(c => c.id !== id);
+                }
+            }
+            break;
+        case 'vehiculo':
+            if (accion === 'nuevo') {
+                cambiosDetectados.vehiculos.nuevos = cambiosDetectados.vehiculos.nuevos.filter(v => v.id !== id);
+                document.querySelector(`#vehiculo-${id}`)?.remove();
+            } else if (accion === 'modificado') {
+                const vehiculoOriginal = vehiculosOriginales.find(v => v.id === id);
+                if (vehiculoOriginal) {
+                    const elemento = document.querySelector(`#vehiculo-${id}`);
+                    if (elemento) {
+                        elemento.querySelector('.placa-vehiculo').textContent = vehiculoOriginal.placa;
+                    }
+                }
+                cambiosDetectados.vehiculos.modificados = cambiosDetectados.vehiculos.modificados.filter(v => v.id !== id);
+            } else if (accion === 'eliminado') {
+                const vehiculoEliminado = cambiosDetectados.vehiculos.eliminados.find(v => v.id === id);
+                if (vehiculoEliminado) {
+                    agregarVehiculo(vehiculoEliminado);
+                    cambiosDetectados.vehiculos.eliminados = cambiosDetectados.vehiculos.eliminados.filter(v => v.id !== id);
+                }
+            }
+            break;
+        case 'documento':
+            if (accion === 'arl') {
+                cambiosDetectados.documentos.arl = false;
+                // Restaurar el documento ARL original
+                const inputArl = document.querySelector('input[name="arl_documento"]');
+                if (inputArl) {
+                    inputArl.value = '';
+                }
+            } else if (accion === 'pasocial') {
+                cambiosDetectados.documentos.pasocial = false;
+                // Restaurar el documento Pasocial original
+                const inputPasocial = document.querySelector('input[name="pasocial_documento"]');
+                if (inputPasocial) {
+                    inputPasocial.value = '';
+                }
+            }
+            break;
+    }
+
+    // Actualizar la vista del modal
+    mostrarConfirmacionCambios();
+}
+
+function cancelarCambios() {
+    // Restaurar todos los cambios
+    cambiosDetectados.colaboradores.nuevos.forEach(col => {
+        document.querySelector(`#colaborador-${col.id}`)?.remove();
+    });
+    cambiosDetectados.colaboradores.eliminados.forEach(col => {
+        agregarColaborador(col);
+    });
+    cambiosDetectados.colaboradores.modificados.forEach(col => {
+        const original = colaboradoresOriginales.find(c => c.id === col.id);
+        if (original) {
+            const elemento = document.querySelector(`#colaborador-${col.id}`);
+            if (elemento) {
+                elemento.querySelector('.nombre-colaborador').textContent = original.nombre;
+                elemento.querySelector('.cedula-colaborador').textContent = original.cedula;
+            }
+        }
+    });
+
+    cambiosDetectados.vehiculos.nuevos.forEach(veh => {
+        document.querySelector(`#vehiculo-${veh.id}`)?.remove();
+    });
+    cambiosDetectados.vehiculos.eliminados.forEach(veh => {
+        agregarVehiculo(veh);
+    });
+    cambiosDetectados.vehiculos.modificados.forEach(veh => {
+        const original = vehiculosOriginales.find(v => v.id === veh.id);
+        if (original) {
+            const elemento = document.querySelector(`#vehiculo-${veh.id}`);
+            if (elemento) {
+                elemento.querySelector('.placa-vehiculo').textContent = original.placa;
+            }
+        }
+    });
+
+    // Restaurar documentos
+    if (cambiosDetectados.documentos.arl) {
+        const inputArl = document.querySelector('input[name="arl_documento"]');
+        if (inputArl) {
+            inputArl.value = '';
+        }
+    }
+    if (cambiosDetectados.documentos.pasocial) {
+        const inputPasocial = document.querySelector('input[name="pasocial_documento"]');
+        if (inputPasocial) {
+            inputPasocial.value = '';
+        }
+    }
+
+    // Limpiar el objeto de cambios
+    cambiosDetectados = {
+        colaboradores: { nuevos: [], modificados: [], eliminados: [] },
+        vehiculos: { nuevos: [], modificados: [], eliminados: [] },
+        documentos: { arl: false, pasocial: false }
+    };
+
+    // Ocultar el modal
+    document.getElementById('confirmacionCambiosModal').classList.add('hidden');
+    document.getElementById('confirmacionCambiosModal').classList.remove('flex');
+}
+
+function confirmarCambios() {
+    // Ocultar el modal
+    document.getElementById('confirmacionCambiosModal').classList.add('hidden');
+    document.getElementById('confirmacionCambiosModal').classList.remove('flex');
+    
+    // Proceder con el guardado de los cambios
+    guardarCambios();
+}
+
+// Modificar la función de guardar para que primero muestre la confirmación
+function guardarSolicitud() {
+    // Detectar cambios
+    detectarCambios();
+    
+    // Mostrar el modal de confirmación
+    mostrarConfirmacionCambios();
+}
+
+// Función para mostrar el modal de confirmación de cambios
+function mostrarModalConfirmacionCambios(cambios) {
+    // Limpiar listas anteriores
+    document.getElementById('listaNuevosColaboradores').innerHTML = '';
+    document.getElementById('listaModificadosColaboradores').innerHTML = '';
+    document.getElementById('listaEliminadosColaboradores').innerHTML = '';
+    document.getElementById('listaNuevosVehiculos').innerHTML = '';
+    document.getElementById('listaModificadosVehiculos').innerHTML = '';
+    document.getElementById('listaEliminadosVehiculos').innerHTML = '';
+    document.getElementById('listaCambiosDocumentos').innerHTML = '';
+
+    // Mostrar/ocultar secciones según haya cambios
+    document.getElementById('cambiosColaboradores').style.display = 
+        (cambios.colaboradores.nuevos.length + cambios.colaboradores.modificados.length + cambios.colaboradores.eliminados.length) > 0 ? 'block' : 'none';
+    document.getElementById('cambiosVehiculos').style.display = 
+        (cambios.vehiculos.nuevos.length + cambios.vehiculos.modificados.length + cambios.vehiculos.eliminados.length) > 0 ? 'block' : 'none';
+    document.getElementById('cambiosDocumentos').style.display = 
+        (cambios.documentos.arl || cambios.documentos.pasocial) ? 'block' : 'none';
+
+    // Agregar colaboradores nuevos
+    cambios.colaboradores.nuevos.forEach(col => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            ${col.nombre} (Cédula: ${col.cedula})
+            <button class="btn btn-sm btn-outline-danger deshacer-cambio" data-tipo="colaborador" data-id="${col.cedula}">
+                <i class="fas fa-undo"></i> Deshacer
+            </button>
+        `;
+        document.getElementById('listaNuevosColaboradores').appendChild(item);
+    });
+
+    // Agregar colaboradores modificados
+    cambios.colaboradores.modificados.forEach(col => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            ${col.nombre} (Cédula: ${col.cedula})
+            <button class="btn btn-sm btn-outline-danger deshacer-cambio" data-tipo="colaborador" data-id="${col.cedula}">
+                <i class="fas fa-undo"></i> Deshacer
+            </button>
+        `;
+        document.getElementById('listaModificadosColaboradores').appendChild(item);
+    });
+
+    // Agregar colaboradores eliminados
+    cambios.colaboradores.eliminados.forEach(col => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            ${col.nombre} (Cédula: ${col.cedula})
+            <button class="btn btn-sm btn-outline-success deshacer-cambio" data-tipo="colaborador" data-id="${col.cedula}">
+                <i class="fas fa-undo"></i> Restaurar
+            </button>
+        `;
+        document.getElementById('listaEliminadosColaboradores').appendChild(item);
+    });
+
+    // Agregar vehículos nuevos
+    cambios.vehiculos.nuevos.forEach(veh => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            Placa: ${veh.matricula}
+            <button class="btn btn-sm btn-outline-danger deshacer-cambio" data-tipo="vehiculo" data-id="${veh.matricula}">
+                <i class="fas fa-undo"></i> Deshacer
+            </button>
+        `;
+        document.getElementById('listaNuevosVehiculos').appendChild(item);
+    });
+
+    // Agregar vehículos modificados
+    cambios.vehiculos.modificados.forEach(veh => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            Placa: ${veh.matricula}
+            <button class="btn btn-sm btn-outline-danger deshacer-cambio" data-tipo="vehiculo" data-id="${veh.matricula}">
+                <i class="fas fa-undo"></i> Deshacer
+            </button>
+        `;
+        document.getElementById('listaModificadosVehiculos').appendChild(item);
+    });
+
+    // Agregar vehículos eliminados
+    cambios.vehiculos.eliminados.forEach(veh => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            Placa: ${veh.matricula}
+            <button class="btn btn-sm btn-outline-success deshacer-cambio" data-tipo="vehiculo" data-id="${veh.matricula}">
+                <i class="fas fa-undo"></i> Restaurar
+            </button>
+        `;
+        document.getElementById('listaEliminadosVehiculos').appendChild(item);
+    });
+
+    // Agregar cambios en documentos
+    if (cambios.documentos.arl) {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            Documento ARL
+            <button class="btn btn-sm btn-outline-danger deshacer-cambio" data-tipo="documento" data-id="arl">
+                <i class="fas fa-undo"></i> Deshacer
+            </button>
+        `;
+        document.getElementById('listaCambiosDocumentos').appendChild(item);
+    }
+    if (cambios.documentos.pasocial) {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            Documento Pasocial
+            <button class="btn btn-sm btn-outline-danger deshacer-cambio" data-tipo="documento" data-id="pasocial">
+                <i class="fas fa-undo"></i> Deshacer
+            </button>
+        `;
+        document.getElementById('listaCambiosDocumentos').appendChild(item);
+    }
+
+    // Mostrar el modal
+    const modal = new bootstrap.Modal(document.getElementById('confirmarCambiosModal'));
+    modal.show();
+
+    // Manejar eventos de deshacer cambios
+    document.querySelectorAll('.deshacer-cambio').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tipo = this.dataset.tipo;
+            const id = this.dataset.id;
+            
+            // Eliminar el elemento del modal
+            this.closest('.list-group-item').remove();
+            
+            // Deshacer el cambio en los datos
+            if (tipo === 'colaborador') {
+                if (this.closest('.nuevos-colaboradores')) {
+                    cambios.colaboradores.nuevos = cambios.colaboradores.nuevos.filter(c => c.cedula !== id);
+                } else if (this.closest('.modificados-colaboradores')) {
+                    cambios.colaboradores.modificados = cambios.colaboradores.modificados.filter(c => c.cedula !== id);
+                } else if (this.closest('.eliminados-colaboradores')) {
+                    cambios.colaboradores.eliminados = cambios.colaboradores.eliminados.filter(c => c.cedula !== id);
+                }
+            } else if (tipo === 'vehiculo') {
+                if (this.closest('.nuevos-vehiculos')) {
+                    cambios.vehiculos.nuevos = cambios.vehiculos.nuevos.filter(v => v.matricula !== id);
+                } else if (this.closest('.modificados-vehiculos')) {
+                    cambios.vehiculos.modificados = cambios.vehiculos.modificados.filter(v => v.matricula !== id);
+                } else if (this.closest('.eliminados-vehiculos')) {
+                    cambios.vehiculos.eliminados = cambios.vehiculos.eliminados.filter(v => v.matricula !== id);
+                }
+            } else if (tipo === 'documento') {
+                if (id === 'arl') cambios.documentos.arl = false;
+                else if (id === 'pasocial') cambios.documentos.pasocial = false;
+            }
+
+            // Ocultar secciones vacías
+            if (cambios.colaboradores.nuevos.length + cambios.colaboradores.modificados.length + cambios.colaboradores.eliminados.length === 0) {
+                document.getElementById('cambiosColaboradores').style.display = 'none';
+            }
+            if (cambios.vehiculos.nuevos.length + cambios.vehiculos.modificados.length + cambios.vehiculos.eliminados.length === 0) {
+                document.getElementById('cambiosVehiculos').style.display = 'none';
+            }
+            if (!cambios.documentos.arl && !cambios.documentos.pasocial) {
+                document.getElementById('cambiosDocumentos').style.display = 'none';
+            }
+        });
+    });
+
+    // Manejar confirmación de cambios
+    document.getElementById('confirmarCambios').addEventListener('click', function() {
+        // Verificar si hay cambios restantes
+        const hayCambios = 
+            cambios.colaboradores.nuevos.length > 0 ||
+            cambios.colaboradores.modificados.length > 0 ||
+            cambios.colaboradores.eliminados.length > 0 ||
+            cambios.vehiculos.nuevos.length > 0 ||
+            cambios.vehiculos.modificados.length > 0 ||
+            cambios.vehiculos.eliminados.length > 0 ||
+            cambios.documentos.arl ||
+            cambios.documentos.pasocial;
+
+        if (hayCambios) {
+            // Cerrar el modal
+            bootstrap.Modal.getInstance(document.getElementById('confirmarCambiosModal')).hide();
+            // Enviar los cambios al servidor
+            enviarCambiosAlServidor(cambios);
+        } else {
+            alert('No hay cambios para confirmar. Por favor, realice cambios antes de guardar.');
+        }
+    });
+}
+
+// Función para enviar cambios al servidor
+async function enviarCambiosAlServidor(cambios) {
+    try {
+        const formData = new FormData(document.getElementById('formularioSolicitud'));
+        formData.append('cambios', JSON.stringify(cambios));
+        
+        const response = await fetch(`/actualizar-solicitud/${solicitudId}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                alert('Cambios guardados correctamente');
+                window.location.reload();
+            } else {
+                alert('Error al guardar los cambios: ' + result.message);
+            }
+        } else {
+            throw new Error('Error en la respuesta del servidor');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al guardar los cambios. Por favor, intente nuevamente.');
+    }
+}
+
+// Funciones de formateo
+function formatearNombre(nombre) {
+    if (!nombre) return '';
+    return nombre
+        .trim()
+        .split(' ')
+        .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1).toLowerCase())
+        .join(' ');
+}
+
+function formatearCedula(cedula) {
+    if (!cedula) return '';
+    return cedula.trim().replace(/\s+/g, '');
+}
+
+function formatearPlaca(placa) {
+    if (!placa) return '';
+    return placa
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/\s*-\s*/g, ' - ');
+}
+
+// Función para formatear datos de colaborador
+function formatearDatosColaborador(colaborador) {
+    return {
+        ...colaborador,
+        nombre: formatearNombre(colaborador.nombre),
+        cedula: formatearCedula(colaborador.cedula)
+    };
+}
+
+// Función para formatear datos de vehículo
+function formatearDatosVehiculo(vehiculo) {
+    return {
+        ...vehiculo,
+        matricula: formatearPlaca(vehiculo.matricula)
+    };
+}
+
+// Modificar la función de agregar colaborador
+function agregarColaborador() {
+    const nombre = document.getElementById('nombreColaborador').value;
+    const cedula = document.getElementById('cedulaColaborador').value;
+    const cargo = document.getElementById('cargoColaborador').value;
+    const eps = document.getElementById('epsColaborador').value;
+    const arl = document.getElementById('arlColaborador').value;
+    const foto = document.getElementById('fotoColaborador').files[0];
+
+    if (!nombre || !cedula || !cargo || !eps || !arl || !foto) {
+        alert('Por favor, complete todos los campos y suba una foto');
+        return;
+    }
+
+    const colaboradorFormateado = formatearDatosColaborador({
+        nombre,
+        cedula,
+        cargo,
+        eps,
+        arl,
+        foto
+    });
+
+    const colaboradoresContainer = document.getElementById('colaboradoresContainer');
+    const colaboradorDiv = document.createElement('div');
+    colaboradorDiv.className = 'colaborador-item bg-white p-4 rounded-lg shadow mb-4';
+    colaboradorDiv.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+            <div>
+                <h3 class="text-lg font-semibold">${colaboradorFormateado.nombre}</h3>
+                <p class="text-gray-600">Cédula: ${colaboradorFormateado.cedula}</p>
+                <p class="text-gray-600">Cargo: ${colaboradorFormateado.cargo}</p>
+                <p class="text-gray-600">EPS: ${colaboradorFormateado.eps}</p>
+                <p class="text-gray-600">ARL: ${colaboradorFormateado.arl}</p>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="editarColaborador(this)" class="text-blue-500 hover:text-blue-700">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button onclick="eliminarColaborador(this)" class="text-red-500 hover:text-red-700">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="mt-2">
+            <img src="${URL.createObjectURL(foto)}" alt="Foto del colaborador" class="w-32 h-32 object-cover rounded">
+        </div>
+        <input type="hidden" name="colaboradores[]" value='${JSON.stringify(colaboradorFormateado)}'>
+    `;
+    colaboradoresContainer.appendChild(colaboradorDiv);
+    limpiarFormularioColaborador();
+}
+
+// Modificar la función de agregar vehículo
+function agregarVehiculo() {
+    const matricula = document.getElementById('matriculaVehiculo').value;
+    const marca = document.getElementById('marcaVehiculo').value;
+    const modelo = document.getElementById('modeloVehiculo').value;
+    const color = document.getElementById('colorVehiculo').value;
+    const foto = document.getElementById('fotoVehiculo').files[0];
+
+    if (!matricula || !marca || !modelo || !color || !foto) {
+        alert('Por favor, complete todos los campos y suba una foto');
+        return;
+    }
+
+    const vehiculoFormateado = formatearDatosVehiculo({
+        matricula,
+        marca,
+        modelo,
+        color,
+        foto
+    });
+
+    const vehiculosContainer = document.getElementById('vehiculosContainer');
+    const vehiculoDiv = document.createElement('div');
+    vehiculoDiv.className = 'vehiculo-item bg-white p-4 rounded-lg shadow mb-4';
+    vehiculoDiv.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+            <div>
+                <h3 class="text-lg font-semibold">Placa: ${vehiculoFormateado.matricula}</h3>
+                <p class="text-gray-600">Marca: ${vehiculoFormateado.marca}</p>
+                <p class="text-gray-600">Modelo: ${vehiculoFormateado.modelo}</p>
+                <p class="text-gray-600">Color: ${vehiculoFormateado.color}</p>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="editarVehiculo(this)" class="text-blue-500 hover:text-blue-700">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button onclick="eliminarVehiculo(this)" class="text-red-500 hover:text-red-700">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="mt-2">
+            <img src="${URL.createObjectURL(foto)}" alt="Foto del vehículo" class="w-32 h-32 object-cover rounded">
+        </div>
+        <input type="hidden" name="vehiculos[]" value='${JSON.stringify(vehiculoFormateado)}'>
+    `;
+    vehiculosContainer.appendChild(vehiculoDiv);
+    limpiarFormularioVehiculo();
+}
+
+// Modificar la función de editar colaborador
+function editarColaborador(button) {
+    const colaboradorDiv = button.closest('.colaborador-item');
+    const colaborador = JSON.parse(colaboradorDiv.querySelector('input[type="hidden"]').value);
+    
+    document.getElementById('nombreColaborador').value = colaborador.nombre;
+    document.getElementById('cedulaColaborador').value = colaborador.cedula;
+    document.getElementById('cargoColaborador').value = colaborador.cargo;
+    document.getElementById('epsColaborador').value = colaborador.eps;
+    document.getElementById('arlColaborador').value = colaborador.arl;
+    
+    colaboradorDiv.remove();
+}
+
+// Modificar la función de editar vehículo
+function editarVehiculo(button) {
+    const vehiculoDiv = button.closest('.vehiculo-item');
+    const vehiculo = JSON.parse(vehiculoDiv.querySelector('input[type="hidden"]').value);
+    
+    document.getElementById('matriculaVehiculo').value = vehiculo.matricula;
+    document.getElementById('marcaVehiculo').value = vehiculo.marca;
+    document.getElementById('modeloVehiculo').value = vehiculo.modelo;
+    document.getElementById('colorVehiculo').value = vehiculo.color;
+    
+    vehiculoDiv.remove();
+}
+
 </script>
 </body>
 </html>

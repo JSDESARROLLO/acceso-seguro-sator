@@ -41,7 +41,8 @@ controller.vistaContratista = async (req, res) => {
       s.estado, 
       a.accion, 
       a.comentario, 
-      s.lugar, 
+      s.lugar,
+      l.nombre_lugar,
       s.labor,
       us.username AS interventor,
       CASE
@@ -56,6 +57,7 @@ controller.vistaContratista = async (req, res) => {
   FROM solicitudes s
   LEFT JOIN acciones a ON s.id = a.solicitud_id
   LEFT JOIN users us ON us.id = s.interventor_id
+  LEFT JOIN lugares l ON s.lugar = l.id
   WHERE s.usuario_id = ?
   ORDER BY s.id DESC;
     `;
@@ -69,7 +71,7 @@ controller.vistaContratista = async (req, res) => {
 
     const [userDetails] = await connection.query('SELECT empresa, nit FROM users WHERE id = ?', [userId]);
     
-    const [lugares] = await connection.query('SELECT * FROM lugares');
+    const [lugares] = await connection.query('SELECT id, nombre_lugar FROM lugares ORDER BY nombre_lugar ASC');
     
     const [Usersinterventores] = await connection.execute(` 
       SELECT id, username FROM users WHERE role_id = (SELECT id FROM roles WHERE role_name = 'interventor')

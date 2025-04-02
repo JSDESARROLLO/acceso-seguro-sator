@@ -11,6 +11,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
 const { v4: uuidv4 } = require('uuid');
+const emailService = require('../services/email.service');
 require('dotenv').config();
 
 // Configuración de logger para depuración
@@ -22,8 +23,8 @@ const s3Client = new S3Client({
   endpoint: `https://${process.env.DO_SPACES_ENDPOINT}`,
   region: process.env.DO_SPACES_REGION || 'us-east-1',
   credentials: {
-    accessKeyId: process.env.DO_SPACES_KEY,
-    secretAccessKey: process.env.DO_SPACES_SECRET
+  accessKeyId: process.env.DO_SPACES_KEY,
+  secretAccessKey: process.env.DO_SPACES_SECRET
   }
 });
 
@@ -163,17 +164,36 @@ async function deleteSSTDocuments(solicitudId) {
     await conn.beginTransaction();
     logInfo('Iniciando borrado de documentos SST:', { solicitudId });
 
+    // Obtener todos los documentos SST de la solicitud
     const [docs] = await conn.execute(
-      'SELECT url FROM sst_documentos WHERE solicitud_id = ?',
+      'SELECT id, url FROM sst_documentos WHERE solicitud_id = ?',
       [solicitudId]
     );
 
-    logInfo('Documentos encontrados:', { count: docs.length });
+    logInfo('Documentos SST encontrados:', { count: docs.length, docs });
 
+    // Borrar cada documento de DigitalOcean
     for (const doc of docs) {
-      await deleteFromSpaces(doc.url);
+      try {
+        // Extraer la clave del archivo de la URL completa
+        const urlParts = doc.url.split('/');
+        const fileKey = urlParts.slice(3).join('/'); // Obtener la ruta después del bucket y endpoint
+
+        const command = new DeleteObjectCommand({
+          Bucket: process.env.DO_SPACES_BUCKET,
+          Key: fileKey
+        });
+
+        logInfo('Intentando borrar archivo de Spaces:', { url: doc.url, fileKey });
+        await s3Client.send(command);
+        logInfo('Archivo borrado exitosamente de Spaces:', { url: doc.url });
+      } catch (error) {
+        logError(error, `Error al borrar documento de DigitalOcean: ${doc.url}`);
+        // Continuar con el siguiente documento incluso si hay error
+      }
     }
 
+    // Borrar todos los registros de la base de datos
     await conn.execute(
       'DELETE FROM sst_documentos WHERE solicitud_id = ?',
       [solicitudId]
@@ -193,25 +213,21 @@ async function deleteSSTDocuments(solicitudId) {
 router.use(authMiddleware);
 
 // Ruta para generar solicitud
-router.post('/generar-solicitud', upload.fields([
-  { name: 'arl', maxCount: 1 },
-  { name: 'pasocial', maxCount: 1 },
-  { name: 'foto[]', maxCount: 25 },
-  { name: 'cedulaFoto[]', maxCount: 25 },
-  { name: 'foto_vehiculo[]', maxCount: 10 },
-  { name: 'tecnomecanica[]', maxCount: 10 },
-  { name: 'soat[]', maxCount: 10 },
-  { name: 'licencia_conduccion[]', maxCount: 10 },
-  { name: 'licencia_transito[]', maxCount: 10 }
-]), async (req, res) => {
+router.post('/generar-solicitud', upload.any(), async (req, res) => {
   const conn = await connection.getConnection();
   try {
     logInfo('Iniciando generación de solicitud', { body: req.body });
     await conn.beginTransaction();
 
-    const uploadedFiles = req.files;
+    const uploadedFiles = req.files || {};
     logInfo('Archivos recibidos:', { 
       fileCount: Object.keys(uploadedFiles || {}).reduce((acc, key) => acc + uploadedFiles[key].length, 0) 
+    });
+
+    const fileMap = {};
+    uploadedFiles.forEach(file => {
+      fileMap[file.fieldname] = fileMap[file.fieldname] || [];
+      fileMap[file.fieldname].push(file);
     });
 
     const fileNames = {
@@ -222,14 +238,23 @@ router.post('/generar-solicitud', upload.fields([
       vehiculos: []
     };
 
-    for (const fileKey in uploadedFiles) {
-      const files = uploadedFiles[fileKey];
-      for (const file of files) {
-        const filePath = await uploadToSpacesFromDisk(file.path, file.originalname);
-        if (fileKey === 'foto[]') fileNames.foto.push(filePath);
-        else if (fileKey === 'cedulaFoto[]') fileNames.cedulaFoto.push(filePath);
-        else if (fileKey === 'arl') fileNames.arl = filePath;
-        else if (fileKey === 'pasocial') fileNames.pasocial = filePath;
+    // Procesar documentos principales
+    if (fileMap['arl']?.[0]) {
+      fileNames.arl = await uploadToSpacesFromDisk(fileMap['arl'][0].path, fileMap['arl'][0].originalname);
+    }
+    if (fileMap['pasocial']?.[0]) {
+      fileNames.pasocial = await uploadToSpacesFromDisk(fileMap['pasocial'][0].path, fileMap['pasocial'][0].originalname);
+    }
+
+    // Procesar fotos y cédulas
+    if (fileMap['foto[]']) {
+      for (const file of fileMap['foto[]']) {
+        fileNames.foto.push(await uploadToSpacesFromDisk(file.path, file.originalname));
+      }
+    }
+    if (fileMap['cedulaFoto[]']) {
+      for (const file of fileMap['cedulaFoto[]']) {
+        fileNames.cedulaFoto.push(await uploadToSpacesFromDisk(file.path, file.originalname));
       }
     }
 
@@ -261,11 +286,11 @@ router.post('/generar-solicitud', upload.fields([
       for (let i = 0; i < matriculas.length; i++) {
         const vehiculo = {
           matricula: matriculas[i],
-          foto: uploadedFiles['foto_vehiculo[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['foto_vehiculo[]'][i].path, uploadedFiles['foto_vehiculo[]'][i].originalname) : null,
-          tecnomecanica: uploadedFiles['tecnomecanica[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['tecnomecanica[]'][i].path, uploadedFiles['tecnomecanica[]'][i].originalname) : null,
-          soat: uploadedFiles['soat[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['soat[]'][i].path, uploadedFiles['soat[]'][i].originalname) : null,
-          licencia_conduccion: uploadedFiles['licencia_conduccion[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['licencia_conduccion[]'][i].path, uploadedFiles['licencia_conduccion[]'][i].originalname) : null,
-          licencia_transito: uploadedFiles['licencia_transito[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['licencia_transito[]'][i].path, uploadedFiles['licencia_transito[]'][i].originalname) : null
+          foto: fileMap['foto_vehiculo[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['foto_vehiculo[]'][i].path, fileMap['foto_vehiculo[]'][i].originalname) : null,
+          tecnomecanica: fileMap['tecnomecanica[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['tecnomecanica[]'][i].path, fileMap['tecnomecanica[]'][i].originalname) : null,
+          soat: fileMap['soat[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['soat[]'][i].path, fileMap['soat[]'][i].originalname) : null,
+          licencia_conduccion: fileMap['licencia_conduccion[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['licencia_conduccion[]'][i].path, fileMap['licencia_conduccion[]'][i].originalname) : null,
+          licencia_transito: fileMap['licencia_transito[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['licencia_transito[]'][i].path, fileMap['licencia_transito[]'][i].originalname) : null
         };
         await conn.execute(
           'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -311,156 +336,590 @@ router.post('/generar-solicitud', upload.fields([
 
 // Ruta para actualizar solicitud
 router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
-  const conn = await connection.getConnection();
-  try {
-    await conn.beginTransaction();
-    const solicitudId = req.params.id;
-    const uploadedFiles = req.files || {};
-    const { cedula, nombre, colaborador_id = [], matricula, vehiculo_id = [] } = req.body;
-
-    const fileMap = {};
-    uploadedFiles.forEach(file => {
-      fileMap[file.fieldname] = fileMap[file.fieldname] || [];
-      fileMap[file.fieldname].push(file);
-    });
-
-    // Actualizar documentos ARL y Pasocial
-    const [currentSolicitud] = await conn.execute(
-      'SELECT arl_documento, pasocial_documento FROM solicitudes WHERE id = ?',
-      [solicitudId]
-    );
-    const oldArl = currentSolicitud[0]?.arl_documento;
-    const oldPasocial = currentSolicitud[0]?.pasocial_documento;
-
-    for (const field of ['arl', 'pasocial']) {
-      if (fileMap[field]?.[0]) {
-        const file = fileMap[field][0];
-        const oldUrl = field === 'arl' ? oldArl : oldPasocial;
-        if (oldUrl) await deleteFromSpaces(oldUrl);
-        const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
-        await conn.execute(
-          `UPDATE solicitudes SET ${field}_documento = ? WHERE id = ?`,
-          [newPath, solicitudId]
-        );
-      }
-    }
-
-    // Actualizar colaboradores existentes
-    for (let i = 0; i < colaborador_id.length; i++) {
-      const id = colaborador_id[i];
-      if (id) {
-        const fotoField = `foto_${id}`;
-        const cedulaFotoField = `cedula_foto_${id}`;
-        for (const field of [fotoField, cedulaFotoField]) {
-          if (fileMap[field]?.[0]) {
-            const file = fileMap[field][0];
-            const campo = field.startsWith('foto_') ? 'foto' : 'cedulaFoto';
-            const [rows] = await conn.execute(`SELECT ${campo} FROM colaboradores WHERE id = ?`, [id]);
-            if (rows[0]?.[campo]) await deleteFromSpaces(rows[0][campo]);
-            const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
-            await conn.execute(
-              `UPDATE colaboradores SET ${campo} = ? WHERE id = ?`,
-              [newPath, id]
-            );
-          }
-        }
-      }
-    }
-
-    // Agregar nuevos colaboradores
-    if (cedula && nombre) {
-      const fotos = fileMap['foto[]'] || [];
-      const cedulaFotos = fileMap['cedulaFoto[]'] || [];
-      for (let i = 0; i < cedula.length; i++) {
-        const [existingColaborador] = await conn.execute(
-          'SELECT id FROM colaboradores WHERE solicitud_id = ? AND cedula = ?',
-          [solicitudId, cedula[i]]
-        );
-
-        if (!existingColaborador.length) {
-          const fotoFile = fotos.shift();
-          const cedulaFotoFile = cedulaFotos.shift();
-          const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
-          const cedulaFotoUrl = cedulaFotoFile ? await uploadToSpacesFromDisk(cedulaFotoFile.path, cedulaFotoFile.originalname) : null;
-          await conn.execute(
-            'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, cedulaFoto, estado) VALUES (?, ?, ?, ?, ?, true)',
-            [solicitudId, cedula[i], nombre[i], fotoUrl, cedulaFotoUrl]
-          );
-        }
-      }
-    }
-
-    // Actualizar vehículos existentes
-    for (let i = 0; i < vehiculo_id.length; i++) {
-      const id = vehiculo_id[i];
-      if (id) {
-        const fields = ['foto_vehiculo', 'tecnomecanica', 'soat', 'licencia_conduccion', 'licencia_transito'];
-        for (const field of fields) {
-          const fieldName = `${field}_${id}`;
-          if (fileMap[fieldName]?.[0]) {
-            const file = fileMap[fieldName][0];
-            const column = field.replace('foto_vehiculo', 'foto');
-            const [rows] = await conn.execute(`SELECT ${column} FROM vehiculos WHERE id = ?`, [id]);
-            if (rows[0]?.[column]) await deleteFromSpaces(rows[0][column]);
-            const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
-            await conn.execute(
-              `UPDATE vehiculos SET ${column} = ? WHERE id = ?`,
-              [newPath, id]
-            );
-          }
-        }
-      }
-    }
-
-    // Agregar nuevos vehículos
-    if (matricula && matricula.length) {
-      const matriculas = Array.isArray(matricula) ? matricula : [matricula];
-      for (let i = 0; i < matriculas.length; i++) {
-        const matriculaValue = matriculas[i];
-        const [existing] = await conn.execute(
-          'SELECT id FROM vehiculos WHERE solicitud_id = ? AND matricula = ? AND estado = 1',
-          [solicitudId, matriculaValue]
-        );
-        if (!existing.length) {
-          const vehiculo = {
-            matricula: matriculaValue,
-            foto: fileMap['foto_vehiculo[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['foto_vehiculo[]'][i].path, fileMap['foto_vehiculo[]'][i].originalname) : null,
-            tecnomecanica: fileMap['tecnomecanica[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['tecnomecanica[]'][i].path, fileMap['tecnomecanica[]'][i].originalname) : null,
-            soat: fileMap['soat[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['soat[]'][i].path, fileMap['soat[]'][i].originalname) : null,
-            licencia_conduccion: fileMap['licencia_conduccion[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['licencia_conduccion[]'][i].path, fileMap['licencia_conduccion[]'][i].originalname) : null,
-            licencia_transito: fileMap['licencia_transito[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['licencia_transito[]'][i].path, fileMap['licencia_transito[]'][i].originalname) : null
-          };
-          await conn.execute(
-            'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [solicitudId, vehiculo.matricula, vehiculo.foto, vehiculo.tecnomecanica, vehiculo.soat, vehiculo.licencia_conduccion, vehiculo.licencia_transito]
-          );
-        }
-      }
-    }
-
-    await conn.commit();
-    res.json({ success: true, message: 'Solicitud actualizada correctamente' });
-  } catch (error) {
-    await conn.rollback();
-    logError(error, '/actualizar-solicitud');
-    if (req.files) {
-      Object.values(req.files).flat().forEach(async file => {
-        try {
-          await fs.access(file.path);
-          await fs.unlink(file.path);
-        } catch (err) {
-          // Ignorar errores si el archivo ya no existe
-          if (err.code !== 'ENOENT') {
-            logError(err, 'Limpieza de archivos temporales');
-          }
-        }
+    const conn = await connection.getConnection();
+    try {
+      await conn.beginTransaction();
+      const solicitudId = req.params.id;
+      const uploadedFiles = req.files || {};
+      const { cedula, nombre, colaborador_id = [], matricula, vehiculo_id = [], renovacion, inicio_obra, fin_obra, dias_trabajo, lugar, labor, cambios } = req.body;
+  
+      // Parsear los cambios si existen
+      const cambiosDetectados = cambios ? JSON.parse(cambios) : null;
+  
+      // Obtener información de la solicitud y el contratista
+      const [solicitudInfo] = await conn.execute(`
+        SELECT s.*, u.empresa, u.nit, u.email as email_contratista, l.nombre_lugar
+        FROM solicitudes s
+        JOIN users u ON s.usuario_id = u.id
+        JOIN lugares l ON s.lugar = l.id
+        WHERE s.id = ?
+      `, [solicitudId]);
+  
+      // Obtener usuarios SST
+      const [usuariosSST] = await conn.execute(`
+        SELECT u.email, u.username
+        FROM users u
+        JOIN roles r ON u.role_id = r.id
+        WHERE r.role_name = 'sst'
+      `);
+  
+      // Log de los datos recibidos
+      logInfo('Datos recibidos:', { 
+        inicio_obra, 
+        fin_obra, 
+        dias_trabajo, 
+        lugar, 
+        labor,
+        cedula: cedula?.length,
+        matricula: matricula?.length,
+        files: Object.keys(uploadedFiles || {}).length,
+        cambios: cambiosDetectados
       });
+  
+      // Obtener el nombre del lugar si se proporciona un ID
+      let nombreLugar = lugar;
+      if (lugar) {
+        const [lugarInfo] = await conn.execute(
+          'SELECT nombre_lugar FROM lugares WHERE id = ?',
+          [lugar]
+        );
+        if (lugarInfo.length > 0) {
+          nombreLugar = lugarInfo[0].nombre_lugar;
+        }
+      }
+  
+      // Verificar si hay cambios reales basados en la información del frontend
+      const hayCambios = cambiosDetectados && (
+        cambiosDetectados.colaboradores.nuevos.length > 0 ||
+        cambiosDetectados.colaboradores.modificados.length > 0 ||
+        cambiosDetectados.colaboradores.eliminados.length > 0 ||
+        cambiosDetectados.vehiculos.nuevos.length > 0 ||
+        cambiosDetectados.vehiculos.modificados.length > 0 ||
+        cambiosDetectados.vehiculos.eliminados.length > 0 ||
+        cambiosDetectados.documentos.arl ||
+        cambiosDetectados.documentos.pasocial
+      );
+  
+      // Definir variables para detectar cambios específicos
+      const hayCambiosColaboradores =
+        cambiosDetectados &&
+        (cambiosDetectados.colaboradores.nuevos.length > 0 ||
+          cambiosDetectados.colaboradores.modificados.length > 0 ||
+          cambiosDetectados.colaboradores.eliminados.length > 0);
+  
+      const hayCambiosVehiculos =
+        cambiosDetectados &&
+        (cambiosDetectados.vehiculos.nuevos.length > 0 ||
+          cambiosDetectados.vehiculos.modificados.length > 0 ||
+          cambiosDetectados.vehiculos.eliminados.length > 0);
+  
+      const hayCambiosDocumentos =
+        cambiosDetectados && (cambiosDetectados.documentos.arl || cambiosDetectados.documentos.pasocial);
+  
+      // Log detallado de los cambios detectados
+      logInfo('Cambios detectados:', { 
+        cambiosDetectados,
+        hayCambios,
+        renovacion
+      });
+  
+      // Determinar si es una nueva solicitud o una actualización
+      const esNuevaSolicitud = !solicitudId || solicitudId === 'null';
+  
+      if (esNuevaSolicitud) {
+        logInfo('Creando nueva solicitud');
+        
+        // Obtener datos del usuario actual
+        const [usuarioActual] = await conn.execute(
+          'SELECT empresa, nit, email FROM users WHERE id = ?',
+          [req.user.id]
+        );
+  
+        if (!usuarioActual.length) {
+          throw new Error('No se encontró información del usuario');
+        }
+  
+        // Obtener interventor_id y datos del body
+        const { interventor_id, lugar, labor, inicio_obra, fin_obra, dias_trabajo } = req.body;
+        if (!interventor_id) {
+          throw new Error('El interventor_id es requerido');
+        }
+  
+        // Preparar los documentos principales
+        const documentosPrincipales = {
+          arl: uploadedFiles['arl']?.[0] ? await uploadToSpacesFromDisk(uploadedFiles['arl'][0].path, uploadedFiles['arl'][0].originalname) : null,
+          pasocial: uploadedFiles['pasocial']?.[0] ? await uploadToSpacesFromDisk(uploadedFiles['pasocial'][0].path, uploadedFiles['pasocial'][0].originalname) : null
+        };
+  
+        // Crear nueva solicitud
+        const query = `
+          INSERT INTO solicitudes (usuario_id, empresa, nit, inicio_obra, fin_obra, dias_trabajo, lugar, labor, interventor_id, arl_documento, pasocial_documento)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        `;
+        const [result] = await conn.execute(query, [
+          req.user.id, 
+          usuarioActual[0].empresa, 
+          usuarioActual[0].nit, 
+          inicio_obra, 
+          fin_obra, 
+          dias_trabajo, 
+          lugar, 
+          labor, 
+          interventor_id,
+          documentosPrincipales.arl,
+          documentosPrincipales.pasocial
+        ]);
+  
+        const solicitudId = result.insertId;
+  
+        // Procesar colaboradores
+        if (cambiosDetectados?.colaboradores?.nuevos?.length > 0) {
+          const fotos = uploadedFiles['foto[]'] || [];
+          const cedulaFotos = uploadedFiles['cedulaFoto[]'] || [];
+          
+          for (let i = 0; i < cambiosDetectados.colaboradores.nuevos.length; i++) {
+            const colaborador = cambiosDetectados.colaboradores.nuevos[i];
+            const fotoFile = fotos[i];
+            const cedulaFotoFile = cedulaFotos[i];
+            
+            const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
+            const cedulaFotoUrl = cedulaFotoFile ? await uploadToSpacesFromDisk(cedulaFotoFile.path, cedulaFotoFile.originalname) : null;
+            
+            await conn.execute(
+              'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, cedulaFoto, estado) VALUES (?, ?, ?, ?, ?, true)',
+              [solicitudId, colaborador.cedula, colaborador.nombre, fotoUrl, cedulaFotoUrl]
+            );
+          }
+        }
+  
+        // Procesar vehículos
+        if (cambiosDetectados?.vehiculos?.nuevos?.length > 0) {
+          for (let i = 0; i < cambiosDetectados.vehiculos.nuevos.length; i++) {
+            const vehiculo = cambiosDetectados.vehiculos.nuevos[i];
+            const vehiculoArchivos = {
+              foto: uploadedFiles['foto_vehiculo[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['foto_vehiculo[]'][i].path, uploadedFiles['foto_vehiculo[]'][i].originalname) : null,
+              tecnomecanica: uploadedFiles['tecnomecanica[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['tecnomecanica[]'][i].path, uploadedFiles['tecnomecanica[]'][i].originalname) : null,
+              soat: uploadedFiles['soat[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['soat[]'][i].path, uploadedFiles['soat[]'][i].originalname) : null,
+              licencia_conduccion: uploadedFiles['licencia_conduccion[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['licencia_conduccion[]'][i].path, uploadedFiles['licencia_conduccion[]'][i].originalname) : null,
+              licencia_transito: uploadedFiles['licencia_transito[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['licencia_transito[]'][i].path, uploadedFiles['licencia_transito[]'][i].originalname) : null
+            };
+  
+            await conn.execute(
+              'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito, estado) VALUES (?, ?, ?, ?, ?, ?, ?, true)',
+              [solicitudId, vehiculo.matricula, vehiculoArchivos.foto, vehiculoArchivos.tecnomecanica, vehiculoArchivos.soat, vehiculoArchivos.licencia_conduccion, vehiculoArchivos.licencia_transito]
+            );
+          }
+        }
+  
+        // Enviar correo a usuarios SST
+        if (usuariosSST.length > 0) {
+          const asunto = `Nueva Solicitud #${solicitudId} - ${usuarioActual[0].empresa}`;
+          
+          let detallesHtml = `
+            <h4>Detalles de la Solicitud:</h4>
+            <ul>
+              <li>Lugar: ${nombreLugar}</li>
+              <li>Labor: ${labor}</li>
+              <li>Fecha de inicio: ${inicio_obra}</li>
+              <li>Fecha de fin: ${fin_obra}</li>
+              <li>Días de trabajo: ${dias_trabajo}</li>
+            </ul>
+          `;
+  
+          if (cambiosDetectados?.colaboradores?.nuevos?.length > 0) {
+            detallesHtml += `
+              <h4>Colaboradores:</h4>
+              <ul>
+                ${cambiosDetectados.colaboradores.nuevos.map(col => `
+                  <li>${col.nombre} (${col.cedula})</li>
+                `).join('')}
+              </ul>
+            `;
+          }
+  
+          if (cambiosDetectados?.vehiculos?.nuevos?.length > 0) {
+            detallesHtml += `
+              <h4>Vehículos:</h4>
+              <ul>
+                ${cambiosDetectados.vehiculos.nuevos.map(veh => `
+                  <li>${veh.matricula}</li>
+                `).join('')}
+              </ul>
+            `;
+          }
+  
+          for (const usuario of usuariosSST) {
+            try {
+              await emailService.sendEmail(
+                usuario.email,
+                asunto,
+                {
+                  template: 'notification',
+                  context: {
+                    asunto,
+                    empresa: usuarioActual[0].empresa,
+                    nit: usuarioActual[0].nit,
+                    solicitudId,
+                    tipoOperacion: 'Nueva Solicitud',
+                    fechaModificacion: new Date().toLocaleDateString('es-CO'),
+                    detallesCambios: detallesHtml,
+                    currentYear: new Date().getFullYear()
+                  }
+                }
+              );
+            } catch (error) {
+              console.error(`Error al enviar correo a ${usuario.email}:`, error);
+            }
+          }
+        }
+  
+        await conn.commit();
+        return res.json({ 
+          success: true, 
+          message: 'Solicitud creada correctamente',
+          solicitudId: solicitudId
+        });
+      } else {
+        // Borrar documentos SST solo si hay cambios reales y la solicitud existe
+        if (hayCambios) {
+          logInfo('Borrando documentos SST:', { solicitudId, renovacion, hayCambios, cambiosDetectados });
+          await deleteSSTDocuments(solicitudId);
+        } else {
+          logInfo('No se borraron documentos SST:', { 
+            solicitudId, 
+            renovacion, 
+            hayCambios, 
+            cambiosDetectados,
+            razon: 'Sin cambios detectados'
+          });
+        }
+  
+        const fileMap = {};
+        uploadedFiles.forEach(file => {
+          fileMap[file.fieldname] = fileMap[file.fieldname] || [];
+          fileMap[file.fieldname].push(file);
+        });
+  
+        // Actualizar documentos ARL y Pasocial solo si hay cambios
+        if (cambiosDetectados?.documentos.arl || cambiosDetectados?.documentos.pasocial) {
+          const [currentSolicitud] = await conn.execute(
+            'SELECT arl_documento, pasocial_documento FROM solicitudes WHERE id = ?',
+            [solicitudId]
+          );
+  
+          const oldArl = currentSolicitud[0]?.arl_documento;
+          const oldPasocial = currentSolicitud[0]?.pasocial_documento;
+  
+          for (const field of ['arl', 'pasocial']) {
+            if (fileMap[field]?.[0]) {
+              const file = fileMap[field][0];
+              const oldUrl = field === 'arl' ? oldArl : oldPasocial;
+              if (oldUrl) await deleteFromSpaces(oldUrl);
+              const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
+              await conn.execute(
+                `UPDATE solicitudes SET ${field}_documento = ? WHERE id = ?`,
+                [newPath, solicitudId]
+              );
+            }
+          }
+        }
+  
+        // Actualizar colaboradores existentes solo si hay cambios
+        if (cambiosDetectados?.colaboradores.modificados.length > 0) {
+          for (const colaborador of cambiosDetectados.colaboradores.modificados) {
+            const id = colaborador.id;
+            const fotoField = `foto_${id}`;
+            const cedulaFotoField = `cedula_foto_${id}`;
+            
+            for (const field of [fotoField, cedulaFotoField]) {
+              if (fileMap[field]?.[0]) {
+                const file = fileMap[field][0];
+                const campo = field.startsWith('foto_') ? 'foto' : 'cedulaFoto';
+                const [rows] = await conn.execute(`SELECT ${campo} FROM colaboradores WHERE id = ?`, [id]);
+                if (rows[0]?.[campo]) await deleteFromSpaces(rows[0][campo]);
+                const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
+                await conn.execute(
+                  `UPDATE colaboradores SET ${campo} = ? WHERE id = ?`,
+                  [newPath, id]
+                );
+              }
+            }
+          }
+        }
+  
+        // Agregar nuevos colaboradores
+        if (cambiosDetectados?.colaboradores.nuevos.length > 0) {
+          const fotos = fileMap['foto[]'] || [];
+          const cedulaFotos = fileMap['cedulaFoto[]'] || [];
+          
+          for (const nuevoColaborador of cambiosDetectados.colaboradores.nuevos) {
+            const [existingColaborador] = await conn.execute(
+              'SELECT id FROM colaboradores WHERE solicitud_id = ? AND cedula = ?',
+              [solicitudId, nuevoColaborador.cedula]
+            );
+  
+            if (!existingColaborador.length) {
+              const fotoFile = fotos.shift();
+              const cedulaFotoFile = cedulaFotos.shift();
+              const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
+              const cedulaFotoUrl = cedulaFotoFile ? await uploadToSpacesFromDisk(cedulaFotoFile.path, cedulaFotoFile.originalname) : null;
+              await conn.execute(
+                'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, cedulaFoto, estado) VALUES (?, ?, ?, ?, ?, true)',
+                [solicitudId, nuevoColaborador.cedula, nuevoColaborador.nombre, fotoUrl, cedulaFotoUrl]
+              );
+            }
+          }
+        }
+  
+        // Actualizar vehículos existentes solo si hay cambios
+        if (cambiosDetectados?.vehiculos.modificados.length > 0) {
+          for (const vehiculo of cambiosDetectados.vehiculos.modificados) {
+            const id = vehiculo.id;
+            const fields = ['foto_vehiculo', 'tecnomecanica', 'soat', 'licencia_conduccion', 'licencia_transito'];
+            
+            for (const field of fields) {
+              const fieldName = `${field}_${id}`;
+              if (fileMap[fieldName]?.[0]) {
+                const file = fileMap[fieldName][0];
+                const column = field.replace('foto_vehiculo', 'foto');
+                const [rows] = await conn.execute(`SELECT ${column} FROM vehiculos WHERE id = ?`, [id]);
+                if (rows[0]?.[column]) await deleteFromSpaces(rows[0][column]);
+                const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
+                await conn.execute(
+                  `UPDATE vehiculos SET ${column} = ? WHERE id = ?`,
+                  [newPath, id]
+                );
+              }
+            }
+          }
+        }
+  
+        // Agregar nuevos vehículos
+        if (cambiosDetectados?.vehiculos.nuevos.length > 0) {
+          for (const nuevoVehiculo of cambiosDetectados.vehiculos.nuevos) {
+            const [existing] = await conn.execute(
+              'SELECT id FROM vehiculos WHERE solicitud_id = ? AND matricula = ? AND estado = 1',
+              [solicitudId, nuevoVehiculo.matricula]
+            );
+            
+            if (!existing.length) {
+              const vehiculo = {
+                matricula: nuevoVehiculo.matricula,
+                foto: fileMap['foto_vehiculo[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['foto_vehiculo[]'][0].path, fileMap['foto_vehiculo[]'][0].originalname) : null,
+                tecnomecanica: fileMap['tecnomecanica[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['tecnomecanica[]'][0].path, fileMap['tecnomecanica[]'][0].originalname) : null,
+                soat: fileMap['soat[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['soat[]'][0].path, fileMap['soat[]'][0].originalname) : null,
+                licencia_conduccion: fileMap['licencia_conduccion[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['licencia_conduccion[]'][0].path, fileMap['licencia_conduccion[]'][0].originalname) : null,
+                licencia_transito: fileMap['licencia_transito[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['licencia_transito[]'][0].path, fileMap['licencia_transito[]'][0].originalname) : null
+              };
+              await conn.execute(
+                'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [solicitudId, vehiculo.matricula, vehiculo.foto, vehiculo.tecnomecanica, vehiculo.soat, vehiculo.licencia_conduccion, vehiculo.licencia_transito]
+              );
+            }
+          }
+        }
+  
+        await conn.commit();
+  
+        // Enviar correo a usuarios SST si hay cambios
+        if (hayCambios && usuariosSST.length > 0) {
+          const asunto = renovacion
+            ? `Renovación de Solicitud #${solicitudId} - ${solicitudInfo[0].empresa}`
+            : `Actualización de Solicitud #${solicitudId} - ${solicitudInfo[0].empresa}`;
+  
+          // Preparar los detalles de cambios en HTML
+          let detallesCambiosHtml = renovacion
+            ? '<p><strong>Esta es una renovación de la solicitud.</strong></p>'
+            : '<p><strong>Se han realizado las siguientes actualizaciones:</strong></p>';
+  
+          // Log detallado de los cambios
+          logInfo('Procesando cambios para el correo:', {
+            colaboradoresModificados: cambiosDetectados.colaboradores.modificados,
+            solicitudInfo: solicitudInfo[0],
+            cambiosDetectados: cambiosDetectados,
+          });
+  
+          // Colaboradores
+          if (hayCambiosColaboradores) {
+            if (cambiosDetectados.colaboradores.nuevos.length > 0) {
+              detallesCambiosHtml += `
+                <h4>Colaboradores Nuevos:</h4>
+                <ul>
+                  ${cambiosDetectados.colaboradores.nuevos
+                    .map((col) => `<li>${col.nombre} (Cédula: ${col.cedula})</li>`)
+                    .join('')}
+                </ul>
+              `;
+            }
+  
+            if (cambiosDetectados.colaboradores.modificados.length > 0) {
+              detallesCambiosHtml += '<h4>Colaboradores Modificados:</h4><ul>';
+              for (const col of cambiosDetectados.colaboradores.modificados) {
+                const [colaboradorData] = await conn.execute(
+                  'SELECT nombre, cedula, foto, cedulaFoto FROM colaboradores WHERE id = ?',
+                  [col.id]
+                );
+                if (colaboradorData.length > 0) {
+                  const colaborador = colaboradorData[0];
+                  const cambios = col.cambios || {};
+                  const cambiosList = [];
+                  if (cambios.foto) cambiosList.push(`Foto actualizada`);
+                  if (cambios.cedulaFoto)
+                    cambiosList.push(`Cédula foto actualizada  </a>`);
+  
+                  detallesCambiosHtml += `
+                    <li>${colaborador.nombre} (Cédula: ${colaborador.cedula}) - ${
+                      cambiosList.length > 0 ? 'Cambios: ' + cambiosList.join(', ') : 'Detalles no especificados'
+                    }</li>
+                  `;
+                }
+              }
+              detallesCambiosHtml += '</ul>';
+            }
+  
+            if (cambiosDetectados.colaboradores.eliminados.length > 0) {
+              detallesCambiosHtml += `
+                <h4>Colaboradores Eliminados:</h4>
+                <ul>
+                  ${cambiosDetectados.colaboradores.eliminados
+                    .map((col) => `<li>${col.nombre} (Cédula: ${col.cedula})</li>`)
+                    .join('')}
+                </ul>
+              `;
+            }
+          }
+  
+          // Vehículos
+          if (hayCambiosVehiculos) {
+            if (cambiosDetectados.vehiculos.nuevos.length > 0) {
+              detallesCambiosHtml += `
+                <h4>Vehículos Nuevos:</h4>
+                <ul>
+                  ${cambiosDetectados.vehiculos.nuevos
+                    .map((veh) => `<li>Matrícula: ${veh.matricula}</li>`)
+                    .join('')}
+                </ul>
+              `;
+            }
+  
+            if (cambiosDetectados.vehiculos.modificados.length > 0) {
+              detallesCambiosHtml += '<h4>Vehículos Modificados:</h4><ul>';
+              for (const veh of cambiosDetectados.vehiculos.modificados) {
+                const [vehiculoData] = await conn.execute(
+                  'SELECT matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito FROM vehiculos WHERE id = ?',
+                  [veh.id]
+                );
+                if (vehiculoData.length > 0) {
+                  const vehiculo = vehiculoData[0];
+                  const cambios = veh.cambios || {};
+                  const cambiosList = [];
+                  if (cambios.foto) cambiosList.push(`Foto actualizada  `);
+                  if (cambios.tecnomecanica)
+                    cambiosList.push(`Tecnomecánica actualizada `);
+                  if (cambios.soat) cambiosList.push(`SOAT actualizado  `);
+                  if (cambios.licencia_conduccion)
+                    cambiosList.push(`Licencia de conducción actualizada`);
+                  if (cambios.licencia_transito)
+                    cambiosList.push(`Licencia de tránsito actualizada`);
+  
+                  detallesCambiosHtml += `
+                    <li>Matrícula: ${vehiculo.matricula} - ${
+                      cambiosList.length > 0 ? 'Cambios: ' + cambiosList.join(', ') : 'Detalles no especificados'
+                    }</li>
+                  `;
+                }
+              }
+              detallesCambiosHtml += '</ul>';
+            }
+  
+            if (cambiosDetectados.vehiculos.eliminados.length > 0) {
+              detallesCambiosHtml += `
+                <h4>Vehículos Eliminados:</h4>
+                <ul>
+                  ${cambiosDetectados.vehiculos.eliminados
+                    .map((veh) => `<li>Matrícula: ${veh.matricula}</li>`)
+                    .join('')}
+                </ul>
+              `;
+            }
+          }
+  
+          // Documentos (ARL y Pasocial)
+          if (hayCambiosDocumentos) {
+            const documentosActualizados = [];
+            if (cambiosDetectados.documentos.arl)
+              documentosActualizados.push(
+                `<li>ARL: Actualizado </li>`
+              );
+            if (cambiosDetectados.documentos.pasocial)
+              documentosActualizados.push(
+                `<li>Pasocial: Actualizado </li>`
+              );
+  
+            if (documentosActualizados.length > 0) {
+              detallesCambiosHtml += `
+                <h4>Documentos Actualizados:</h4>
+                <ul>${documentosActualizados.join('')}</ul>
+              `;
+            }
+          }
+  
+          // Si no hay cambios específicos, mostrar mensaje genérico
+          if (!hayCambiosColaboradores && !hayCambiosVehiculos && !hayCambiosDocumentos) {
+            detallesCambiosHtml += '<p class="no-changes">No se detectaron cambios específicos.</p>';
+          }
+  
+          // Log final del HTML generado
+          logInfo('HTML generado para el correo:', { detallesCambiosHtml });
+  
+          // Enviar correo a cada usuario SST
+          for (const usuario of usuariosSST) {
+            try {
+                await emailService.sendEmail(usuario.email, asunto, {
+                    template: 'notification',
+                    context: {
+                      asunto,
+                      empresa: solicitudInfo[0].empresa || 'No especificada',
+                      nit: solicitudInfo[0].nit || 'No especificado',
+                      solicitudId: solicitudId || 'No especificado',
+                      tipoOperacion: renovacion ? 'Renovación' : 'Actualización',
+                      fechaModificacion: new Date().toLocaleDateString('es-CO'),
+                      detallesCambios: detallesCambiosHtml,
+                      currentYear: new Date().getFullYear(),
+                    },
+                  });
+            } catch (error) {
+              console.error(`Error al enviar correo a ${usuario.email}:`, error);
+            }
+          }
+        }
+  
+        res.json({ 
+          success: true, 
+          message: 'Solicitud actualizada correctamente',
+          cambios: cambiosDetectados
+        });
+      }
+    } catch (error) {
+      await conn.rollback();
+      logError(error, '/actualizar-solicitud');
+      if (req.files) {
+        Object.values(req.files).flat().forEach(async file => {
+          try {
+            await fs.access(file.path);
+            await fs.unlink(file.path);
+          } catch (err) {
+            if (err.code !== 'ENOENT') {
+              logError(err, 'Limpieza de archivos temporales');
+            }
+          }
+        });
+      }
+      res.status(500).json({ success: false, message: error.message });
+    } finally {
+      conn.release();
     }
-    res.status(500).json({ success: false, message: error.message });
-  } finally {
-    conn.release();
-  }
-});
+  });
 
 // Ruta para obtener solicitudes
 router.get('/obtener-solicitudes', async (req, res) => {
@@ -506,19 +965,29 @@ router.get('/obtener-solicitudes', async (req, res) => {
 router.get('/obtener-datos-solicitud/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    logInfo('Obteniendo datos de solicitud:', { id });
+
     const [solicitud] = await connection.execute(`
       SELECT 
         s.*,
         u.empresa,
         u.nit,
-        u2.username as interventor_nombre
+        u2.username as interventor_nombre,
+        l.nombre_lugar,
+        l.id as lugar_id
       FROM solicitudes s
       JOIN users u ON s.usuario_id = u.id
       LEFT JOIN users u2 ON s.interventor_id = u2.id
+      LEFT JOIN lugares l ON s.lugar = l.id
       WHERE s.id = ?
     `, [id]);
 
-    if (!solicitud[0]) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    logInfo('Resultado de la consulta:', { solicitud });
+
+    if (!solicitud[0]) {
+      logError('Solicitud no encontrada:', { id });
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
 
     const [colaboradores] = await connection.execute(
       'SELECT id, cedula, nombre, foto, cedulaFoto, estado, solicitud_id FROM colaboradores WHERE solicitud_id = ? AND estado = 1',
@@ -531,8 +1000,11 @@ router.get('/obtener-datos-solicitud/:id', async (req, res) => {
       fin_obra: format(new Date(solicitud[0].fin_obra), 'yyyy-MM-dd'),
       arl_documento: solicitud[0].arl_documento || null,
       pasocial_documento: solicitud[0].pasocial_documento || null,
-      interventor_id: solicitud[0].interventor_id
+      interventor_id: solicitud[0].interventor_id,
+      lugar: solicitud[0].lugar_id // Asegurarnos de que el lugar se incluya correctamente
     };
+
+    logInfo('Datos procesados:', { solicitudData });
 
     res.json({
       solicitud: solicitudData,

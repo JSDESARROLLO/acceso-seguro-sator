@@ -15,6 +15,7 @@
         .bg-blanco-puro { background-color: #fdfdfd; }
         /* Estilos adicionales para imágenes */
         .qr-img { cursor: pointer; }
+        .foto-img { cursor: pointer; }
         /* Limitar el ancho máximo */
         .max-width-container {
             max-width: 1200px; /* Ajusta este valor según tus necesidades */
@@ -67,6 +68,52 @@
             border-radius: 15px; 
             object-fit: cover;
         }
+        /* Modal de imagen grande */
+        .image-modal {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            background: #fdfdfd;
+            border: 3px solid #cc9000;
+            display: flex;
+            flex-direction: column;
+        }
+        .image-modal-header {
+            background: #cc9000;
+            color: white;
+            padding: 15px;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .image-modal-body {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .image-modal-content {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .close-button {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0 10px;
+        }
     </style>
 </head>
 <body class="bg-crema font-sans text-azul-oscuro min-h-screen p-8">
@@ -104,7 +151,6 @@
                     <thead>
                         <tr class="bg-melocoton text-azul-oscuro">
                             <th class="p-3 font-semibold border-b border-dorado">ID Colaborador</th>
-                            <th class="p-3 font-semibold border-b border-dorado">Cédula</th>
                             <th class="p-3 font-semibold border-b border-dorado">Nombre</th>
                             <th class="p-3 font-semibold border-b border-dorado">Fotos</th>
                             <th class="p-3 font-semibold border-b border-dorado">Código QR</th>
@@ -114,24 +160,62 @@
                         {{#each colaboradores}}
                         <tr class="hover:bg-melocoton/50 transition-colors">
                             <td class="p-3 border-b border-dorado/20">{{id}}</td>
-                            <td class="p-3 border-b border-dorado/20">{{cedula}}</td>
                             <td class="p-3 border-b border-dorado/20">{{nombre}}</td>
                             <td class="p-3 border-b border-dorado/20">
                                 {{#if foto}}
-                                    <img src="{{fotoBase64}}" alt="Foto del colaborador" class="w-24 h-24 object-cover rounded-lg border border-dorado/50">
+                                    <img src="{{fotoBase64}}" alt="Foto del colaborador" class="w-24 h-24 object-cover rounded-lg border border-dorado/50 foto-img" data-src="{{fotoBase64}}" data-type="foto" data-nombre="{{nombre}}">
                                 {{else}}
                                     <span class="text-red-500">❌ Sin foto</span>
                                 {{/if}}
                                 <br>
                                 {{#if cedulaFoto}}
-                                    <img src="{{cedulaFotoBase64}}" alt="Foto de la cédula" class="w-24 h-24 object-cover rounded-lg border border-dorado/50 mt-2">
+                                    <img src="{{cedulaFotoBase64}}" alt="Foto de la cédula" class="w-24 h-24 object-cover rounded-lg border border-dorado/50 mt-2 foto-img" data-src="{{cedulaFotoBase64}}" data-type="cédula" data-nombre="{{nombre}}">
                                 {{else}}
                                     <span class="text-red-500">❌ Sin cédula</span>
                                 {{/if}}
                             </td>
                             <td class="p-3 border-b border-dorado/20">
                                 {{#if qrBase64}}
-                                    <img src="{{qrBase64}}" alt="QR del colaborador" class="qr-img w-24 h-24 object-contain rounded-lg border border-dorado/50" data-id="{{id}}" data-nombre="{{nombre}}" data-foto="{{fotoBase64}}">
+                                    <img src="{{qrBase64}}" alt="QR del colaborador" class="qr-img w-24 h-24 object-contain rounded-lg border border-dorado/50" data-id="{{id}}" data-nombre="{{nombre}}" data-foto="{{fotoBase64}}" data-empresa="{{../solicitud.empresa}}" data-nit="{{../solicitud.nit}}">
+                                {{else}}
+                                    <span class="text-red-500">❌ Sin QR</span>
+                                {{/if}}
+                            </td>
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Sección de vehículos -->
+        <section class="bg-blanco-puro rounded-lg shadow-md p-6 mt-8">
+            <h2 class="text-xl font-semibold text-azul-oscuro border-b-2 border-dorado pb-2 mb-4">Vehículos</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-melocoton text-azul-oscuro">
+                            <th class="p-3 font-semibold border-b border-dorado">ID Vehículo</th>
+                            <th class="p-3 font-semibold border-b border-dorado">Vehículo</th>
+                             <th class="p-3 font-semibold border-b border-dorado">Foto</th>
+                            <th class="p-3 font-semibold border-b border-dorado">Código QR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each vehiculos}}
+                        <tr class="hover:bg-melocoton/50 transition-colors">
+                            <td class="p-3 border-b border-dorado/20">VH-{{id}}</td>
+                            <td class="p-3 border-b border-dorado/20">{{placa}}</td>
+                             <td class="p-3 border-b border-dorado/20">
+                                {{#if foto}}
+                                    <img src="{{foto}}" alt="Foto del vehículo" class="w-24 h-24 object-cover rounded-lg border border-dorado/50 foto-img" data-src="{{foto}}" data-type="foto" data-nombre="{{placa}}">
+                                {{else}}
+                                    <span class="text-red-500">❌ Sin foto</span>
+                                {{/if}}
+                            </td>
+                            <td class="p-3 border-b border-dorado/20">
+                                {{#if qrBase64}}
+                                    <img src="{{qrBase64}}" alt="QR del vehículo" class="qr-img w-24 h-24 object-contain rounded-lg border border-dorado/50" data-id="VH-{{id}}" data-placa="{{placa}}" data-estado="{{estado}}" data-foto="{{foto}}" data-empresa="{{../solicitud.empresa}}" data-nit="{{../solicitud.nit}}">
                                 {{else}}
                                     <span class="text-red-500">❌ Sin QR</span>
                                 {{/if}}
@@ -149,13 +233,27 @@
                 <div class="carnet-header"> 
                 </div>
                 <div class="carnet-body">
-                    <img id="modalFoto" class="carnet-photo" src="" alt="Foto del colaborador">
+                    <img id="modalFoto" class="carnet-photo" src="" alt="Foto">
                     <div class="carnet-details">
-                        <p><strong>Nombre:</strong> <span id="modalNombre"></span></p>
-                        <p><strong>ID Colaborador:</strong> <span id="modalId"></span></p>
-                        <p><strong>Cédula:</strong> <span id="modalCedula"></span></p>
+                        <p><strong>Empresa:</strong> <span id="modalEmpresa"></span></p>
+                        <p><strong>NIT:</strong> <span id="modalNit"></span></p>
+                        <p><strong>ID:</strong> <span id="modalId"></span></p>
+                        <p><strong>Nombre/Vehículo:</strong> <span id="modalNombre"></span></p>
                     </div>
-                    <img id="modalQr" class="carnet-qr" src="" alt="QR del colaborador">
+                    <img id="modalQr" class="carnet-qr" src="" alt="QR">
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de imagen grande -->
+        <div id="imageModal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
+            <div class="image-modal">
+                <div class="image-modal-header">
+                    <span id="imageModalTitle"></span>
+                    <button class="close-button" onclick="closeImageModal()">&times;</button>
+                </div>
+                <div class="image-modal-body">
+                    <img id="imageModalContent" class="image-modal-content" src="" alt="Imagen">
                 </div>
             </div>
         </div>
@@ -163,19 +261,42 @@
     </div>
 
     <script>
-        function openModal(qrSrc, nombre, fotoSrc, id, cedula) {
+        function openModal(qrSrc, nombre, fotoSrc, id, empresa, nit) {
             const modal = document.getElementById('qrModal');
             const modalQr = document.getElementById('modalQr');
             const modalFoto = document.getElementById('modalFoto');
             const modalNombre = document.getElementById('modalNombre');
             const modalId = document.getElementById('modalId');
-            const modalCedula = document.getElementById('modalCedula');
+            const modalEmpresa = document.getElementById('modalEmpresa');
+            const modalNit = document.getElementById('modalNit');
 
             modalQr.src = qrSrc;
             modalFoto.src = fotoSrc || '';
+            modalFoto.style.display = fotoSrc ? 'block' : 'none';
             modalNombre.textContent = nombre;
             modalId.textContent = id;
-            modalCedula.textContent = cedula;
+            modalEmpresa.textContent = empresa;
+            modalNit.textContent = nit;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function openVehiculoModal(qrSrc, placa, fotoSrc, id, empresa, nit) {
+            const modal = document.getElementById('qrModal');
+            const modalQr = document.getElementById('modalQr');
+            const modalFoto = document.getElementById('modalFoto');
+            const modalNombre = document.getElementById('modalNombre');
+            const modalId = document.getElementById('modalId');
+            const modalEmpresa = document.getElementById('modalEmpresa');
+            const modalNit = document.getElementById('modalNit');
+
+            modalQr.src = qrSrc;
+            modalFoto.src = fotoSrc || '';
+            modalFoto.style.display = fotoSrc ? 'block' : 'none';
+            modalNombre.textContent = placa;
+            modalId.textContent = id;
+            modalEmpresa.textContent = empresa;
+            modalNit.textContent = nit;
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
@@ -186,19 +307,75 @@
             modal.classList.remove('flex');
         }
 
-        document.querySelectorAll('.qr-img').forEach(img => {
+        // Event listeners para colaboradores
+        document.querySelectorAll('.qr-img[data-nombre]').forEach(img => {
             img.addEventListener('click', () => {
                 const qrSrc = img.src;
                 const nombre = img.getAttribute('data-nombre');
                 const fotoSrc = img.getAttribute('data-foto');
                 const id = img.getAttribute('data-id');
-                const cedula = img.closest('tr').querySelector('td:nth-child(2)').textContent;
-                openModal(qrSrc, nombre, fotoSrc, id, cedula);
+                const empresa = img.getAttribute('data-empresa');
+                const nit = img.getAttribute('data-nit');
+                openModal(qrSrc, nombre, fotoSrc, id, empresa, nit);
+            });
+        });
+
+        // Event listeners para vehículos
+        document.querySelectorAll('.qr-img[data-placa]').forEach(img => {
+            img.addEventListener('click', () => {
+                const qrSrc = img.src;
+                const placa = img.getAttribute('data-placa');
+                const fotoSrc = img.getAttribute('data-foto');
+                const id = img.getAttribute('data-id');
+                const empresa = img.getAttribute('data-empresa');
+                const nit = img.getAttribute('data-nit');
+                openVehiculoModal(qrSrc, placa, fotoSrc, id, empresa, nit);
             });
         });
 
         document.getElementById('qrModal').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) closeModal();
+        });
+
+        // Funciones para el modal de imagen
+        function openImageModal(src, type, nombre) {
+            const modal = document.getElementById('imageModal');
+            const modalContent = document.getElementById('imageModalContent');
+            const modalTitle = document.getElementById('imageModalTitle');
+
+            modalContent.src = src;
+            modalTitle.textContent = `${type} - ${nombre}`;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Event listeners para las imágenes
+        document.querySelectorAll('.foto-img').forEach(img => {
+            img.addEventListener('click', () => {
+                const src = img.getAttribute('data-src');
+                const type = img.getAttribute('data-type');
+                const nombre = img.getAttribute('data-nombre');
+                openImageModal(src, type, nombre);
+            });
+        });
+
+        // Cerrar modal de imagen al hacer clic fuera
+        document.getElementById('imageModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeImageModal();
+        });
+
+        // Cerrar modal de imagen con la tecla ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeImageModal();
+                closeModal();
+            }
         });
     </script>
 </body>
