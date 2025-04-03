@@ -12,7 +12,6 @@ const { format } = require('date-fns');
 require('dotenv').config();
 const axios = require('axios');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-const pdf = require('html-pdf');
 const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
 
@@ -125,7 +124,7 @@ async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitu
     const filename = `${uuid}${extension}`;
     const spacesPath = `${folder}/${filename}`;
     
-    const fileContent = await fs.promises.readFile(filePath);
+    const fileContent = await fs.readFile(filePath);
     const command = new PutObjectCommand({
         Bucket: process.env.DO_SPACES_BUCKET,
         Key: spacesPath,
@@ -510,7 +509,7 @@ controller.descargarSolicitud = async (req, res) => {
         }
 
         // Crear directorio temporal
-        await fs.promises.mkdir(tempDir, { recursive: true });
+        await fs.mkdir(tempDir, { recursive: true });
 
         // Obtener datos de la solicitud
         const [solicitud] = await connection.execute(`
@@ -562,7 +561,7 @@ controller.descargarSolicitud = async (req, res) => {
         });
 
         // Guardar el HTML
-        await fs.promises.writeFile(htmlPath, html);
+        await fs.writeFile(htmlPath, html);
 
         // Crear el archivo ZIP
         const zipFileName = `Solicitud_${solicitud[0].empresa}_${id}.zip`;
@@ -602,7 +601,7 @@ controller.descargarSolicitud = async (req, res) => {
             } finally {
                 // Limpiar archivos temporales
                 try {
-                    await fs.promises.rm(tempDir, { recursive: true, force: true });
+                    await fs.rm(tempDir, { recursive: true, force: true });
                 } catch (error) {
                     console.error('Error al limpiar archivos temporales:', error);
                 }
