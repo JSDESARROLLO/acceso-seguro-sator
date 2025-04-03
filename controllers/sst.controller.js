@@ -452,6 +452,10 @@ async function downloadFromSpaces(fileUrl) {
 // Función para generar el HTML
 async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contractorName, interventorName }) {
     try {
+        // Array para almacenar documentos faltantes
+        const documentosFaltantes = [];
+        const timestamp = format(new Date(), 'dd/MM/yyyy HH:mm:ss');
+
         // Formatear fechas de la solicitud
         const solicitudFormateada = {
             ...solicitud,
@@ -459,20 +463,87 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
             fin_obra: format(new Date(solicitud.fin_obra), 'dd/MM/yyyy')
         };
 
-        // Convertir las imágenes de los colaboradores a Base64
+        // Procesar colaboradores
+        const colaboradoresProcesados = [];
         for (const colaborador of colaboradores) {
-            colaborador.fotoBase64 = colaborador.foto ? await convertWebPtoJpeg(colaborador.foto) : null;
-            colaborador.cedulaFotoBase64 = colaborador.cedulaFoto ? await convertWebPtoJpeg(colaborador.cedulaFoto) : null;
-            // Generar QR para el ID del colaborador
+            // Verificar foto del colaborador
+            let fotoBase64 = null;
+            if (colaborador.foto) {
+                fotoBase64 = await convertWebPtoJpeg(colaborador.foto);
+                if (!fotoBase64) {
+                    documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de perfil no disponible`);
+                }
+            } else {
+                documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de perfil no cargada`);
+            }
+
+            // Verificar foto de la cédula
+            let cedulaFotoBase64 = null;
+            if (colaborador.cedulaFoto) {
+                cedulaFotoBase64 = await convertWebPtoJpeg(colaborador.cedulaFoto);
+                if (!cedulaFotoBase64) {
+                    documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de cédula no disponible`);
+                }
+            } else {
+                documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de cédula no cargada`);
+            }
+
+            // Generar QR para el colaborador
             const qrData = `${process.env.BASE_URL}/vista-seguridad/${colaborador.id}`;
-            colaborador.qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
+            const qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
+
+            colaboradoresProcesados.push({
+                ...colaborador,
+                fotoBase64,
+                cedulaFotoBase64,
+                qrBase64
+            });
         }
 
         // Procesar vehículos
+        const vehiculosProcesados = [];
         for (const vehiculo of vehiculos) {
+            // Verificar foto del vehículo
+            if (!vehiculo.foto) {
+                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Foto no cargada`);
+            }
+
+            // Verificar documentos del vehículo
+            if (!vehiculo.soat) {
+                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: SOAT no cargado`);
+            }
+            if (!vehiculo.tecnomecanica) {
+                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Tecnomecánica no cargada`);
+            }
+            if (!vehiculo.licencia_conduccion) {
+                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Licencia de conducción no cargada`);
+            }
+            if (!vehiculo.licencia_transito) {
+                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Licencia de tránsito no cargada`);
+            }
+
             // Generar QR para el vehículo
             const qrData = `${process.env.BASE_URL}/vista-seguridad/VH-${vehiculo.id}`;
-            vehiculo.qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
+            const qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
+
+            vehiculosProcesados.push({
+                ...vehiculo,
+                qrBase64
+            });
+        }
+
+        // Si hay documentos faltantes, generar archivo de texto
+        if (documentosFaltantes.length > 0) {
+            const contenidoTxt = `REPORTE DE DOCUMENTOS FALTANTES
+Fecha y hora: ${timestamp}
+Solicitud ID: ${solicitud.id}
+Empresa: ${solicitud.empresa}
+
+Lista de documentos faltantes:
+${documentosFaltantes.map((doc, index) => `${index + 1}. ${doc}`).join('\n')}`;
+
+            const txtPath = path.join(path.dirname(process.mainModule.filename), '..', 'temp', `documentos_faltantes_${solicitud.id}.txt`);
+            await fs.promises.writeFile(txtPath, contenidoTxt, 'utf8');
         }
 
         // Cargar la plantilla HTML
@@ -489,10 +560,11 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
             logo: `data:image/jpeg;base64,${logoBase64}`,
             fecha: format(new Date(), 'dd/MM/yyyy'),
             solicitud: solicitudFormateada,
-            colaboradores,
-            vehiculos,
+            colaboradores: colaboradoresProcesados,
+            vehiculos: vehiculosProcesados,
             contractorName,
-            interventorName
+            interventorName,
+            documentosFaltantes: documentosFaltantes.length > 0
         };
 
         // Generar el HTML
@@ -1298,21 +1370,21 @@ controller.generarDocumentos = async (req, res) => {
             throw new Error(`No se encontraron datos para la solicitud ${id}`);
         }
 
-        // 3. Obtener colaboradores y vehículos
+        // 3. Obtener colaboradores con sus fotos
         const [colaboradores] = await connection.execute(
-            'SELECT id, cedula, nombre, estado FROM colaboradores WHERE solicitud_id = ?',
+            'SELECT id, cedula, nombre, estado, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ?',
             [id]
         );
 
+        // 4. Obtener vehículos con todos sus documentos
         const [vehiculos] = await connection.execute(
-            'SELECT id, matricula as placa, estado, foto FROM vehiculos WHERE solicitud_id = ?',
+            'SELECT id, matricula as placa, estado, foto, soat, tecnomecanica, licencia_conduccion, licencia_transito FROM vehiculos WHERE solicitud_id = ?',
             [id]
         );
 
         console.log(`📊 Datos obtenidos: ${colaboradores.length} colaboradores, ${vehiculos.length} vehículos`);
 
-        // 4. Generar documentos generales
-        // 4.1 Generar HTML del informe
+        // 5. Generar HTML del informe
         const html = await generateInformeHTML({
             solicitud: solicitud[0],
             colaboradores,
@@ -1321,54 +1393,61 @@ controller.generarDocumentos = async (req, res) => {
             interventorName: solicitud[0].interventor_nombre
         });
         
-        // 4.2 Guardar HTML
+        // 6. Guardar HTML
         const htmlPath = path.join(tempDir, `Informe_Solicitud_${id}.html`);
         await fs.promises.writeFile(htmlPath, html);
         console.log('💾 HTML guardado en:', htmlPath);
 
-        // 4.3 Generar ARL y Pasocial (simulados por ahora)
-        const arlPath = path.join(tempDir, `ARL_${id}.docx`);
-        const pasocialPath = path.join(tempDir, `Pasocial_${id}.pdf`);
-        await fs.promises.writeFile(arlPath, 'Contenido ARL');
-        await fs.promises.writeFile(pasocialPath, 'Contenido Pasocial');
+        // 7. Verificar y copiar el archivo de documentos faltantes si existe
+        const docsFaltantesPath = path.join(__dirname, '..', 'temp', `documentos_faltantes_${id}.txt`);
+        let tieneDocsFaltantes = false;
+        try {
+            await fs.promises.access(docsFaltantesPath);
+            await fs.promises.copyFile(
+                docsFaltantesPath,
+                path.join(tempDir, `documentos_faltantes_${id}.txt`)
+            );
+            tieneDocsFaltantes = true;
+            console.log('📄 Archivo de documentos faltantes copiado al directorio temporal');
+        } catch (error) {
+            console.log('ℹ️ No se encontró archivo de documentos faltantes');
+        }
 
-        // 5. Procesar cada vehículo
+        // 8. Generar ARL y Pasocial
+        if (solicitud[0].arl_documento) {
+            const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
+            if (arlBuffer) {
+                await fs.promises.writeFile(path.join(tempDir, `ARL_${id}.pdf`), arlBuffer);
+            }
+        }
+
+        if (solicitud[0].pasocial_documento) {
+            const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
+            if (pasocialBuffer) {
+                await fs.promises.writeFile(path.join(tempDir, `Pasocial_${id}.pdf`), pasocialBuffer);
+            }
+        }
+
+        // 9. Procesar vehículos
         for (const vehiculo of vehiculos) {
             const vehiculoDir = path.join(tempDir, vehiculo.placa);
             await fs.promises.mkdir(vehiculoDir, { recursive: true });
-            console.log(`📁 Creando directorio para vehículo ${vehiculo.placa}`);
 
-            // 5.1 Guardar foto del vehículo
-            if (vehiculo.foto) {
-                const fotoBuffer = await downloadFromSpaces(vehiculo.foto);
-                if (fotoBuffer) {
-                    await fs.promises.writeFile(
-                        path.join(vehiculoDir, `${vehiculo.placa}_foto.jpg`),
-                        fotoBuffer
-                    );
-                }
-            }
+            // Procesar cada documento del vehículo
+            const documentos = {
+                foto: { url: vehiculo.foto, nombre: 'foto' },
+                soat: { url: vehiculo.soat, nombre: 'soat' },
+                tecnomecanica: { url: vehiculo.tecnomecanica, nombre: 'tecnomecanica' },
+                licencia_conduccion: { url: vehiculo.licencia_conduccion, nombre: 'licencia_conduccion' },
+                licencia_transito: { url: vehiculo.licencia_transito, nombre: 'licencia_transito' }
+            };
 
-            // 5.2 Obtener y guardar documentos del vehículo
-            const documentos = [
-                { tipo: 'soat', columna: 'soat' },
-                { tipo: 'tecnomecanica', columna: 'tecnomecanica' },
-                { tipo: 'licencia_conduccion', columna: 'licencia_conduccion' },
-                { tipo: 'licencia_transito', columna: 'licencia_transito' }
-            ];
-
-            for (const doc of documentos) {
-                // Obtener la URL directamente de la tabla vehículos
-                const [docData] = await connection.execute(
-                    `SELECT ${doc.columna} as url FROM vehiculos WHERE id = ?`,
-                    [vehiculo.id]
-                );
-
-                if (docData && docData[0] && docData[0].url) {
-                    const docBuffer = await downloadFromSpaces(docData[0].url);
+            for (const [tipo, doc] of Object.entries(documentos)) {
+                if (doc.url) {
+                    const docBuffer = await downloadFromSpaces(doc.url);
                     if (docBuffer) {
                         await fs.promises.writeFile(
-                            path.join(vehiculoDir, `${vehiculo.placa}_${doc.tipo}.pdf`),
+                            path.join(vehiculoDir, `${vehiculo.placa}_${doc.nombre}${path.extname(doc.url)}`),
                             docBuffer
                         );
                     }
@@ -1376,7 +1455,7 @@ controller.generarDocumentos = async (req, res) => {
             }
         }
 
-        // 6. Crear ZIP
+        // 10. Crear ZIP
         const zipFileName = `documentos_solicitud_${id}_${Date.now()}.zip`;
         const zipPath = path.join(tempDir, zipFileName);
         const output = fs.createWriteStream(zipPath);
@@ -1387,7 +1466,7 @@ controller.generarDocumentos = async (req, res) => {
                 try {
                     console.log('📦 ZIP creado:', archive.pointer() + ' bytes');
                     
-                    // 7. Subir ZIP a DigitalOcean Spaces
+                    // Subir ZIP a DigitalOcean Spaces
                     const fileUrl = await uploadToSpacesFromDisk(zipPath, zipFileName);
                     console.log('☁️ Archivo subido a DigitalOcean:', fileUrl);
 
@@ -1395,25 +1474,29 @@ controller.generarDocumentos = async (req, res) => {
                         throw new Error('Error al subir el archivo a DigitalOcean');
                     }
 
-                    // 8. Guardar URL en la base de datos
+                    // Guardar URL en la base de datos
                     await connection.execute(
                         'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
                         [id, fileUrl]
                     );
 
-                    // 9. Enviar respuesta exitosa
+                    // Enviar respuesta exitosa
                     resolve(res.json({
                         success: true,
                         url: fileUrl,
-                        message: 'Documentos generados y subidos correctamente'
+                        message: 'Documentos generados y subidos correctamente',
+                        tieneDocsFaltantes
                     }));
                 } catch (error) {
                     console.error('❌ Error en el proceso de subida:', error);
                     reject(error);
                 } finally {
-                    // 10. Limpiar archivos temporales
+                    // Limpiar archivos temporales
                     try {
                         await fs.promises.rm(tempDir, { recursive: true, force: true });
+                        if (tieneDocsFaltantes) {
+                            await fs.promises.unlink(docsFaltantesPath);
+                        }
                         console.log('🧹 Archivos temporales eliminados');
                     } catch (cleanupError) {
                         console.error('⚠️ Error al limpiar archivos temporales:', cleanupError);
@@ -1426,20 +1509,20 @@ controller.generarDocumentos = async (req, res) => {
                 reject(new Error('Error al crear el archivo ZIP: ' + err.message));
             });
 
-            // 11. Agregar todos los archivos al ZIP
+            // Agregar archivos al ZIP
             archive.pipe(output);
-            
-            // Agregar archivos principales
             archive.file(htmlPath, { name: path.basename(htmlPath) });
-            archive.file(arlPath, { name: path.basename(arlPath) });
-            archive.file(pasocialPath, { name: path.basename(pasocialPath) });
+            
+            // Agregar documentos faltantes si existe
+            if (tieneDocsFaltantes) {
+                archive.file(path.join(tempDir, `documentos_faltantes_${id}.txt`), 
+                    { name: `documentos_faltantes_${id}.txt` });
+            }
 
-            // Agregar carpetas de vehículos
+            // Agregar carpetas de vehículos y otros documentos
             archive.directory(tempDir, false, (data) => {
-                // Solo incluir archivos que no sean los principales
                 if (!data.name.includes('Informe_Solicitud_') && 
-                    !data.name.includes('ARL_') && 
-                    !data.name.includes('Pasocial_') &&
+                    !data.name.includes('documentos_faltantes_') &&
                     !data.name.endsWith('.zip')) {
                     return data;
                 }
@@ -1447,15 +1530,6 @@ controller.generarDocumentos = async (req, res) => {
             });
 
             archive.finalize();
-        }).catch(error => {
-            console.error('❌ Error general:', error);
-            if (!res.headersSent) {
-                res.status(500).json({
-                    success: false,
-                    message: 'Error al generar los documentos',
-                    error: error.message
-                });
-            }
         });
 
     } catch (error) {
