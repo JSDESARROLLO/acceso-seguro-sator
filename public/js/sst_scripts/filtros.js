@@ -9,17 +9,19 @@ async function filtrarSolicitudes(event) {
   try {
     // Obtener valores de los filtros
     const filtros = {
-      id: $('#filtroId').val(),
-      empresa: $('#filtroEmpresa').val(),
-      nit: $('#filtroNit').val(),
-      estado: $('#filtroEstadoSolicitud').val(),
-      fechaInicio: $('#filtroFechaInicio').val(),
-      fechaFin: $('#filtroFechaFin').val(),
-      lugar: $('#filtroLugar').val(),
-      cedula: $('#filtroCedula').val(),
-      placa: $('#filtroPlaca').val(),
-      interventor: $('#filtroInterventor').val(),
-      vigencia: $('#filtroVigencia').val()
+      id: $('#idSolicitud').val(),
+      empresa: $('#empresa').val(),
+      nit: $('#nit').val(),
+      estado: $('#estado').val(),
+      fechaInicio: $('#fechaInicio').val(),
+      fechaFin: $('#fechaFin').val(),
+      lugar: $('#lugar').val(),
+      cedula: $('#cedula').val(),
+      placa: $('#placa').val(),
+      interventor: $('#interventor').val(),
+      vigencia: $('#vigencia').val(),
+      colaboradorId: $('#colaboradorId').val(),
+      vehiculoId: $('#vehiculoId').val()
     };
     
     // Mostrar indicador de carga

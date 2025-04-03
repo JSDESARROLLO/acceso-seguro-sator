@@ -323,7 +323,6 @@
     </div>
 
 <!-- Modal de Chat -->
-
 <div id="chatModal" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center">
   <div class="bg-white w-full max-w-4xl h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
     <!-- Header del chat -->
@@ -347,10 +346,6 @@
           <li id="interventorContact" class="p-2 hover:bg-gray-200 cursor-pointer flex justify-between items-center" onclick="loadChat('interventor')">
             <span>Interventor: <span id="interventorName"></span></span>
             <span class="badge badge-pill badge-danger unread-count hidden" data-type="interventor" id="unread-count-interventor">0</span>
-          </li>
-          <li id="soporteContact" class="p-2 hover:bg-gray-200 cursor-pointer flex justify-between items-center" onclick="loadChat('soporte')">
-            <span>Soporte</span>
-            <span class="badge badge-pill badge-danger unread-count hidden" data-type="soporte" id="unread-count-soporte">0</span>
           </li>
         </ul>
       </div>
@@ -382,7 +377,7 @@
             <p>Inicio de Obra: <%= solicitud.inicio_obra %></p>
             <p>Fin de Obra: <%= solicitud.fin_obra %></p>
             <p>NIT: <%= solicitud.nit %></p>
-            <p>Lugar: <%= solicitud.lugar %></p>
+            <p>Lugar: <%= solicitud.nombre_lugar %></p>
             <p>Labor: <%= solicitud.labor %></p>
             <p>Interventor: <%= solicitud.interventor %></p>
             <p>Estado: <span class="<%= getEstadoClass(solicitud.estado_actual) %>"><%= solicitud.estado_actual %></span></p>

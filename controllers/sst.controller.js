@@ -177,7 +177,7 @@ controller.mostrarNegarSolicitud = async (req, res) => {
       console.error('Error al obtener detalles de la solicitud:', error);
       res.status(500).json({ message: 'Error al obtener detalles de la solicitud' });
     }
-  };
+};
 
    
 
@@ -727,32 +727,91 @@ exports.descargarDocumentos = async (req, res) => {
 // Obtener colaboradores de una solicitud
 controller.getColaboradores = async (req, res) => {
     const { solicitudId } = req.params;
-    const { estado } = req.query; // Recibir el parámetro estado desde la query
+    const { estado } = req.query;
+    
+    console.log('Iniciando getColaboradores:', { solicitudId, estado });
     
     try {
+        // Validar que solicitudId sea un número válido
+        if (!solicitudId || isNaN(solicitudId)) {
+            console.error('ID de solicitud inválido:', solicitudId);
+            return res.status(400).json({ message: 'ID de solicitud inválido' });
+        }
+
         // Obtener información de la solicitud y el contratista
+        console.log('Consultando información de la solicitud...');
         const [solicitud] = await connection.execute(
             'SELECT s.id, s.empresa, u.username AS contratista FROM solicitudes s LEFT JOIN users u ON s.usuario_id = u.id WHERE s.id = ?',
             [solicitudId]
         );
+
+        console.log('Resultado consulta solicitud:', solicitud);
+
         if (!solicitud.length) {
+            console.error('Solicitud no encontrada:', solicitudId);
             return res.status(404).json({ message: 'Solicitud no encontrada' });
         }
 
-        // Preparar consulta para colaboradores, aplicando filtro por estado si es necesario
-        let colaboradoresQuery = 'SELECT c.id, c.nombre, c.cedula, c.estado FROM colaboradores c WHERE c.solicitud_id = ?';
+        // Preparar consulta para colaboradores
+        let colaboradoresQuery = `
+            SELECT 
+                c.id, 
+                c.nombre, 
+                c.cedula, 
+                c.estado,
+                (SELECT 
+                    JSON_OBJECT(
+                        'id', pss.id,
+                        'fecha_inicio', pss.fecha_inicio,
+                        'fecha_fin', pss.fecha_fin
+                    )
+                 FROM plantilla_seguridad_social pss 
+                 WHERE pss.colaborador_id = c.id 
+                 ORDER BY pss.fecha_fin DESC LIMIT 1) as plantillaSS,
+                (SELECT rc.estado 
+                 FROM resultados_capacitaciones rc 
+                 WHERE rc.colaborador_id = c.id 
+                 ORDER BY rc.fecha_vencimiento DESC LIMIT 1) as cursoSiso
+            FROM colaboradores c 
+            WHERE c.solicitud_id = ?`;
+
         let colaboradoresParams = [solicitudId];
-        
-        // Si se especificó un filtro de estado, añadirlo a la consulta
+
         if (estado !== undefined) {
             colaboradoresQuery += ' AND c.estado = ?';
             colaboradoresParams.push(estado === 'true' || estado === true);
         }
-        
-        // Obtener colaboradores con el filtro aplicado
-        const [colaboradores] = await connection.execute(colaboradoresQuery, colaboradoresParams);
 
-        // Obtener vehículos con licencias de conducción y tránsito
+        console.log('Consultando colaboradores...', { query: colaboradoresQuery, params: colaboradoresParams });
+
+        // Obtener colaboradores
+        const [colaboradores] = await connection.execute(colaboradoresQuery, colaboradoresParams);
+        console.log(`Encontrados ${colaboradores.length} colaboradores`);
+
+        // Procesar los resultados
+        const colaboradoresProcesados = colaboradores.map(col => {
+            // Convertir plantillaSS de string a objeto si es necesario
+            let plantillaSS = null;
+            if (col.plantillaSS && typeof col.plantillaSS === 'string') {
+                try {
+                    plantillaSS = JSON.parse(col.plantillaSS);
+                } catch (e) {
+                    console.error('Error al parsear plantillaSS:', e);
+                }
+            } else {
+                plantillaSS = col.plantillaSS;
+            }
+
+            return {
+                ...col,
+                estado: Boolean(col.estado),
+                plantillaSS: plantillaSS,
+                cursoSiso: col.cursoSiso === 1 ? 'Aprobado' : col.cursoSiso === 0 ? 'Vencido' : 'No definido'
+            };
+        });
+
+        // Obtener vehículos
+        console.log('Consultando vehículos...');
         const [vehiculos] = await connection.execute(
             `SELECT 
                 v.id, 
@@ -768,89 +827,61 @@ controller.getColaboradores = async (req, res) => {
             WHERE v.solicitud_id = ?`,
             [solicitudId]
         );
+        console.log(`Encontrados ${vehiculos.length} vehículos`);
 
-        // Procesar colaboradores con datos adicionales (Curso SISO y Plantilla SS)
-        const colaboradoresConDatos = await Promise.all(colaboradores.map(async col => {
-            // Curso SISO con fecha_vencimiento
-            const [cursoSiso] = await connection.execute(
-                `SELECT rc.estado, rc.fecha_vencimiento 
-                FROM resultados_capacitaciones rc 
-                JOIN capacitaciones cap ON rc.capacitacion_id = cap.id 
-                WHERE rc.colaborador_id = ? AND cap.nombre = 'Curso SISO'`,
-                [col.id]
-            );
-
-            // Determinar estado del curso SISO
-            let cursoSisoEstado = 'No'; // Valor por defecto si no hay resultados
-            if (cursoSiso.length) {
-                if (cursoSiso[0].estado === 'APROBADO') {
-                    const fechaVencimiento = new Date(cursoSiso[0].fecha_vencimiento);
-                    const hoy = new Date();
-                    cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
-                } else {
-                    cursoSisoEstado = 'Perdido';
-                }
-            }
-
-            // Plantilla SS
-            const [plantillaSS] = await connection.execute(
-                'SELECT id, fecha_inicio, fecha_fin FROM plantilla_seguridad_social WHERE colaborador_id = ? ORDER BY created_at DESC LIMIT 1',
-                [col.id]
-            );
-
-            return {
-                ...col,
-                cursoSiso: cursoSisoEstado,
-                plantillaSS: plantillaSS.length ? plantillaSS[0] : null
-            };
-        }));
-
-        // Procesar vehículos con datos de SOAT y tecnomecánica
+        // Procesar vehículos
+        console.log('Procesando datos adicionales de vehículos...');
         const vehiculosConDatos = await Promise.all(vehiculos.map(async veh => {
-            // Obtener SOAT
-            const [soat] = await connection.execute(
-                'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "soat" ORDER BY created_at DESC LIMIT 1',
-                [veh.id]
-            );
+            try {
+                const [soat] = await connection.execute(
+                    'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "soat" ORDER BY created_at DESC LIMIT 1',
+                    [veh.id]
+                );
 
-            // Obtener Tecnomecánica
-            const [tecnomecanica] = await connection.execute(
-                'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "tecnomecanica" ORDER BY created_at DESC LIMIT 1',
-                [veh.id]
-            );
+                const [tecnomecanica] = await connection.execute(
+                    'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "tecnomecanica" ORDER BY created_at DESC LIMIT 1',
+                    [veh.id]
+                );
 
-            return {
-                ...veh,
-                soat: soat.length ? soat[0] : null,
-                tecnomecanica: tecnomecanica.length ? tecnomecanica[0] : null,
-                licencia_conduccion: veh.licencia_conduccion || false, // Default a false si no existe
-                licencia_transito: veh.licencia_transito || false     // Default a false si no existe
-            };
+                return {
+                    ...veh,
+                    soat: soat.length ? soat[0] : null,
+                    tecnomecanica: tecnomecanica.length ? tecnomecanica[0] : null,
+                    licencia_conduccion: veh.licencia_conduccion || false,
+                    licencia_transito: veh.licencia_transito || false
+                };
+            } catch (error) {
+                console.error(`Error procesando vehículo ${veh.id}:`, error);
+                return {
+                    ...veh,
+                    soat: null,
+                    tecnomecanica: null,
+                    licencia_conduccion: false,
+                    licencia_transito: false,
+                    error: 'Error procesando datos adicionales'
+                };
+            }
         }));
 
-        // Log para depuración
-        console.log('Datos enviados al frontend:', {
-            solicitudId: solicitud[0].id,
-            empresa: solicitud[0].empresa,
-            contratista: solicitud[0].contratista,
-            estadoFiltro: estado,
-            totalColaboradores: colaboradoresConDatos.length,
-            totalVehiculos: vehiculosConDatos.length
-        });
-
-        // Respuesta al frontend
-        res.json({
+        console.log('Preparando respuesta final...');
+        const respuesta = {
             id: solicitud[0].id,
             empresa: solicitud[0].empresa,
             contratista: solicitud[0].contratista,
-            colaboradores: colaboradoresConDatos,
+            colaboradores: colaboradoresProcesados,
             vehiculos: vehiculosConDatos
-        });
+        };
+
+        console.log('Enviando respuesta exitosa');
+        res.json(respuesta);
+
     } catch (error) {
-        console.error('Error al obtener colaboradores y vehículos:', error);
+        console.error('Error en getColaboradores:', error);
+        console.error('Stack trace:', error.stack);
         res.status(500).json({ 
-            message: 'Error interno del servidor',
-            error: error.message 
+            message: 'Error interno del servidor al obtener colaboradores y vehículos',
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
@@ -859,51 +890,98 @@ controller.getColaboradores = async (req, res) => {
   // Obtener Plantilla SS existente
  
   controller.getPlantillaSS = async (req, res) => {
-    const { colaboradorId } = req.params;
+    const { documentoId } = req.params;
+    
     try {
-      const [plantilla] = await connection.execute(
-        'SELECT id, DATE_FORMAT(fecha_inicio, "%Y-%m-%d") AS fecha_inicio, DATE_FORMAT(fecha_fin, "%Y-%m-%d") AS fecha_fin FROM plantilla_seguridad_social WHERE colaborador_id = ? ORDER BY created_at DESC LIMIT 1',
-        [colaboradorId]
-      );
-      res.json({ plantilla: plantilla.length ? plantilla[0] : null });
+        // Validar que documentoId sea un número válido
+        if (!documentoId || isNaN(documentoId)) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'ID de documento inválido',
+                plantilla: null 
+            });
+        }
+
+        const [plantilla] = await connection.execute(
+            'SELECT id, fecha_inicio, fecha_fin FROM plantilla_seguridad_social WHERE id = ?',
+            [documentoId]
+        );
+
+        return res.json({ 
+            success: true,
+            plantilla: plantilla.length ? plantilla[0] : null 
+        });
     } catch (error) {
-      console.error('Error al obtener plantilla:', error);
-      res.status(500).json({ message: 'Error interno del servidor' });
+        console.error('Error al obtener plantilla:', error);
+        return res.status(500).json({ 
+            success: false,
+            message: 'Error al obtener la plantilla',
+            error: error.message 
+        });
     }
   };
   
   // Guardar o Actualizar Plantilla SS
   controller.guardarOActualizarPlantillaSS = async (req, res) => {
-    const { colaboradorId, solicitudId, fechaInicio, fechaFin } = req.body;
+    const { colaboradorId, solicitudId, documentoId, fechaInicio, fechaFin } = req.body;
+    
+    console.log('Datos recibidos:', { colaboradorId, solicitudId, documentoId, fechaInicio, fechaFin });
+    
     try {
-      const [existing] = await connection.execute(
-        'SELECT id FROM plantilla_seguridad_social WHERE colaborador_id = ? ORDER BY created_at DESC LIMIT 1',
-        [colaboradorId]
-      );
-  
-      if (existing.length) {
-        // Actualizar
+      // Validar fechas
+      if (!fechaInicio || !fechaFin) {
+        return res.status(400).json({ message: 'Las fechas son requeridas' });
+      }
+
+      const inicio = new Date(fechaInicio);
+      const fin = new Date(fechaFin);
+      
+      if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
+        return res.status(400).json({ message: 'Fechas inválidas' });
+      }
+
+      if (fin <= inicio) {
+        return res.status(400).json({ message: 'La fecha de fin debe ser posterior a la fecha de inicio' });
+      }
+
+      // Si hay documentoId, actualizar el registro existente
+      if (documentoId) {
         const [result] = await connection.execute(
           'UPDATE plantilla_seguridad_social SET fecha_inicio = ?, fecha_fin = ?, updated_at = NOW() WHERE id = ?',
-          [fechaInicio, fechaFin, existing[0].id]
+          [fechaInicio, fechaFin, documentoId]
         );
-        if (result.affectedRows) {
-          res.json({ message: 'Plantilla actualizada correctamente' });
-        } else {
-          res.status(500).json({ message: 'Error al actualizar la plantilla' });
+
+        if (result.affectedRows === 0) {
+          return res.status(404).json({ message: 'No se encontró la plantilla para actualizar' });
         }
-      } else {
-        // Insertar
-        const [result] = await connection.execute(
-          'INSERT INTO plantilla_seguridad_social (colaborador_id, solicitud_id, fecha_inicio, fecha_fin) VALUES (?, ?, ?, ?)',
-          [colaboradorId, solicitudId, fechaInicio, fechaFin]
-        );
-        if (result.affectedRows) {
-          res.json({ message: 'Plantilla guardada correctamente' });
-        } else {
-          res.status(500).json({ message: 'Error al guardar la plantilla' });
-        }
+
+        return res.json({ 
+          success: true,
+          message: 'Plantilla actualizada correctamente',
+          plantilla: { id: documentoId, fecha_inicio: fechaInicio, fecha_fin: fechaFin }
+        });
       }
+
+      // Si no hay documentoId, crear un nuevo registro
+      const [result] = await connection.execute(
+        'INSERT INTO plantilla_seguridad_social (colaborador_id, solicitud_id, fecha_inicio, fecha_fin) VALUES (?, ?, ?, ?)',
+        [colaboradorId, solicitudId, fechaInicio, fechaFin]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(500).json({ message: 'Error al crear la plantilla' });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Plantilla creada correctamente',
+        plantilla: { 
+          id: result.insertId,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin
+        }
+      });
+
     } catch (error) {
       console.error('Error al guardar/actualizar plantilla:', error);
       res.status(500).json({ message: 'Error interno del servidor' });
@@ -1105,118 +1183,117 @@ controller.filtrarSolicitudesSst = async (req, res) => {
 // Obtener documento de vehículo
 controller.getVehiculoDocumento = async (req, res) => {
     try {
-      const { vehiculoId, tipoDocumento } = req.params;
-      
-      let query = '';
-      let params = [];
-      
-      if (tipoDocumento === 'soat' || tipoDocumento === 'tecnomecanica') {
-        query = `
-          SELECT 
-            id, 
-            DATE_FORMAT(fecha_inicio, '%Y-%m-%d') as fecha_inicio,
-            DATE_FORMAT(fecha_fin, '%Y-%m-%d') as fecha_fin,
-            estado,
-            CASE 
-              WHEN fecha_fin > CURDATE() THEN 'vigente'
-              ELSE 'vencido'
-            END as estado_actual
-          FROM plantilla_documentos_vehiculos 
-          WHERE vehiculo_id = ? AND tipo_documento = ?
-          ORDER BY created_at DESC
-          LIMIT 1
-        `;
-        params = [vehiculoId, tipoDocumento];
-      } else {
-        query = `
-          SELECT estado 
-          FROM licencias_vehiculo 
-          WHERE vehiculo_id = ? AND tipo = ?
-        `;
-        params = [vehiculoId, tipoDocumento];
-      }
-  
-      const [documento] = await connection.execute(query, params);
-      
-      if (!documento || documento.length === 0) {
-        return res.json({ 
-          documento: null,
-          message: 'No se encontró el documento'
+        const { vehiculoId, tipoDocumento } = req.params;
+        
+        console.log('Obteniendo documento:', { vehiculoId, tipoDocumento });
+        
+        const [documento] = await connection.execute(
+            'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = ? ORDER BY created_at DESC LIMIT 1',
+            [vehiculoId, tipoDocumento]
+        );
+
+        if (documento.length === 0) {
+            return res.json({ success: true, documento: null });
+        }
+
+        res.json({
+            success: true,
+            documento: {
+                id: documento[0].id,
+                fecha_inicio: documento[0].fecha_inicio,
+                fecha_fin: documento[0].fecha_fin,
+                estado: documento[0].estado
+            }
         });
-      }
-
-      // Actualizar el estado si es necesario
-      if (tipoDocumento === 'soat' || tipoDocumento === 'tecnomecanica') {
-        const doc = documento[0];
-        if (new Date(doc.fecha_fin) <= new Date() && doc.estado === 'vigente') {
-          await connection.execute(
-            `UPDATE plantilla_documentos_vehiculos 
-             SET estado = 'vencido' 
-             WHERE id = ?`,
-            [doc.id]
-          );
-          doc.estado = 'vencido';
-        }
-      }
-      
-      res.json({ 
-        documento: documento[0],
-        message: 'Documento encontrado correctamente'
-      });
     } catch (error) {
-      console.error('Error al obtener documento:', error);
-      res.status(500).json({ 
-        success: false,
-        message: 'Error al obtener el documento',
-        error: error.message 
-      });
-    }
-  };
-  
-  // Guardar o actualizar documento de vehículo
-  controller.saveVehiculoDocumento = async (req, res) => {
-    try {
-        const { vehiculoId, solicitudId, tipoDocumento, documentoId, fechaInicio, fechaFin } = req.body;
-        if (!['soat', 'tecnomecanica'].includes(tipoDocumento)) {
-            return res.status(400).json({ success: false, message: 'Tipo de documento no válido' });
-        }
-        if (!fechaInicio || !fechaFin) {
-            return res.status(400).json({ success: false, message: 'Las fechas de inicio y fin son requeridas' });
-        }
-        if (new Date(fechaFin) <= new Date(fechaInicio)) {
-            return res.status(400).json({ success: false, message: 'La fecha fin debe ser posterior a la fecha inicio' });
-        }
-
-        const fechaInicioFormateada = new Date(fechaInicio).toISOString().split('T')[0];
-        const fechaFinFormateada = new Date(fechaFin).toISOString().split('T')[0];
-
-        if (documentoId) {
-            const [result] = await connection.execute(
-                `UPDATE plantilla_documentos_vehiculos 
-                 SET fecha_inicio = ?, fecha_fin = ?, estado = CASE WHEN ? > CURDATE() THEN 'vigente' ELSE 'vencido' END,
-                 updated_at = NOW() WHERE id = ?`,
-                [fechaInicioFormateada, fechaFinFormateada, fechaFinFormateada, documentoId]
-            );
-            if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Documento no encontrado' });
-        } else {
-            const [result] = await connection.execute(
-                `INSERT INTO plantilla_documentos_vehiculos 
-                 (vehiculo_id, solicitud_id, tipo_documento, fecha_inicio, fecha_fin, estado) 
-                 VALUES (?, ?, ?, ?, ?, CASE WHEN ? > CURDATE() THEN 'vigente' ELSE 'vencido' END)`,
-                [vehiculoId, solicitudId, tipoDocumento, fechaInicioFormateada, fechaFinFormateada, fechaFinFormateada]
-            );
-            if (result.affectedRows === 0) return res.status(500).json({ success: false, message: 'Error al crear el documento' });
-        }
-
-        res.json({ success: true, message: documentoId ? 'Documento actualizado correctamente' : 'Documento creado correctamente' });
-    } catch (error) {
-        console.error('Error al guardar documento:', error);
-        res.status(500).json({ success: false, message: 'Error al guardar el documento', error: error.message });
+        console.error('Error al obtener documento:', error);
+        res.status(500).json({ success: false, message: 'Error al obtener el documento', error: error.message });
     }
 };
   
-  // Alternar estado de licencia
-  controller.toggleLicencia = async (req, res) => {
+// Guardar o actualizar documento de vehículo
+controller.saveVehiculoDocumento = async (req, res) => {
+    const conn = await connection.getConnection();
+    try {
+        await conn.beginTransaction();
+        
+        const { vehiculoId, solicitudId, tipoDocumento, documentoId, fechaInicio, fechaFin } = req.body;
+        
+        console.log('Datos recibidos en saveVehiculoDocumento:', { vehiculoId, solicitudId, tipoDocumento, documentoId, fechaInicio, fechaFin });
+        
+        // Validar tipo de documento
+        if (!['soat', 'tecnomecanica'].includes(tipoDocumento)) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'Tipo de documento no válido' });
+        }
+        
+        // Validar fechas
+        if (!fechaInicio || !fechaFin) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'Las fechas de inicio y fin son requeridas' });
+        }
+        
+        const inicio = new Date(fechaInicio);
+        const fin = new Date(fechaFin);
+        if (isNaN(inicio) || isNaN(fin)) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'Formato de fecha inválido' });
+        }
+        if (fin <= inicio) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'La fecha de fin debe ser posterior a la fecha de inicio' });
+        }
+
+        const estado = fin > new Date() ? 'vigente' : 'vencido';
+        const fechaInicioISO = inicio.toISOString().split('T')[0];
+        const fechaFinISO = fin.toISOString().split('T')[0];
+
+        let result;
+        if (documentoId) {
+            [result] = await conn.execute(
+                'UPDATE plantilla_documentos_vehiculos SET fecha_inicio = ?, fecha_fin = ?, estado = ?, updated_at = NOW() WHERE id = ?',
+                [fechaInicioISO, fechaFinISO, estado, documentoId]
+            );
+        } else {
+            // Verificar si ya existe un registro para este vehículo y tipo de documento
+            const [existing] = await conn.execute(
+                'SELECT id FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = ? ORDER BY created_at DESC LIMIT 1',
+                [vehiculoId, tipoDocumento]
+            );
+
+            if (existing.length > 0) {
+                // Actualizar el registro existente
+                [result] = await conn.execute(
+                    'UPDATE plantilla_documentos_vehiculos SET fecha_inicio = ?, fecha_fin = ?, estado = ?, updated_at = NOW() WHERE id = ?',
+                    [fechaInicioISO, fechaFinISO, estado, existing[0].id]
+                );
+            } else {
+                // Crear nuevo registro
+                [result] = await conn.execute(
+                    'INSERT INTO plantilla_documentos_vehiculos (vehiculo_id, solicitud_id, tipo_documento, fecha_inicio, fecha_fin, estado) VALUES (?, ?, ?, ?, ?, ?)',
+                    [vehiculoId, solicitudId, tipoDocumento, fechaInicioISO, fechaFinISO, estado]
+                );
+            }
+        }
+
+        if (result.affectedRows === 0) {
+            await conn.rollback();
+            return res.status(500).json({ success: false, message: 'Error al guardar el documento' });
+        }
+
+        await conn.commit();
+        res.json({ success: true, message: documentoId ? 'Documento actualizado' : 'Documento creado' });
+    } catch (error) {
+        await conn.rollback();
+        console.error('Error al guardar documento:', error);
+        res.status(500).json({ success: false, message: 'Error al guardar el documento', error: error.message });
+    } finally {
+        conn.release();
+    }
+};
+  
+// Alternar estado de licencia
+controller.toggleLicencia = async (req, res) => {
     try {
         const { vehiculoId, solicitudId, tipoLicencia, activar } = req.body;
         

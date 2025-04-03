@@ -1,413 +1,751 @@
 /**
- * Funciones para la gestión de conversaciones (chat) - Vista SST (Parte 1)
+ * Funciones para la gestión de conversaciones (chat) - Vista SST
  */
 
-// Variables globales para gestión del chat
-let socket = null;
-let currentSolicitudId = null;
-let currentChatType = 'sst'; // Tipo de chat: 'sst' (Analista SST - Contratista) o 'soporte' (Usuario - Soporte)
-let isLoading = false;
+// Variables globales
+let socket;
+let currentSolicitudId;
+let currentChatType = 'sst';
+let displayedMessages = new Set();
+let sentMessages = new Map();
+let isLoadingMore = false;
 let oldestMessageId = null;
-let isReconnecting = false;
 let reconnectAttempts = 0;
-let reconnectInterval = null;
-let displayedMessages = new Set(); // Conjunto para evitar mensajes duplicados
+let maxReconnectAttempts = 5;
+let reconnectTimeout = null;
 
 // Función para obtener el ID del usuario SST
-const getSstUserId = () => {
-  return window.sstUserId || document.querySelector('[data-sst-user-id]')?.dataset.sstUserId || 
-         document.querySelector('meta[name="sst-user-id"]')?.getAttribute('content') || null;
-};
-
-// Función para abrir modal de chat
-function openChatModal(solicitudId) {
-  if (!solicitudId) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'No se proporcionó ID de solicitud para el chat'
-    });
-    return;
-  }
-  
-  currentSolicitudId = solicitudId;
-  
-  // Limpiar chat previo
-  document.getElementById('chatMessages').innerHTML = '';
-  displayedMessages.clear();
-  
-  // Mostrar modal
-  const chatModal = new bootstrap.Modal(document.getElementById('chatModal'));
-  chatModal.show();
-  
-  // Mostrar información del contratista
-  const contratistaInfo = document.querySelector(`tr[data-solicitud-id="${solicitudId}"] td:nth-child(2)`);
-  const empresaInfo = document.querySelector(`tr[data-solicitud-id="${solicitudId}"] td:nth-child(1)`);
-  
-  if (contratistaInfo && empresaInfo) {
-    document.querySelectorAll('.contratista-name').forEach(el => {
-      el.textContent = contratistaInfo.textContent.trim() + ' (' + empresaInfo.textContent.trim() + ')';
-    });
-  } else {
-    document.querySelectorAll('.contratista-name').forEach(el => {
-      el.textContent = `Contratista - Solicitud ${solicitudId}`;
-    });
-  }
-  
-  // Establecer título del chat actual
-  document.getElementById('chatCurrentContact').textContent = 
-    document.querySelector('.contratista-name')?.textContent || 
-    `Contratista - Solicitud ${solicitudId}`;
-  
-  // Resaltar contacto activo
-  document.querySelectorAll('.contact-item').forEach(item => {
-    if (item.dataset.type === 'contratista') {
-      item.classList.add('bg-gray-200');
-    } else {
-      item.classList.remove('bg-gray-200');
-    }
-  });
-  
-  // Inicializar chat
-  initChat();
-  
-  // Cargar contactos
-  loadChatContacts();
-  
-  // Establecer foco en el input
-  setTimeout(() => {
-    document.getElementById('chatInput').focus();
-  }, 500);
-  
-  // Marcar mensajes como leídos
-  markMessagesAsRead(solicitudId, 'sst');
+function getSstUserId() {
+  const metaTag = document.querySelector('meta[name="sst-user-id"]');
+  return metaTag ? metaTag.content : window.sstUserId;
 }
 
-// Retardo para reconexión exponencial
-function getReconnectDelay() {
-  // Comenzar con 1 segundo y aumentar exponencialmente hasta un máximo de 30 segundos
-  const maxDelay = 30000;
-  const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), maxDelay);
-  return delay;
-}
-
-// Manejar errores de WebSocket
-function handleWebSocketError() {
-  console.warn(`Error de WebSocket. Intento ${reconnectAttempts + 1}`);
-  
-  if (!isReconnecting) {
-    isReconnecting = true;
-    
-    // Mostrar indicador de reconexión
-    const chatMessages = document.getElementById('chatMessages');
-    const reconnectMessage = document.createElement('div');
-    reconnectMessage.className = 'reconnect-message text-center my-2 p-2 bg-warning text-dark rounded';
-    reconnectMessage.innerHTML = 'Conexión perdida. Reconectando...';
-    reconnectMessage.id = 'reconnectMessage';
-    
-    // Solo agregar si no existe ya
-    if (!document.getElementById('reconnectMessage')) {
-      chatMessages.appendChild(reconnectMessage);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-  }
-  
-  // Incrementar conteo de intentos
-  reconnectAttempts++;
-  
-  // Programar reconexión
-  const delay = getReconnectDelay();
-  clearTimeout(reconnectInterval);
-  
-  reconnectInterval = setTimeout(() => {
-    if (socket) {
-      // Cerrar socket previo si existe
-      try {
-        socket.close();
-      } catch (e) {
-        console.error('Error al cerrar socket previo:', e);
-      }
-    }
-    
-    // Reiniciar conexión
-    initChat();
-  }, delay);
-}
-
-// Comprobar si un mensaje contiene un archivo adjunto
-function hasAttachment(message) {
+// Función para cargar un tipo de chat específico
+async function loadChat(chatType) {
   try {
-    let content = message.content;
+    console.log('🔄 Cargando chat tipo:', chatType);
     
-    // Intentar parse si es un string
-    if (typeof content === 'string') {
-      try {
-        content = JSON.parse(content);
-      } catch (e) {
-        return false;
-      }
+    if (!currentSolicitudId) {
+      console.error('❌ No hay solicitud activa');
+      return;
     }
-    
-    return content && content.attachment && 
-           (content.attachment.url || content.attachment.name || content.attachment.type);
-  } catch (e) {
-    return false;
-  }
-}
 
-// Mostrar notificación de escritorio
-function showDesktopNotification(message) {
-  // Verificar si el navegador soporta notificaciones
-  if (!('Notification' in window)) {
-    return;
-  }
-  
-  // Verificar si el mensaje es del usuario actual
-  const userId = getSstUserId();
-  if (parseInt(message.usuario_id) === parseInt(userId)) {
-    return; // No notificar mensajes propios
-  }
-  
-  // No mostrar notificación si la ventana está activa y el chat está abierto
-  if (document.visibilityState === 'visible' && document.getElementById('chatModal').classList.contains('show')) {
-    return;
-  }
-  
-  // Verificar permiso
-  if (Notification.permission === 'granted') {
-    createNotification(message);
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then(permission => {
-      if (permission === 'granted') {
-        createNotification(message);
-      }
-    });
-  }
-}
-
-// Crear notificación
-function createNotification(message) {
-  try {
-    let messageContent = '';
-    let senderName = '';
-    
-    // Extraer contenido del mensaje
-    try {
-      if (typeof message.content === 'string') {
-        try {
-          const parsedContent = JSON.parse(message.content);
-          messageContent = parsedContent.text || message.content;
-        } catch (e) {
-          messageContent = message.content;
-        }
-      } else if (typeof message.content === 'object') {
-        messageContent = message.content.text || JSON.stringify(message.content);
-      }
-    } catch (e) {
-      messageContent = 'Nuevo mensaje';
-    }
-    
-    // Detectar tipo de chat para mostrar remitente
-    if (currentChatType === 'sst') {
-      senderName = 'Contratista';
-    } else if (currentChatType === 'soporte') {
-      senderName = 'Soporte Técnico';
-    } else {
-      senderName = message.username || 'Usuario';
-    }
-    
-    // Crear y mostrar notificación
-    const notification = new Notification('Nuevo mensaje de ' + senderName, {
-      body: messageContent.substring(0, 100) + (messageContent.length > 100 ? '...' : ''),
-      icon: '/img/logo.png'
-    });
-    
-    // Al hacer clic, enfocar la ventana y mostrar el chat
-    notification.onclick = function() {
-      window.focus();
-      document.getElementById('chatModal').classList.add('show');
-    };
-    
-    // Cerrar automáticamente después de 5 segundos
-    setTimeout(() => {
-      notification.close();
-    }, 5000);
-  } catch (error) {
-    console.error('Error al crear notificación:', error);
-  }
-}
-
-// Función para abrir el chat de soporte global
-window.openSoporteChat = async () => {
-  try {
-    currentChatType = 'soporte';
-    sentMessages.clear();
-    displayedMessages.clear();
-
-    const modalElement = document.getElementById('chatModal');
-    if (!modalElement) throw new Error('No se encontró el modal de chat');
-    modalElement.style.display = 'flex';
-    modalElement.classList.remove('hidden');
-
+    currentChatType = chatType;
     const userId = getSstUserId();
-    if (!userId) throw new Error('No se pudo obtener ID de usuario');
 
-    // Inicializar chat de soporte
-    await fetch('/api/chat/iniciar/global/soporte', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId })
-    }).catch(err => console.warn('Error al inicializar chat Soporte:', err));
+    if (!userId) {
+      console.error('❌ No se pudo obtener el ID del usuario');
+      return;
+    }
 
-    // Cargar información del contratista para las solicitudes actuales
-    loadChatContacts();
+    // Limpiar mensajes anteriores
+    displayedMessages.clear();
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div></div>';
 
-    // Activar el contacto de soporte por defecto
-    document.querySelectorAll('.contact-item').forEach(item => {
-      item.classList.remove('bg-gray-200');
-      if (item.dataset.type === 'soporte') {
-        item.classList.add('bg-gray-200');
-        document.getElementById('chatCurrentContact').textContent = 'Soporte Técnico';
-      }
-    });
+    // Cargar mensajes
+    const messages = await loadInitialMessagesWithRetry(currentSolicitudId, chatType, userId);
+    console.log('✅ Mensajes obtenidos:', messages.length);
 
-    if (socket?.readyState === WebSocket.OPEN) socket.close();
+    // Limpiar área de mensajes
+    chatMessages.innerHTML = '';
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-    socket.onopen = () => {
-      socket.send(JSON.stringify({
-        type: 'identify',
-        userId,
-        role: 'sst',
-        solicitudId: 'global'
-      }));
-    };
-
-    socket.onmessage = (event) => {
-      console.log('Received WebSocket message:', event.data);
-      const message = JSON.parse(event.data);
-      if (message.type === 'identify_confirmation') return;
-
-      if (message.type === 'status_update') {
-        const { tempId, status, messageId } = message;
-        const existing = document.querySelector(`.chat-message[data-message-id="${tempId}"]`);
-        if (existing) {
-          existing.dataset.messageId = messageId;
-          updateMessageStatus(messageId, status);
-          sentMessages.set(tempId, messageId);
-          displayedMessages.add(messageId);
+    // Mostrar mensajes
+    if (messages.length === 0) {
+      chatMessages.innerHTML = '<div class="text-center text-gray-500 p-4">No hay mensajes. Escribe para comenzar.</div>';
+    } else {
+      messages.forEach(message => {
+        if (!displayedMessages.has(message.id)) {
+          displayMessage(message);
         }
+      });
+    }
+
+    // Scroll al final
+    setTimeout(() => {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 100);
+
+    // Marcar mensajes como leídos
+    await markMessagesAsRead(currentSolicitudId, chatType);
+
+  } catch (error) {
+    console.error('❌ Error al cargar chat:', error);
+    document.getElementById('chatMessages').innerHTML = `
+      <div class="flex justify-center my-4 p-4 bg-red-100 text-red-700 rounded-lg">
+        Error al cargar mensajes. <button class="underline ml-2" onclick="loadChat('${chatType}')">Reintentar</button>
+      </div>
+    `;
+  }
+}
+
+// Función para mostrar un mensaje en el chat
+function displayMessage(message) {
+  if (displayedMessages.has(message.id)) return;
+
+  const chatMessages = document.getElementById('chatMessages');
+  const emptyMessage = chatMessages.querySelector('.text-center.text-gray-500');
+  if (emptyMessage) chatMessages.innerHTML = '';
+
+  const userId = getSstUserId();
+  const isSender = parseInt(message.usuario_id) === parseInt(userId);
+
+  const div = document.createElement('div');
+  div.className = `chat-message p-3 my-2 rounded-lg ${
+    isSender 
+      ? 'bg-[#011C3D] text-[#FDFDFD] ml-auto' 
+      : 'bg-[#FDF1E6] text-[#011C3D]'
+  } max-w-xs shadow-sm`;
+  div.dataset.messageId = message.id;
+  div.dataset.userId = message.usuario_id;
+
+  let content;
+  try {
+    if (typeof message.content === 'string') {
+      const parsed = JSON.parse(message.content);
+      content = parsed.text || message.content;
+    } else {
+      content = message.content.text || JSON.stringify(message.content);
+    }
+  } catch (e) {
+    content = message.content;
+  }
+
+  const date = new Date(message.created_at || Date.now());
+  const time = date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+
+  const statusIcon = isSender ? (
+    String(message.id).startsWith('temp-') ? '<span class="status-icon-sent text-[#CC9000]">✓</span>' :
+    message.leido ? '<span class="status-icon-read text-[#CC9000]">✓✓</span>' : 
+    '<span class="status-icon-delivered text-[#CC9000]">✓✓</span>'
+  ) : '';
+
+  div.innerHTML = `
+    <div class="text-sm mb-1">${content}</div>
+    <div class="text-xs ${isSender ? 'text-[#FBFBF0]' : 'text-[#011C3D]/70'} text-right">${time} ${statusIcon}</div>
+  `;
+
+  chatMessages.appendChild(div);
+  displayedMessages.add(message.id);
+
+  const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+  if (isNearBottom) setTimeout(() => chatMessages.scrollTop = chatMessages.scrollHeight, 100);
+}
+
+// Función para inicializar el chat (WebSocket)
+function initChat() {
+  const userId = getSstUserId();
+  if (!userId) {
+    console.error('No se pudo obtener el ID del usuario SST');
+    return;
+  }
+
+  // Limpiar timeout anterior si existe
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+
+  // Cerrar socket anterior si existe
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.close();
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+  socket.onopen = () => {
+    console.log('🔌 WebSocket conectado');
+    reconnectAttempts = 0; // Resetear intentos de reconexión
+    
+    // Enviar identificación
+    socket.send(JSON.stringify({
+      type: 'identify',
+      userId,
+      role: 'sst',
+      solicitudId: currentSolicitudId
+    }));
+  };
+
+  socket.onmessage = async (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      console.log('📨 Mensaje WebSocket recibido:', message);
+
+      if (message.type === 'identify_confirmation') {
+        console.log('✅ Identificación confirmada:', message);
         return;
       }
 
-      if (message.type === 'message') {
-        if (!displayedMessages.has(message.id)) {
-          displayMessage(message);
-          if (message.usuario_id !== getSstUserId()) {
-            markMessageAsRead(message.id);
+      if (message.type === 'status_update') {
+        const { tempId, status, messageId } = message;
+        updateMessageStatus(tempId, status);
+        
+        if (messageId) {
+          const messageElement = document.querySelector(`.chat-message[data-message-id="${tempId}"]`);
+          if (messageElement) {
+            messageElement.dataset.messageId = messageId;
+            sentMessages.set(tempId, messageId);
           }
         }
         return;
       }
-    };
 
-    socket.onerror = (error) => {
-      console.error('WebSocket Error:', error);
+      // Si el mensaje tiene id, es un mensaje de chat
+      if (message.id) {
+        const userId = getSstUserId();
+        const isSender = parseInt(message.usuario_id) === parseInt(userId);
+        
+        // Evitar duplicados
+        if (displayedMessages.has(message.id)) {
+          return;
+        }
+
+        // Normalizar el mensaje
+        const normalizedMessage = {
+          id: message.id,
+          usuario_id: message.usuario_id,
+          content: message.content,
+          created_at: message.created_at,
+          type: message.type || currentChatType, // Usar el tipo actual si no viene especificado
+          leido: message.leido || false
+        };
+
+        // Verificar si el mensaje pertenece al chat actual
+        if (message.solicitudId == currentSolicitudId) {
+          displayMessage(normalizedMessage);
+          displayedMessages.add(message.id);
+          
+          // Si no somos el remitente, marcar como leído
+          if (!isSender) {
+            await markMessagesAsRead(currentSolicitudId, currentChatType);
+          }
+
+          // Scroll al último mensaje si estamos cerca del final
+    const chatMessages = document.getElementById('chatMessages');
+          if (chatMessages) {
+            const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+            if (isNearBottom) {
+              setTimeout(() => chatMessages.scrollTop = chatMessages.scrollHeight, 100);
+            }
+          }
+        } else {
+          // Si el mensaje no es para el chat actual, actualizar contador
+          await updateUnreadCounter(message.solicitudId, message.type);
+          if (!isSender) {
+            notifyNewMessage(message);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error al procesar mensaje WebSocket:', error);
+    }
+  };
+
+  socket.onerror = (error) => {
+    console.error('❌ Error en WebSocket:', error);
+  };
+
+  socket.onclose = (event) => {
+    console.log('👋 WebSocket cerrado:', event.code, event.reason);
+    
+    // Intentar reconexión si no fue un cierre limpio y no excedimos los intentos
+    if (!event.wasClean && reconnectAttempts < maxReconnectAttempts) {
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+      console.log(`🔄 Reintentando conexión en ${delay/1000} segundos...`);
+      
+      reconnectTimeout = setTimeout(() => {
+        reconnectAttempts++;
+    initChat();
+  }, delay);
+    } else if (reconnectAttempts >= maxReconnectAttempts) {
+      console.error('❌ Máximo de intentos de reconexión alcanzado');
       Swal.fire({
         icon: 'error',
         title: 'Error de conexión',
-        text: 'No se pudo establecer conexión con el servidor de chat'
+        text: 'No se pudo restablecer la conexión. Por favor, recarga la página.',
+        confirmButtonText: 'Recargar',
+        allowOutsideClick: false
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.reload();
+        }
       });
-    };
+    }
+  };
+}
 
-    const chatMessages = document.getElementById('chatMessages');
-    chatMessages.addEventListener('scroll', scrollHandler);
+// Función para enviar un mensaje
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const content = input.value.trim();
+  if (!content || !currentSolicitudId || !currentChatType || !socket) return;
 
-    const loadedMessages = await loadInitialMessagesWithRetry('global', 'soporte', getSstUserId());
-    chatMessages.innerHTML = loadedMessages.length === 0 ? 
-      '<div class="text-center text-gray-500 p-4">No hay mensajes. Escribe para comenzar.</div>' : '';
-    
-    loadedMessages.forEach(displayMessage);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    await markMessagesAsRead('global', 'soporte');
-  } catch (error) {
-    console.error('Error al abrir el chat:', error);
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'No se pudo iniciar el chat: ' + error.message
-    });
+  const userId = getSstUserId();
+  if (!userId) {
+    Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo identificar usuario' });
+    return;
   }
-};
+  
+  const tempId = 'temp-' + Date.now();
+  const timestamp = new Date().toISOString();
 
-// Función para abrir el modal de chat y cargar los mensajes para una solicitud específica
-function openChatModalSST(solicitudId) {
+  const localMessage = { id: tempId, usuario_id: userId, content, created_at: timestamp, type: currentChatType };
+  displayMessage(localMessage);
+  sentMessages.set(tempId, tempId);
+  displayedMessages.add(tempId);
+
+  const messageToSend = { solicitudId: currentSolicitudId, type: currentChatType, content, userId, tempId, timestamp };
+
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(messageToSend));
+    setTimeout(() => updateMessageStatus(tempId, 'sent'), 300);
+    setTimeout(() => updateMessageStatus(tempId, 'delivered'), 1000);
+  } else {
+    updateMessageStatus(tempId, 'error');
+    Swal.fire({ icon: 'warning', title: 'Conexión perdida', text: 'Reconectando...' });
+    setTimeout(() => { closeChatModal(); openChatModalSST(currentSolicitudId); }, 2000);
+  }
+
+  input.value = '';
+}
+
+// Función para actualizar el estado de un mensaje
+function updateMessageStatus(messageId, status) {
+  const messageElement = document.querySelector(`.chat-message[data-message-id="${messageId}"]`);
+  if (!messageElement) return;
+
+  const statusContainer = messageElement.querySelector('.text-right');
+  if (!statusContainer) return;
+
+  const timeText = statusContainer.textContent.trim().split(' ').slice(0, 2).join(' ');
+  const statusIcon = status === 'error' ? '<span class="status-icon-error">!</span>' :
+                    status === 'sent' ? '<span class="status-icon-sent">✓</span>' :
+                    status === 'delivered' ? '<span class="status-icon-delivered">✓✓</span>' :
+                    '<span class="status-icon-read">✓✓</span>';
+
+  statusContainer.innerHTML = `${timeText} ${statusIcon}`;
+}
+
+// Función para marcar un mensaje como leído
+async function markMessageAsRead(messageId) {
   try {
+    await fetch(`/api/chat/mensaje/${messageId}/leido`, {
+      method: 'PUT'
+    });
+  } catch (error) {
+    console.error('Error al marcar mensaje como leído:', error);
+  }
+}
+
+// Función para marcar múltiples mensajes como leídos
+async function markMessagesAsRead(messageIds) {
+  try {
+    await fetch('/api/chat/mensajes/leidos', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ messageIds })
+    });
+  } catch (error) {
+    console.error('Error al marcar mensajes como leídos:', error);
+  }
+}
+
+// Función para cargar contactos del chat
+async function loadChatContacts(solicitudId) {
+  if (!solicitudId) return;
+  
+  // Solo mostramos el contacto SST
+  document.getElementById('sstContact').classList.add('active');
+  document.getElementById('chatActiveContact').textContent = 'Chat con Contratista';
+  
+  // Cargar el chat SST por defecto
+  loadChat(solicitudId, 'sst');
+}
+
+// Función para cambiar el tipo de contacto
+function changeContactType(type) {
+  if (!currentSolicitudId) {
+    console.error('❌ No hay solicitud activa');
+    return;
+  }
+
+  currentChatType = type;
+  $('#chatActiveContact').text('Contratista');
+  
+  // Cargar mensajes con los parámetros correctos
+  loadChat(type);
+}
+
+// Función para actualizar contador de mensajes no leídos
+async function updateUnreadCountSST(solicitudId) {
+  // Eliminar esta funcionalidad ya que no queremos mostrar contadores
+  return;
+}
+
+// Función para actualizar badges de notificaciones
+async function updateSSTNotificationBadges() {
+  // Eliminar esta funcionalidad ya que no queremos mostrar contadores
+  return;
+}
+
+// Función para actualizar el contador de mensajes no leídos
+async function updateUnreadCounter(solicitudId, type) {
+  // Eliminar esta funcionalidad ya que no queremos mostrar contadores
+  return;
+}
+
+// Función para abrir el modal de chat SST
+async function openChatModalSST(solicitudId) {
+  try {
+    console.log('🔄 Abriendo chat para solicitud:', solicitudId);
+    
     currentSolicitudId = solicitudId;
     currentChatType = 'sst';
-    
-    // Limpiar mensajes anteriores
-    document.getElementById('chatMessages').innerHTML = `
-      <div class="text-center my-4">
-        <div class="spinner-border text-primary" role="status">
-          <span class="sr-only">Cargando...</span>
-        </div>
-        <p class="mt-2">Cargando mensajes...</p>
-      </div>
-    `;
-    
-    // Abrir el modal de manera asíncrona para evitar conflictos
-    setTimeout(() => {
-      // Usando jQuery para mostrar el modal de Bootstrap
-      $('#chatModal').modal('show');
-      
-      // Focus en el campo de texto una vez que el modal esté visible
-      $('#chatModal').on('shown.bs.modal', function() {
-        $('#chatInput').trigger('focus');
-      });
-    }, 100);
-    
-    // Obtener los datos del contratista de la solicitud seleccionada
-    const row = document.querySelector(`#solicitudesTable tbody tr .open-chat-btn[data-solicitud-id="${solicitudId}"]`)?.closest('tr');
-    if (row) {
-      const empresa = row.cells[1]?.textContent.trim() || '';
-      const contratista = row.cells[2]?.textContent.trim() || '';
-      
-      // Actualizar título con el nombre del contratista
-      const titulo = contratista + (empresa ? ` (${empresa})` : '');
-      document.querySelectorAll('.contratista-name').forEach(el => {
-        el.textContent = titulo;
-      });
-      
-      // Cambiar el contacto activo a Contratista
-      const contactoContratista = document.querySelector('.contact-item[data-type="contratista"]');
-      if (contactoContratista) {
-        // Remover clase active de todos los contactos
-        document.querySelectorAll('.contact-item').forEach(item => {
-          item.classList.remove('active');
-        });
-        // Agregar clase active al contacto seleccionado
-        contactoContratista.classList.add('active');
-      }
+    sentMessages.clear();
+    displayedMessages.clear();
+
+    const modalElement = document.getElementById('chatModal');
+    if (!modalElement) {
+      throw new Error('No se encontró el modal de chat');
     }
-    
-    // Cargar contactos
-    loadChatContacts();
-    
-    // Inicializar chat via WebSocket
+
+    modalElement.style.display = 'flex';
+    modalElement.classList.remove('hidden');
+
+    document.getElementById('chatSolicitudId').textContent = solicitudId;
+    document.getElementById('chatActiveContact').textContent = 'Contratista';
+
+    // Inicializar WebSocket
     initChat();
+
+    // Cargar mensajes iniciales
+    await loadChat('sst');
     
-    // Cargar mensajes existentes
-    loadChatMessages();
+    // Agregar manejador de scroll
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.removeEventListener('scroll', scrollHandler);
+    chatMessages.addEventListener('scroll', scrollHandler);
+    
   } catch (error) {
-    console.error('Error al abrir el modal de chat:', error);
+    console.error('❌ Error al abrir chat:', error);
     Swal.fire({
       icon: 'error',
       title: 'Error',
-      text: 'Hubo un problema al abrir el chat. Por favor intente nuevamente.'
+      text: 'No se pudo abrir el chat: ' + error.message
     });
+  }
+}
+
+// Función para cargar mensajes
+async function loadMessages() {
+  if (!currentSolicitudId || !currentChatType) {
+    console.error('❌ Faltan parámetros necesarios:', { currentSolicitudId, currentChatType });
+    return;
+  }
+
+  try {
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div></div>';
+
+    const userId = getSstUserId();
+    const response = await fetch(`/api/chat/${currentSolicitudId}/${currentChatType}?userId=${userId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error HTTP: ${response.status}`);
+    }
+    
+    const messages = await response.json();
+
+    chatMessages.innerHTML = messages.length === 0 ? 
+      '<div class="text-center text-muted p-4">No hay mensajes. Escribe para comenzar.</div>' : '';
+
+    messages.forEach(message => displayMessage(message));
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // Marcar mensajes como leídos
+    const unreadMessages = messages.filter(m => !m.leido && m.usuario_id !== userId).map(m => m.id);
+    if (unreadMessages.length > 0) {
+      await markMessagesAsRead(currentSolicitudId, currentChatType);
+    }
+  } catch (error) {
+    console.error('Error al cargar mensajes:', error);
+    document.getElementById('chatMessages').innerHTML = `
+      <div class="alert alert-danger">
+        Error al cargar mensajes. <button class="btn btn-link" onclick="loadMessages()">Reintentar</button>
+      </div>
+    `;
+  }
+}
+
+// Función para cargar más mensajes (scroll infinito)
+async function loadMoreMessages() {
+  if (isLoadingMore || !oldestMessageId) return;
+
+  try {
+    isLoadingMore = true;
+    const userId = getSstUserId();
+    const response = await fetch(`/api/chat/${currentSolicitudId}/${currentChatType}?userId=${userId}&before=${oldestMessageId}`);
+    const messages = await response.json();
+
+    if (messages.length > 0) {
+      const chatMessages = document.getElementById('chatMessages');
+      const scrollHeight = chatMessages.scrollHeight;
+      
+      messages.forEach(message => {
+        if (!displayedMessages.has(message.id)) {
+          const messageElement = displayMessage(message);
+          if (messageElement) {
+            chatMessages.insertBefore(messageElement, chatMessages.firstChild);
+          }
+        }
+      });
+
+      chatMessages.scrollTop = chatMessages.scrollHeight - scrollHeight;
+      oldestMessageId = messages[messages.length - 1].id;
+    }
+  } catch (error) {
+    console.error('Error al cargar más mensajes:', error);
+  } finally {
+    isLoadingMore = false;
+  }
+}
+
+// Función para cerrar el modal del chat
+function closeChatModal() {
+  // Limpiar timeout de reconexión si existe
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+
+  // Cerrar socket si existe
+  if (socket) {
+    const closeSocket = socket;
+    socket = null; // Evitar que onclose intente reconectar
+    closeSocket.close(1000, 'Cierre normal'); // Código 1000 indica cierre limpio
+  }
+
+  const chatMessages = document.getElementById('chatMessages');
+  if (chatMessages) {
+    chatMessages.innerHTML = '';
+    chatMessages.removeEventListener('scroll', scrollHandler);
+  }
+
+  document.getElementById('chatInput').value = '';
+  document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
+  document.getElementById('chatActiveContact').textContent = 'Selecciona un contacto';
+  
+  const modalElement = document.getElementById('chatModal');
+  modalElement.classList.add('hidden');
+  modalElement.style.display = 'none';
+
+  currentSolicitudId = null;
+  currentChatType = null;
+  oldestMessageId = null;
+  displayedMessages.clear();
+  reconnectAttempts = 0;
+}
+
+// Inicializar eventos cuando el documento esté listo
+document.addEventListener('DOMContentLoaded', () => {
+  // Inicializar botones de chat
+  document.querySelectorAll('.open-chat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const solicitudId = btn.dataset.solicitudId;
+      openChatModalSST(solicitudId);
+    });
+  });
+
+  // Inicializar eventos de contactos
+        document.querySelectorAll('.contact-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const type = item.dataset.type;
+      if (type) {
+        changeContactType(type);
+      }
+    });
+  });
+
+  // Inicializar input de chat
+  const chatInput = document.getElementById('chatInput');
+  if (chatInput) {
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  }
+});
+
+// Exportar funciones para que estén disponibles globalmente
+window.displayMessage = displayMessage;
+window.sendMessage = sendMessage;
+window.updateMessageStatus = updateMessageStatus;
+window.markMessageAsRead = markMessageAsRead;
+window.markMessagesAsRead = markMessagesAsRead;
+window.loadChatContacts = loadChatContacts;
+window.changeContactType = changeContactType;
+window.updateUnreadCountSST = updateUnreadCountSST;
+window.updateSSTNotificationBadges = updateSSTNotificationBadges;
+window.openChatModalSST = openChatModalSST;
+window.loadMessages = loadMessages;
+window.loadMoreMessages = loadMoreMessages;
+window.closeChatModal = closeChatModal;
+
+// Función para marcar mensajes como leídos
+async function markMessagesAsRead(solicitudId, type) {
+  const userId = getSstUserId();
+  if (!userId) return;
+
+  try {
+    const response = await fetch(`/api/chat/${solicitudId}/${type}/mark-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('Chat no encontrado, ignorando error');
+        return;
+      }
+      const errorData = await response.json().catch(() => ({ message: 'Error desconocido' }));
+      throw new Error(errorData.message || 'Error al marcar mensajes');
+    }
+    
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Error al marcar mensajes como leídos');
+    }
+    
+    // Actualizar contador visual
+    const badge = document.querySelector(`.unread-count[data-type="${type}"][data-solicitud-id="${solicitudId}"]`);
+    if (badge) {
+      badge.textContent = '0';
+      badge.classList.add('hidden');
+    }
+  } catch (error) {
+    console.error('Error al marcar mensajes como leídos:', error);
+    // No mostramos el error al usuario para no interrumpir la experiencia
+  }
+}
+
+// Función para notificar nuevos mensajes
+function notifyNewMessage(message) {
+  if (parseInt(message.userId) === parseInt(getSstUserId())) return;
+  
+  updateUnreadCounter(message.solicitudId, message.type);
+  
+  if (!document.getElementById('chatModal').classList.contains('hidden') && 
+      currentSolicitudId === message.solicitudId && currentChatType === message.type) return;
+
+  if (Notification.permission === 'granted') {
+    const sender = message.type === 'sst' ? 'Contratista' : 'Soporte';
+    const notification = new Notification(`Nuevo mensaje de ${sender}`, {
+      body: message.content,
+      icon: '/img/logo.png',
+      tag: `chat-${message.solicitudId}-${message.type}`
+    });
+    notification.onclick = () => {
+      window.focus();
+      openChatModalSST(message.solicitudId);
+      loadChat(message.type);
+    };
+  }
+}
+
+// Función para manejar el scroll infinito
+function scrollHandler() {
+  const chatMessages = document.getElementById('chatMessages');
+  if (chatMessages.scrollTop < 50 && oldestMessageId && !isLoadingMore) {
+    loadMoreMessages(currentSolicitudId, currentChatType);
+  }
+}
+
+// Función para cargar más mensajes
+async function loadMoreMessages(solicitudId, type) {
+  if (!oldestMessageId || isLoadingMore) return;
+  isLoadingMore = true;
+
+  try {
+    const chatMessages = document.getElementById('chatMessages');
+    const loading = document.createElement('div');
+    loading.className = 'text-center text-gray-500 text-sm py-2';
+    loading.innerHTML = '<div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-ga-gold inline-block"></div> Cargando...';
+    chatMessages.insertBefore(loading, chatMessages.firstChild);
+
+    const response = await fetch(`/api/chat/${solicitudId}/${type}?limit=20&before=${oldestMessageId}&userId=${getSstUserId()}`);
+    if (!response.ok) throw new Error('Error al cargar más mensajes');
+
+    const messages = await response.json();
+    loading.remove();
+
+    if (messages.length > 0) {
+      const scrollHeightBefore = chatMessages.scrollHeight;
+      const scrollTopBefore = chatMessages.scrollTop;
+
+      messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).forEach(displayMessage);
+      oldestMessageId = messages.reduce((min, curr) => parseInt(curr.id) < parseInt(min.id) ? curr : min).id;
+
+      chatMessages.scrollTop = scrollTopBefore + (chatMessages.scrollHeight - scrollHeightBefore);
+    } else {
+      oldestMessageId = null;
+      const noMore = document.createElement('div');
+      noMore.className = 'text-center text-gray-500 text-xs py-1';
+      noMore.textContent = 'No hay más mensajes';
+      chatMessages.insertBefore(noMore, chatMessages.firstChild);
+      setTimeout(() => noMore.remove(), 3000);
+    }
+  } catch (error) {
+    console.error('Error al cargar más mensajes:', error);
+  } finally {
+    isLoadingMore = false;
+  }
+}
+
+// Inicialización cuando el documento está listo
+document.addEventListener('DOMContentLoaded', async () => {
+  if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+
+  const solicitudIds = Array.from(document.querySelectorAll('.unread-count[data-solicitud-id]'))
+    .map(el => el.dataset.solicitudId);
+  for (const id of solicitudIds) {
+    await updateUnreadCounter(id, 'sst');
+    await updateUnreadCounter(id, 'soporte');
+  }
+
+  document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+});
+
+// Función auxiliar para cargar mensajes iniciales con reintentos
+async function loadInitialMessagesWithRetry(solicitudId, type, userId, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log('🔄 Intentando cargar mensajes:', { solicitudId, type, userId });
+      const response = await fetch(`/api/chat/${solicitudId}/${type}?userId=${userId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const messages = await response.json();
+      console.log('✅ Mensajes cargados:', messages.length);
+      return messages;
+    } catch (error) {
+      console.error(`❌ Intento ${i + 1} fallido:`, error);
+      if (i === retries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+    }
   }
 } 

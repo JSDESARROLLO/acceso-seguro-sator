@@ -4,9 +4,9 @@ const controller = require('../controllers/sst.controller');  // Importamos el c
 const router = express.Router();
   
 router.get('/api/sst/colaboradores/:solicitudId', controller.getColaboradores);
-router.get('/api/sst/plantilla-ss/:colaboradorId', controller.getPlantillaSS);
+router.get('/api/sst/plantilla-ss/:documentoId', controller.getPlantillaSS);
 router.post('/api/sst/plantilla-ss', controller.guardarOActualizarPlantillaSS);
-router.put('/api/sst/plantilla-ss/:id', controller.guardarOActualizarPlantillaSS);
+router.put('/api/sst/plantilla-ss', controller.guardarOActualizarPlantillaSS);
 router.get('/api/sst/historial-cursos/:colaboradorId', controller.getHistorialCursos);
 router.post('/api/filtrar-solicitudes-sst', controller.filtrarSolicitudesSst);
 router.get('/api/sst/filtrar-solicitudes', controller.filtrarSolicitudesSst);

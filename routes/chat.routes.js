@@ -161,6 +161,48 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
   }
 });
 
+// Marcar mensajes como leídos por tipo de chat
+router.post('/:solicitudId/:tipo/mark-read', async (req, res) => {
+  try {
+    const { solicitudId, tipo } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'Se requiere userId en el body' });
+    }
+
+    const [chats] = await db.query(
+      'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
+      [solicitudId, tipo]
+    );
+
+    if (chats.length === 0) {
+      return res.json({ success: true, message: 'No hay chat para marcar como leído' });
+    }
+
+    const chatId = chats[0].id;
+
+    // Marcar todos los mensajes como leídos
+    await db.query(`
+      UPDATE mensajes m
+      SET m.leido = TRUE
+      WHERE m.chat_id = ? AND m.usuario_id != ?
+    `, [chatId, userId]);
+
+    // Actualizar contador de mensajes no leídos
+    await db.query(`
+      UPDATE chat_participantes
+      SET mensajes_no_leidos = 0
+      WHERE chat_id = ? AND usuario_id = ?
+    `, [chatId, userId]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error al marcar mensajes como leídos:', error);
+    res.status(500).json({ error: 'Error al marcar mensajes como leídos' });
+  }
+});
+
 // Marcar mensajes como leídos
 router.post('/marcar-todos-leidos', async (req, res) => {
   try {
