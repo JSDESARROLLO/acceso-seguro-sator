@@ -91,15 +91,10 @@ if (typeof controller.descargarSolicitud !== 'function') {
   console.error('controller.descargarSolicitud no es una función o está undefined');
 } else {
   // Si controller.descargarSolicitud es una función válida, se añade la ruta
-  router.get('/descargar-solicitud/:id', async (req, res) => {
-    try {
-      console.log('[RUTAS] Descargando documentos de la solicitud con ID:', req.params.id);
-      await controller.descargarSolicitud(req, res);
-    } catch (err) {
-      console.error('[RUTAS] Error al descargar documentos de la solicitud:', err);
-      res.status(500).send('Error al descargar documentos de la solicitud');
-    }
-  });
-} 
+  router.get('/api/sst/descargar-documentos/:solicitudId', controller.descargarSolicitud);
+}
+
+// Ruta para generar documentos
+router.post('/api/sst/generar-documentos/:id', controller.generarDocumentos);
 
 module.exports = router;

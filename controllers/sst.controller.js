@@ -119,37 +119,49 @@ controller.vistaSst = async (req, res) => {
 
 // Función para subir archivo a Spaces con reintentos
 async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitudes', retries = 3) {
-    const uuid = uuidv4();
-    const extension = path.extname(originalName);
-    const filename = `${uuid}${extension}`;
-    const spacesPath = `${folder}/${filename}`;
-    
-    const fileContent = await fs.readFile(filePath);
-    const command = new PutObjectCommand({
-        Bucket: process.env.DO_SPACES_BUCKET,
-        Key: spacesPath,
-        Body: fileContent,
-        ACL: 'public-read',
-        ContentType: mime.lookup(filePath) || 'application/octet-stream'
-    });
+    try {
+        console.log('🔄 Iniciando subida de archivo:', { filePath, originalName, folder });
+        
+        const uuid = uuidv4();
+        const extension = path.extname(originalName);
+        const filename = `${uuid}${extension}`;
+        const spacesPath = `${folder}/${filename}`;
+        
+        // Leer el archivo usando fs.promises
+        const fileContent = await fs.promises.readFile(filePath);
+        console.log('📄 Archivo leído correctamente:', { size: fileContent.length });
+        
+        const command = new PutObjectCommand({
+            Bucket: process.env.DO_SPACES_BUCKET,
+            Key: spacesPath,
+            Body: fileContent,
+            ACL: 'public-read',
+            ContentType: mime.lookup(filePath) || 'application/octet-stream'
+        });
 
-    let attempt = 0;
-    while (attempt < retries) {
-        try {
-            console.log('Subiendo archivo a Spaces:', { filePath, spacesPath, attempt: attempt + 1 });
-            await s3Client.send(command);
-            
-            // Construir la URL completa de DigitalOcean Spaces
-            const spacesUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${spacesPath}`;
-            
-            console.log('Archivo subido exitosamente:', { spacesUrl });
-            return spacesUrl;
-        } catch (error) {
-            attempt++;
-            console.error(`Error al subir archivo (intento ${attempt}/${retries}):`, error);
-            if (attempt === retries) throw new Error(`Fallo al subir archivo tras ${retries} intentos: ${error.message}`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Espera exponencial
+        let attempt = 0;
+        while (attempt < retries) {
+            try {
+                console.log('📤 Subiendo archivo a Spaces:', { attempt: attempt + 1, spacesPath });
+                await s3Client.send(command);
+                
+                // Construir la URL completa de DigitalOcean Spaces
+                const spacesUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${spacesPath}`;
+                
+                console.log('✅ Archivo subido exitosamente:', { spacesUrl });
+                return spacesUrl;
+            } catch (error) {
+                attempt++;
+                console.error(`❌ Error al subir archivo (intento ${attempt}/${retries}):`, error);
+                if (attempt === retries) {
+                    throw new Error(`Fallo al subir archivo tras ${retries} intentos: ${error.message}`);
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Espera exponencial
+            }
         }
+    } catch (error) {
+        console.error('❌ Error en uploadToSpacesFromDisk:', error);
+        throw error;
     }
 }
 
@@ -491,196 +503,92 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
     }
 }
 
-// Controlador para descargar la solicitud
+// Descargar documentos de una solicitud
 controller.descargarSolicitud = async (req, res) => {
-    const { id } = req.params;
-    const tempDir = path.join(__dirname, '../temp', `solicitud_${id}`);
-    const htmlPath = path.join(tempDir, `Informe_Solicitud_${id}.html`);
+    const { solicitudId } = req.params;
+    console.log('[RUTAS] Descargando documentos de la solicitud con ID:', solicitudId);
 
     try {
-        // Verificar si ya existe una URL en la tabla sst_documentos
-        const [existingDoc] = await connection.execute('SELECT * FROM sst_documentos WHERE solicitud_id = ?', [id]);
-        if (existingDoc.length > 0) {
-            return res.json({
-                success: true,
-                url: existingDoc[0].url,
-                message: 'URL de descarga recuperada correctamente'
-            });
+        // Crear directorio temporal si no existe
+        const tempDir = path.join(__dirname, '..', 'temp');
+        if (!fs.existsSync(tempDir)) {
+            await fs.promises.mkdir(tempDir, { recursive: true });
         }
 
-        // Crear directorio temporal
-        await fs.mkdir(tempDir, { recursive: true });
+        // Obtener documentos de la solicitud
+        const [documentos] = await connection.execute(
+            'SELECT url FROM sst_documentos WHERE solicitud_id = ?',
+            [solicitudId]
+        );
 
-        // Obtener datos de la solicitud
-        const [solicitud] = await connection.execute(`
-            SELECT 
-                s.*,
-                u.empresa,
-                u.nit,
-                u2.username as interventor_nombre,
-                l.nombre_lugar as lugar,
-                l.id as lugar_id
-            FROM solicitudes s
-            JOIN users u ON s.usuario_id = u.id
-            LEFT JOIN users u2 ON s.interventor_id = u2.id
-            LEFT JOIN lugares l ON s.lugar = l.id
-            WHERE s.id = ?
-        `, [id]);        if (!solicitud || solicitud.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Solicitud no encontrada'
-            });
+        if (!documentos || documentos.length === 0) {
+            return res.status(404).json({ success: false, message: 'No se encontraron documentos para esta solicitud' });
         }
-        
 
-        // Obtener datos necesarios para generar el documento
-        const [colaboradores] = await connection.execute(
-            'SELECT id, cedula, nombre, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ? and estado = true',
-            [id]
-        );
+        try {
+            // Crear archivo ZIP
+            const zipFilename = `documentos_solicitud_${solicitudId}_${Date.now()}.zip`;
+            const zipPath = path.join(tempDir, zipFilename);
+            const output = fs.createWriteStream(zipPath);
+            const archive = archiver('zip', {
+                zlib: { level: 9 }
+            });
 
-        // Obtener vehículos con todos sus documentos
-        const [vehiculos] = await connection.execute(
-            'SELECT v.id, v.matricula as placa, v.estado, v.foto, v.tecnomecanica, v.soat, v.licencia_conduccion, v.licencia_transito FROM vehiculos v WHERE v.solicitud_id = ?',
-            [id]
-        );
-
-        // Obtener nombres del contratista e interventor
-        const [contractorInfo] = await connection.execute(
-            'SELECT u.username AS contractorName, i.username AS interventorName FROM solicitudes s LEFT JOIN users u ON s.usuario_id = u.id LEFT JOIN users i ON s.interventor_id = i.id WHERE s.id = ?',
-            [id]
-        );
-
-        // Generar el HTML
-        const html = await generateInformeHTML({
-            solicitud: solicitud[0],
-            colaboradores,
-            vehiculos,
-            contractorName: contractorInfo[0]?.contractorName || 'No especificado',
-            interventorName: contractorInfo[0]?.interventorName || 'No especificado'
-        });
-
-        // Guardar el HTML
-        await fs.writeFile(htmlPath, html);
-
-        // Crear el archivo ZIP
-        const zipFileName = `Solicitud_${solicitud[0].empresa}_${id}.zip`;
-        const zipPath = path.join(tempDir, zipFileName);
-        const output = fs.createWriteStream(zipPath);
-        const archive = archiver('zip', {
-            zlib: { level: 9 }
-        });
-
-        output.on('close', async () => {
-            try {
-                // Subir el archivo ZIP a DigitalOcean Spaces
-                const fileUrl = await uploadToSpacesFromDisk(zipPath, zipFileName);
-
-                if (fileUrl) {
-                    // Guardar la URL en la base de datos
-                    await connection.execute(
-                        'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
-                        [id, fileUrl]
-                    );
-
-                    res.json({
-                        success: true,
-                        url: fileUrl,
-                        message: 'Documento generado y subido correctamente'
+            // Manejar eventos del archivo ZIP
+            output.on('close', () => {
+                console.log('ZIP creado exitosamente:', archive.pointer() + ' bytes totales');
+                res.download(zipPath, zipFilename, (err) => {
+                    if (err) {
+                        console.error('Error al enviar el archivo:', err);
+                        if (!res.headersSent) {
+                            res.status(500).json({ success: false, message: 'Error al descargar el archivo' });
+                        }
+                    }
+                    // Eliminar archivo ZIP después de enviarlo
+                    fs.unlink(zipPath, (unlinkErr) => {
+                        if (unlinkErr) {
+                            console.error('Error al eliminar archivo temporal:', unlinkErr);
+                        }
                     });
-                } else {
-                    throw new Error('Error al subir el archivo a DigitalOcean Spaces');
-                }
-            } catch (error) {
-                console.error('Error al procesar el archivo:', error);
-                res.status(500).json({
-                    success: false,
-                    error: 'Error al procesar el archivo',
-                    details: error.message
                 });
-            } finally {
-                // Limpiar archivos temporales
-                try {
-                    await fs.rm(tempDir, { recursive: true, force: true });
-                } catch (error) {
-                    console.error('Error al limpiar archivos temporales:', error);
+            });
+
+            archive.on('error', (err) => {
+                throw err;
+            });
+
+            // Conectar archivo ZIP con respuesta
+            archive.pipe(output);
+
+            // Agregar documentos al ZIP
+            for (const doc of documentos) {
+                const filePath = path.join(__dirname, '..', 'public', doc.url);
+                if (fs.existsSync(filePath)) {
+                    archive.file(filePath, { name: path.basename(doc.url) });
+                } else {
+                    console.warn('Archivo no encontrado:', filePath);
                 }
             }
-        });
 
-        archive.on('error', (err) => {
-            throw err;
-        });
+            // Finalizar archivo ZIP
+            await archive.finalize();
 
-        archive.pipe(output);
-
-        // Agregar el HTML al ZIP
-        archive.file(htmlPath, { name: `Informe_Solicitud_${id}.html` });
-
-        // Procesar documentos de la solicitud
-        if (solicitud[0].arl_documento) {
-            const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
-            if (arlBuffer) {
-                archive.append(arlBuffer, { name: `ARL_${id}${path.extname(solicitud[0].arl_documento)}` });
+        } catch (zipError) {
+            console.error('Error al crear el ZIP:', zipError);
+            if (!res.headersSent) {
+                res.status(500).json({ success: false, message: 'Error al crear el archivo ZIP' });
             }
         }
-
-        if (solicitud[0].pasocial_documento) {
-            const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
-            if (pasocialBuffer) {
-                archive.append(pasocialBuffer, { name: `Pasocial_${id}${path.extname(solicitud[0].pasocial_documento)}` });
-            }
-        }
-
-        // Procesar documentos de vehículos
-        for (const vehiculo of vehiculos) {
-            const vehiculoDir = `${vehiculo.placa}/`;
-            
-            if (vehiculo.foto) {
-                const fotoBuffer = await downloadFromSpaces(vehiculo.foto);
-                if (fotoBuffer) {
-                    archive.append(fotoBuffer, { name: `${vehiculoDir}${vehiculo.placa}_foto${path.extname(vehiculo.foto)}` });
-                }
-            }
-
-            if (vehiculo.tecnomecanica) {
-                const tecnomecanicaBuffer = await downloadFromSpaces(vehiculo.tecnomecanica);
-                if (tecnomecanicaBuffer) {
-                    archive.append(tecnomecanicaBuffer, { name: `${vehiculoDir}${vehiculo.placa}_tecnomecanica${path.extname(vehiculo.tecnomecanica)}` });
-                }
-            }
-
-            if (vehiculo.soat) {
-                const soatBuffer = await downloadFromSpaces(vehiculo.soat);
-                if (soatBuffer) {
-                    archive.append(soatBuffer, { name: `${vehiculoDir}${vehiculo.placa}_soat${path.extname(vehiculo.soat)}` });
-                }
-            }
-
-            if (vehiculo.licencia_conduccion) {
-                const licenciaConduccionBuffer = await downloadFromSpaces(vehiculo.licencia_conduccion);
-                if (licenciaConduccionBuffer) {
-                    archive.append(licenciaConduccionBuffer, { name: `${vehiculoDir}${vehiculo.placa}_licencia_conduccion${path.extname(vehiculo.licencia_conduccion)}` });
-                }
-            }
-
-            if (vehiculo.licencia_transito) {
-                const licenciaTransitoBuffer = await downloadFromSpaces(vehiculo.licencia_transito);
-                if (licenciaTransitoBuffer) {
-                    archive.append(licenciaTransitoBuffer, { name: `${vehiculoDir}${vehiculo.placa}_licencia_transito${path.extname(vehiculo.licencia_transito)}` });
-                }
-            }
-        }
-
-        archive.finalize();
 
     } catch (error) {
         console.error('Error al generar el archivo ZIP:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Error al generar el archivo ZIP',
-            details: error.message
-        });
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                success: false,
+                message: 'Error al generar el archivo ZIP', 
+                error: error.message 
+            });
+        }
     }
 };
 
@@ -1341,4 +1249,225 @@ controller.toggleLicencia = async (req, res) => {
     }
 };
   
+// Generar y subir documentos de una solicitud
+controller.generarDocumentos = async (req, res) => {
+    const { id } = req.params;
+    console.log('🔄 Iniciando generación de documentos para solicitud:', id);
+
+    try {
+        // Validar que la solicitud existe
+        const [solicitudExiste] = await connection.execute(
+            'SELECT COUNT(*) as count FROM solicitudes WHERE id = ?',
+            [id]
+        );
+
+        if (!solicitudExiste[0].count) {
+            console.error('❌ Solicitud no encontrada:', id);
+            return res.status(404).json({
+                success: false,
+                message: `No se encontró la solicitud con ID ${id}`
+            });
+        }
+
+        // 1. Crear directorio temporal principal
+        const tempDir = path.join(__dirname, '..', 'temp', `solicitud_${id}_${Date.now()}`);
+        try {
+            await fs.promises.mkdir(tempDir, { recursive: true });
+            console.log('📁 Directorio temporal creado:', tempDir);
+        } catch (mkdirError) {
+            console.error('❌ Error al crear directorio temporal:', mkdirError);
+            throw new Error('Error al crear directorio temporal: ' + mkdirError.message);
+        }
+
+        // 2. Obtener datos de la solicitud
+        const [solicitud] = await connection.execute(`
+            SELECT 
+                s.*,
+                u.empresa,
+                u.nit,
+                u2.username as interventor_nombre,
+                l.nombre_lugar as lugar
+            FROM solicitudes s
+            JOIN users u ON s.usuario_id = u.id
+            LEFT JOIN users u2 ON s.interventor_id = u2.id
+            LEFT JOIN lugares l ON s.lugar = l.id
+            WHERE s.id = ?
+        `, [id]);
+
+        if (!solicitud || solicitud.length === 0) {
+            throw new Error(`No se encontraron datos para la solicitud ${id}`);
+        }
+
+        // 3. Obtener colaboradores y vehículos
+        const [colaboradores] = await connection.execute(
+            'SELECT id, cedula, nombre, estado FROM colaboradores WHERE solicitud_id = ?',
+            [id]
+        );
+
+        const [vehiculos] = await connection.execute(
+            'SELECT id, matricula as placa, estado, foto FROM vehiculos WHERE solicitud_id = ?',
+            [id]
+        );
+
+        console.log(`📊 Datos obtenidos: ${colaboradores.length} colaboradores, ${vehiculos.length} vehículos`);
+
+        // 4. Generar documentos generales
+        // 4.1 Generar HTML del informe
+        const html = await generateInformeHTML({
+            solicitud: solicitud[0],
+            colaboradores,
+            vehiculos,
+            contractorName: solicitud[0].empresa,
+            interventorName: solicitud[0].interventor_nombre
+        });
+        
+        // 4.2 Guardar HTML
+        const htmlPath = path.join(tempDir, `Informe_Solicitud_${id}.html`);
+        await fs.promises.writeFile(htmlPath, html);
+        console.log('💾 HTML guardado en:', htmlPath);
+
+        // 4.3 Generar ARL y Pasocial (simulados por ahora)
+        const arlPath = path.join(tempDir, `ARL_${id}.docx`);
+        const pasocialPath = path.join(tempDir, `Pasocial_${id}.pdf`);
+        await fs.promises.writeFile(arlPath, 'Contenido ARL');
+        await fs.promises.writeFile(pasocialPath, 'Contenido Pasocial');
+
+        // 5. Procesar cada vehículo
+        for (const vehiculo of vehiculos) {
+            const vehiculoDir = path.join(tempDir, vehiculo.placa);
+            await fs.promises.mkdir(vehiculoDir, { recursive: true });
+            console.log(`📁 Creando directorio para vehículo ${vehiculo.placa}`);
+
+            // 5.1 Guardar foto del vehículo
+            if (vehiculo.foto) {
+                const fotoBuffer = await downloadFromSpaces(vehiculo.foto);
+                if (fotoBuffer) {
+                    await fs.promises.writeFile(
+                        path.join(vehiculoDir, `${vehiculo.placa}_foto.jpg`),
+                        fotoBuffer
+                    );
+                }
+            }
+
+            // 5.2 Obtener y guardar documentos del vehículo
+            const documentos = [
+                { tipo: 'soat', columna: 'soat' },
+                { tipo: 'tecnomecanica', columna: 'tecnomecanica' },
+                { tipo: 'licencia_conduccion', columna: 'licencia_conduccion' },
+                { tipo: 'licencia_transito', columna: 'licencia_transito' }
+            ];
+
+            for (const doc of documentos) {
+                // Obtener la URL directamente de la tabla vehículos
+                const [docData] = await connection.execute(
+                    `SELECT ${doc.columna} as url FROM vehiculos WHERE id = ?`,
+                    [vehiculo.id]
+                );
+
+                if (docData && docData[0] && docData[0].url) {
+                    const docBuffer = await downloadFromSpaces(docData[0].url);
+                    if (docBuffer) {
+                        await fs.promises.writeFile(
+                            path.join(vehiculoDir, `${vehiculo.placa}_${doc.tipo}.pdf`),
+                            docBuffer
+                        );
+                    }
+                }
+            }
+        }
+
+        // 6. Crear ZIP
+        const zipFileName = `documentos_solicitud_${id}_${Date.now()}.zip`;
+        const zipPath = path.join(tempDir, zipFileName);
+        const output = fs.createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        return new Promise((resolve, reject) => {
+            output.on('close', async () => {
+                try {
+                    console.log('📦 ZIP creado:', archive.pointer() + ' bytes');
+                    
+                    // 7. Subir ZIP a DigitalOcean Spaces
+                    const fileUrl = await uploadToSpacesFromDisk(zipPath, zipFileName);
+                    console.log('☁️ Archivo subido a DigitalOcean:', fileUrl);
+
+                    if (!fileUrl) {
+                        throw new Error('Error al subir el archivo a DigitalOcean');
+                    }
+
+                    // 8. Guardar URL en la base de datos
+                    await connection.execute(
+                        'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
+                        [id, fileUrl]
+                    );
+
+                    // 9. Enviar respuesta exitosa
+                    resolve(res.json({
+                        success: true,
+                        url: fileUrl,
+                        message: 'Documentos generados y subidos correctamente'
+                    }));
+                } catch (error) {
+                    console.error('❌ Error en el proceso de subida:', error);
+                    reject(error);
+                } finally {
+                    // 10. Limpiar archivos temporales
+                    try {
+                        await fs.promises.rm(tempDir, { recursive: true, force: true });
+                        console.log('🧹 Archivos temporales eliminados');
+                    } catch (cleanupError) {
+                        console.error('⚠️ Error al limpiar archivos temporales:', cleanupError);
+                    }
+                }
+            });
+
+            archive.on('error', (err) => {
+                console.error('❌ Error al crear ZIP:', err);
+                reject(new Error('Error al crear el archivo ZIP: ' + err.message));
+            });
+
+            // 11. Agregar todos los archivos al ZIP
+            archive.pipe(output);
+            
+            // Agregar archivos principales
+            archive.file(htmlPath, { name: path.basename(htmlPath) });
+            archive.file(arlPath, { name: path.basename(arlPath) });
+            archive.file(pasocialPath, { name: path.basename(pasocialPath) });
+
+            // Agregar carpetas de vehículos
+            archive.directory(tempDir, false, (data) => {
+                // Solo incluir archivos que no sean los principales
+                if (!data.name.includes('Informe_Solicitud_') && 
+                    !data.name.includes('ARL_') && 
+                    !data.name.includes('Pasocial_') &&
+                    !data.name.endsWith('.zip')) {
+                    return data;
+                }
+                return false;
+            });
+
+            archive.finalize();
+        }).catch(error => {
+            console.error('❌ Error general:', error);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    success: false,
+                    message: 'Error al generar los documentos',
+                    error: error.message
+                });
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error general:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: 'Error al generar los documentos',
+                error: error.message
+            });
+        }
+    }
+};
+
 module.exports = controller;

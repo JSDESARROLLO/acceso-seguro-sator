@@ -27,9 +27,9 @@ async function loadChat(chatType) {
     
     if (!currentSolicitudId) {
       console.error('❌ No hay solicitud activa');
-      return;
-    }
-
+    return;
+  }
+  
     currentChatType = chatType;
     const userId = getSstUserId();
 
@@ -139,7 +139,7 @@ function initChat() {
     console.error('No se pudo obtener el ID del usuario SST');
     return;
   }
-
+  
   // Limpiar timeout anterior si existe
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
@@ -151,21 +151,21 @@ function initChat() {
     socket.close();
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-  socket.onopen = () => {
+    socket.onopen = () => {
     console.log('🔌 WebSocket conectado');
     reconnectAttempts = 0; // Resetear intentos de reconexión
     
     // Enviar identificación
-    socket.send(JSON.stringify({
-      type: 'identify',
-      userId,
-      role: 'sst',
+      socket.send(JSON.stringify({
+        type: 'identify',
+        userId,
+        role: 'sst',
       solicitudId: currentSolicitudId
-    }));
-  };
+      }));
+    };
 
   socket.onmessage = async (event) => {
     try {
@@ -185,7 +185,7 @@ function initChat() {
           const messageElement = document.querySelector(`.chat-message[data-message-id="${tempId}"]`);
           if (messageElement) {
             messageElement.dataset.messageId = messageId;
-            sentMessages.set(tempId, messageId);
+          sentMessages.set(tempId, messageId);
           }
         }
         return;
@@ -239,10 +239,10 @@ function initChat() {
       }
     } catch (error) {
       console.error('❌ Error al procesar mensaje WebSocket:', error);
-    }
-  };
+      }
+    };
 
-  socket.onerror = (error) => {
+    socket.onerror = (error) => {
     console.error('❌ Error en WebSocket:', error);
   };
 
