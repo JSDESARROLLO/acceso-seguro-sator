@@ -163,6 +163,97 @@ wss.on('connection', async (ws, req) => {
         );
         if (!remitente) throw new Error(`Usuario con ID ${data.userId} no encontrado`);
 
+        // Manejo especial para chat global de soporte
+        if (data.solicitudId === 'global' && data.type === 'soporte') {
+          let chatId;
+          const [[existingChat]] = await db.query(
+            'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
+            ['global-' + data.userId, 'soporte']
+          );
+
+          if (!existingChat) {
+            const [createResult] = await db.query(
+              'INSERT INTO chats (solicitud_id, tipo, metadatos) VALUES (?, ?, ?)',
+              ['global-' + data.userId, 'soporte', JSON.stringify({
+                created_by: data.userId,
+                created_at: new Date().toISOString(),
+                is_global: true
+              })]
+            );
+            chatId = createResult.insertId;
+
+            // Obtener usuarios de soporte
+            const [soporteUsers] = await db.query(`
+              SELECT u.id FROM users u
+              JOIN roles r ON u.role_id = r.id
+              WHERE r.role_name = 'soporte' LIMIT 1
+            `);
+            
+            // Agregar participantes
+            await db.query('INSERT INTO chat_participantes (chat_id, usuario_id) VALUES (?, ?)', [chatId, data.userId]);
+            
+            if (soporteUsers.length > 0) {
+              await db.query('INSERT INTO chat_participantes (chat_id, usuario_id) VALUES (?, ?)', [chatId, soporteUsers[0].id]);
+            }
+          } else {
+            chatId = existingChat.id;
+          }
+
+          // Guardar el mensaje
+          const contentJson = typeof data.content === 'string' ? data.content : JSON.stringify({ text: data.content });
+          const [messageResult] = await db.query(
+            'INSERT INTO mensajes (chat_id, usuario_id, contenido, created_at) VALUES (?, ?, ?, ?)',
+            [chatId, data.userId, contentJson, data.timestamp || new Date().toISOString()]
+          );
+          const messageId = messageResult.insertId;
+
+          // Actualizar contadores de mensajes no leídos para todos los participantes excepto el remitente
+          await db.query(`
+            UPDATE chat_participantes
+            SET mensajes_no_leidos = mensajes_no_leidos + 1
+            WHERE chat_id = ? AND usuario_id != ?
+          `, [chatId, data.userId]);
+
+          // Enviar confirmación al remitente
+          ws.send(JSON.stringify({
+            type: 'status_update',
+            tempId: data.tempId,
+            status: 'delivered',
+            messageId: messageId
+          }));
+
+          // Difundir mensaje a todos los clientes conectados que pertenezcan al chat
+          const [participantes] = await db.query(
+            'SELECT usuario_id FROM chat_participantes WHERE chat_id = ?',
+            [chatId]
+          );
+
+          // Preparar el mensaje para difusión
+          const broadcastMessage = {
+            type: 'message',
+            id: messageId,
+            chatId: chatId,
+            solicitudId: 'global-' + data.userId,
+            usuario_id: data.userId,
+            username: remitente.username,
+            content: typeof data.content === 'object' ? data.content : { text: data.content },
+            created_at: data.timestamp || new Date().toISOString(),
+            type: 'soporte'
+          };
+
+          // Enviar a todos los clientes conectados que sean participantes
+          wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN && 
+                client.userId && 
+                participantes.some(p => p.usuario_id == client.userId) &&
+                client !== ws) {
+              client.send(JSON.stringify(broadcastMessage));
+            }
+          });
+
+          return;
+        }
+
         const [[solicitud]] = await db.query(`
           SELECT s.*, uc.id as contratista_id, uc.username as contratista_nombre,
                  ui.id as interventor_id, ui.username as interventor_nombre
@@ -209,6 +300,8 @@ wss.on('connection', async (ws, req) => {
               rol: 'interventor'
             });
           } else if (data.type === 'soporte') {
+            // Para chats de soporte, solo agregamos al usuario de soporte
+            // El usuario contratista ya está agregado automáticamente antes
             const [soporteUsers] = await db.query(`
               SELECT u.id, u.username 
               FROM users u
@@ -217,6 +310,13 @@ wss.on('connection', async (ws, req) => {
               LIMIT 1
             `);
             if (soporteUsers.length > 0) {
+              // Solo agregamos el usuario de soporte, ya que el contratista ya fue agregado
+              participantes = []; // Limpiamos la lista que tenía al contratista
+              participantes.push({
+                id: solicitud.contratista_id,
+                nombre: solicitud.contratista_nombre,
+                rol: 'contratista'
+              });
               participantes.push({
                 id: soporteUsers[0].id,
                 nombre: soporteUsers[0].username,
@@ -383,7 +483,14 @@ async function saveMessageToDatabase(message) {
           JOIN roles r ON u.role_id = r.id
           WHERE r.role_name = 'soporte' LIMIT 1
         `);
+        // Para chat de soporte, solo agregamos al usuario de soporte y al contratista
         additionalParticipantId = soporteUsers.length > 0 ? soporteUsers[0].id : message.userId;
+        // Limpiamos la tabla de participantes para asegurarnos que no haya otros roles como SST
+        await db.query('DELETE FROM chat_participantes WHERE chat_id = ?', [chatId]);
+        await db.query('INSERT IGNORE INTO chat_participantes (chat_id, usuario_id) VALUES (?, ?), (?, ?)', 
+          [chatId, contratistaId, chatId, additionalParticipantId]);
+        // Saltamos el bucle genérico de participantes
+        return chatId;
       }
 
       const participants = [contratistaId, additionalParticipantId].filter(id => id);

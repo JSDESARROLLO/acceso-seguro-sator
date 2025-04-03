@@ -77,6 +77,12 @@ controller.vistaSst = async (req, res) => {
     
     console.log('✅ userID obtenido del token:', userId);
     
+    // Verificar que el usuario tenga el rol de SST
+    if (decodedToken.role !== 'sst') {
+      console.error('❌ ERROR: Usuario no tiene el rol SST:', decodedToken.role);
+      return res.redirect('/login');
+    }
+    
     // Obtener las solicitudes
     const [solicitud] = await connection.execute(`
         SELECT s.*, us.username AS interventor, l.nombre_lugar 
@@ -148,42 +154,32 @@ async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitu
     }
 }
 
-
-// Función para mostrar la pantalla de negar solicitud
 controller.mostrarNegarSolicitud = async (req, res) => {
-  try {
-    const solicitudId = req.params.id;
-    console.log("[RUTAS] Mostrando detalles para negar solicitud con ID:", solicitudId);
-    
-    // Obtener detalles de la solicitud
-    const [solicitudRows] = await connection.execute(`
-      SELECT s.*, u.nombre AS nombre_usuario, e.nombre AS nombre_empresa 
-      FROM solicitudes s
-      JOIN users u ON s.usuario_id = u.id
-      JOIN empresas e ON s.empresa_id = e.id
-      WHERE s.id = ?
-    `, [solicitudId]);
-    
-    if (solicitudRows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Solicitud no encontrada'
-      });
+    try {
+      const solicitudId = req.params.id;
+      console.log('[RUTAS] Consultando detalles para solicitud con ID:', solicitudId);
+  
+      const query = `
+        SELECT s.*, u.username as nombre_usuario
+        FROM solicitudes s
+        JOIN users u ON s.usuario_id = u.id
+        WHERE s.id = ?
+      `;
+  
+      const [solicitud] = await connection.execute(query, [solicitudId]);
+  
+      if (!solicitud || solicitud.length === 0) {
+        return res.status(404).json({ message: 'Solicitud no encontrada' });
+      }
+  
+      res.json(solicitud[0]); // Devolver datos en JSON en lugar de renderizar
+    } catch (error) {
+      console.error('Error al obtener detalles de la solicitud:', error);
+      res.status(500).json({ message: 'Error al obtener detalles de la solicitud' });
     }
-    
-    // Devolver los datos en formato JSON para que el modal los use
-    res.json({
-      success: true,
-      solicitud: solicitudRows[0]
-    });
-  } catch (error) {
-    console.error('Error al obtener detalles de la solicitud:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error al cargar los detalles de la solicitud'
-    });
-  }
-};
+  };
+
+   
 
 // Aprobar solicitud
 controller.aprobarSolicitud = async (req, res) => {
@@ -212,38 +208,45 @@ controller.aprobarSolicitud = async (req, res) => {
     });
 };
 
-// Negar solicitud (Guardar el comentario y la acción)
+// Negar solicitud (Guardar el comentario y la acción) 
 controller.negarSolicitud = async (req, res) => {
     const { id } = req.params;
     const { comentario } = req.body;
     const token = req.cookies.token;
-
+  
     try {
-        const decoded = jwt.verify(token, SECRET_KEY);
-        const usuarioId = decoded.id;
-
-        // Actualizar el estado de la solicitud a "negada"
-        await connection.execute('UPDATE solicitudes SET estado = "negada" WHERE id = ?', [id]);
-
-        // Registrar la acción con el comentario
-        await connection.execute(
-            'INSERT INTO acciones (solicitud_id, usuario_id, accion, comentario) VALUES (?, ?, "negada", ?)',
-            [id, usuarioId, comentario]
-        );
-
-        // Responder con éxito
-        res.json({
-            success: true,
-            message: 'Solicitud negada correctamente'
+      const decoded = jwt.verify(token, SECRET_KEY);
+      const usuarioId = decoded.id;
+  
+      // Verificar que la solicitud existe y está pendiente
+      const [solicitud] = await connection.execute('SELECT estado FROM solicitudes WHERE id = ?', [id]);
+      if (!solicitud.length || solicitud[0].estado !== 'pendiente') {
+        return res.status(400).json({
+          success: false,
+          message: 'La solicitud no puede ser negada porque no está pendiente'
         });
+      }
+  
+      // Actualizar estado
+      await connection.execute('UPDATE solicitudes SET estado = "negada" WHERE id = ?', [id]);
+      // Guardar acción
+      await connection.execute(
+        'INSERT INTO acciones (solicitud_id, usuario_id, accion, comentario) VALUES (?, ?, "negada", ?)',
+        [id, usuarioId, comentario]
+      );
+  
+      res.json({
+        success: true,
+        message: 'Solicitud negada correctamente'
+      });
     } catch (error) {
-        console.error('Error al negar la solicitud:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al negar la solicitud'
-        });
+      console.error('[Backend] Error al negar la solicitud:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error al negar la solicitud'
+      });
     }
-};
+  };
  
 
 async function getImageBase64(imageUrl) {
@@ -722,26 +725,51 @@ exports.descargarDocumentos = async (req, res) => {
  
 
 // Obtener colaboradores de una solicitud
-
 controller.getColaboradores = async (req, res) => {
     const { solicitudId } = req.params;
+    const { estado } = req.query; // Recibir el parámetro estado desde la query
+    
     try {
+        // Obtener información de la solicitud y el contratista
         const [solicitud] = await connection.execute(
             'SELECT s.id, s.empresa, u.username AS contratista FROM solicitudes s LEFT JOIN users u ON s.usuario_id = u.id WHERE s.id = ?',
             [solicitudId]
         );
-        if (!solicitud.length) return res.status(404).json({ message: 'Solicitud no encontrada' });
+        if (!solicitud.length) {
+            return res.status(404).json({ message: 'Solicitud no encontrada' });
+        }
 
-        const [colaboradores] = await connection.execute(
-            'SELECT c.id, c.nombre, c.cedula, c.estado FROM colaboradores c WHERE c.solicitud_id = ?',
-            [solicitudId]
-        );
+        // Preparar consulta para colaboradores, aplicando filtro por estado si es necesario
+        let colaboradoresQuery = 'SELECT c.id, c.nombre, c.cedula, c.estado FROM colaboradores c WHERE c.solicitud_id = ?';
+        let colaboradoresParams = [solicitudId];
+        
+        // Si se especificó un filtro de estado, añadirlo a la consulta
+        if (estado !== undefined) {
+            colaboradoresQuery += ' AND c.estado = ?';
+            colaboradoresParams.push(estado === 'true' || estado === true);
+        }
+        
+        // Obtener colaboradores con el filtro aplicado
+        const [colaboradores] = await connection.execute(colaboradoresQuery, colaboradoresParams);
 
+        // Obtener vehículos con licencias de conducción y tránsito
         const [vehiculos] = await connection.execute(
-            'SELECT v.id, v.matricula as placa, v.estado FROM vehiculos v WHERE v.solicitud_id = ?',
+            `SELECT 
+                v.id, 
+                v.matricula AS placa, 
+                v.estado,
+                lv_conduccion.estado AS licencia_conduccion,
+                lv_transito.estado AS licencia_transito
+            FROM vehiculos v
+            LEFT JOIN licencias_vehiculo lv_conduccion 
+                ON v.id = lv_conduccion.vehiculo_id AND lv_conduccion.tipo = 'licencia_conduccion'
+            LEFT JOIN licencias_vehiculo lv_transito 
+                ON v.id = lv_transito.vehiculo_id AND lv_transito.tipo = 'licencia_transito'
+            WHERE v.solicitud_id = ?`,
             [solicitudId]
         );
 
+        // Procesar colaboradores con datos adicionales (Curso SISO y Plantilla SS)
         const colaboradoresConDatos = await Promise.all(colaboradores.map(async col => {
             // Curso SISO con fecha_vencimiento
             const [cursoSiso] = await connection.execute(
@@ -777,13 +805,15 @@ controller.getColaboradores = async (req, res) => {
             };
         }));
 
+        // Procesar vehículos con datos de SOAT y tecnomecánica
         const vehiculosConDatos = await Promise.all(vehiculos.map(async veh => {
-            // Obtener documentos del vehículo
+            // Obtener SOAT
             const [soat] = await connection.execute(
                 'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "soat" ORDER BY created_at DESC LIMIT 1',
                 [veh.id]
             );
 
+            // Obtener Tecnomecánica
             const [tecnomecanica] = await connection.execute(
                 'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "tecnomecanica" ORDER BY created_at DESC LIMIT 1',
                 [veh.id]
@@ -792,10 +822,23 @@ controller.getColaboradores = async (req, res) => {
             return {
                 ...veh,
                 soat: soat.length ? soat[0] : null,
-                tecnomecanica: tecnomecanica.length ? tecnomecanica[0] : null
+                tecnomecanica: tecnomecanica.length ? tecnomecanica[0] : null,
+                licencia_conduccion: veh.licencia_conduccion || false, // Default a false si no existe
+                licencia_transito: veh.licencia_transito || false     // Default a false si no existe
             };
         }));
 
+        // Log para depuración
+        console.log('Datos enviados al frontend:', {
+            solicitudId: solicitud[0].id,
+            empresa: solicitud[0].empresa,
+            contratista: solicitud[0].contratista,
+            estadoFiltro: estado,
+            totalColaboradores: colaboradoresConDatos.length,
+            totalVehiculos: vehiculosConDatos.length
+        });
+
+        // Respuesta al frontend
         res.json({
             id: solicitud[0].id,
             empresa: solicitud[0].empresa,
@@ -804,8 +847,11 @@ controller.getColaboradores = async (req, res) => {
             vehiculos: vehiculosConDatos
         });
     } catch (error) {
-        console.error('Error al obtener colaboradores:', error);
-        res.status(500).json({ message: 'Error interno del servidor' });
+        console.error('Error al obtener colaboradores y vehículos:', error);
+        res.status(500).json({ 
+            message: 'Error interno del servidor',
+            error: error.message 
+        });
     }
 };
 
@@ -887,6 +933,7 @@ controller.getColaboradores = async (req, res) => {
 
 controller.filtrarSolicitudesSst = async (req, res) => {
     console.log('🔍 Iniciando filtrado de solicitudes SST');
+    console.log('Método HTTP:', req.method);
     const token = req.cookies.token;
     if (!token) {
         console.log('❌ No se encontró token en las cookies');
@@ -902,11 +949,19 @@ controller.filtrarSolicitudesSst = async (req, res) => {
         }
         console.log('✅ Token verificado correctamente para rol SST');
   
-        const params = req.method === 'GET' ? req.query : req.body;
+        // Obtener parámetros según el método HTTP
+        let params = {};
+        if (req.method === 'GET') {
+            params = req.query || {};
+        } else if (req.method === 'POST') {
+            params = req.body || {};
+        }
+        
         console.log('📝 Parámetros recibidos:', params);
       
-        const { id, cedula, interventor, estado, fechaInicio, fechaFin, nit, empresa, lugar, vigencia, idColaborador } = params;
+        const { id, cedula, interventor, estado, fechaInicio, fechaFin, nit, empresa, lugar, vigencia, placa, colaboradorId, vehiculoId } = params;
   
+        // Construir consulta base
         let query = `
             SELECT DISTINCT
                 s.id AS solicitud_id,
@@ -915,7 +970,7 @@ controller.filtrarSolicitudesSst = async (req, res) => {
                 DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
                 DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
                 s.dias_trabajo,
-                s.lugar,
+                l.nombre_lugar AS lugar,
                 s.labor,
                 us.username AS interventor,
                 s.estado AS solicitud_estado,
@@ -925,9 +980,19 @@ controller.filtrarSolicitudesSst = async (req, res) => {
                 END AS estado_vigencia
             FROM solicitudes s
             LEFT JOIN users us ON us.id = s.interventor_id
+            LEFT JOIN lugares l ON s.lugar = l.id
             LEFT JOIN colaboradores c ON c.solicitud_id = s.id
-            WHERE 1=1
         `;
+        
+        // Agregar join con vehículos cuando se filtra por placa o vehiculoId
+        if (placa || vehiculoId) {
+            query += `
+                LEFT JOIN vehiculos v ON v.solicitud_id = s.id
+            `;
+        }
+        
+        query += ` WHERE 1=1`;
+        
         const placeholders = [];
   
         // Agregar condiciones de filtrado con logs
@@ -936,15 +1001,25 @@ controller.filtrarSolicitudesSst = async (req, res) => {
             placeholders.push(id);
             console.log('🔍 Filtrando por ID:', id);
         }
-        if (idColaborador) {
-            query += ' AND c.id = ?';
-            placeholders.push(idColaborador);
-            console.log('🔍 Filtrando por ID de colaborador:', idColaborador);
-        }
         if (cedula) {
             query += ' AND c.cedula LIKE ?';
             placeholders.push(`%${cedula}%`);
             console.log('🔍 Filtrando por cédula:', cedula);
+        }
+        if (colaboradorId) {
+            query += ' AND c.id = ?';
+            placeholders.push(colaboradorId);
+            console.log('🔍 Filtrando por ID de colaborador:', colaboradorId);
+        }
+        if (vehiculoId) {
+            query += ' AND v.id = ?';
+            placeholders.push(vehiculoId);
+            console.log('🔍 Filtrando por ID de vehículo:', vehiculoId);
+        }
+        if (placa) {
+            query += ' AND v.matricula LIKE ?';
+            placeholders.push(`%${placa}%`);
+            console.log('🔍 Filtrando por placa:', placa);
         }
         if (interventor) {
             query += ' AND us.username LIKE ?';
@@ -977,7 +1052,7 @@ controller.filtrarSolicitudesSst = async (req, res) => {
             console.log('🔍 Filtrando por empresa:', empresa);
         }
         if (lugar) {
-            query += ' AND s.lugar = (SELECT id FROM lugares WHERE nombre_lugar = ?)';
+            query += ' AND l.nombre_lugar = ?';
             placeholders.push(lugar);
             console.log('🔍 Filtrando por lugar:', lugar);
         }
@@ -987,7 +1062,7 @@ controller.filtrarSolicitudesSst = async (req, res) => {
             console.log('🔍 Filtrando por vigencia:', vigencia);
         }
   
-        query += ' ORDER BY s.id DESC';
+        query += ' GROUP BY s.id ORDER BY s.id DESC';
         console.log('📋 Query final:', query);
         console.log('📋 Placeholders:', placeholders);
   
@@ -1025,6 +1100,205 @@ controller.filtrarSolicitudesSst = async (req, res) => {
         });
     }
 };
+
+
+// Obtener documento de vehículo
+controller.getVehiculoDocumento = async (req, res) => {
+    try {
+      const { vehiculoId, tipoDocumento } = req.params;
+      
+      let query = '';
+      let params = [];
+      
+      if (tipoDocumento === 'soat' || tipoDocumento === 'tecnomecanica') {
+        query = `
+          SELECT 
+            id, 
+            DATE_FORMAT(fecha_inicio, '%Y-%m-%d') as fecha_inicio,
+            DATE_FORMAT(fecha_fin, '%Y-%m-%d') as fecha_fin,
+            estado,
+            CASE 
+              WHEN fecha_fin > CURDATE() THEN 'vigente'
+              ELSE 'vencido'
+            END as estado_actual
+          FROM plantilla_documentos_vehiculos 
+          WHERE vehiculo_id = ? AND tipo_documento = ?
+          ORDER BY created_at DESC
+          LIMIT 1
+        `;
+        params = [vehiculoId, tipoDocumento];
+      } else {
+        query = `
+          SELECT estado 
+          FROM licencias_vehiculo 
+          WHERE vehiculo_id = ? AND tipo = ?
+        `;
+        params = [vehiculoId, tipoDocumento];
+      }
   
+      const [documento] = await connection.execute(query, params);
+      
+      if (!documento || documento.length === 0) {
+        return res.json({ 
+          documento: null,
+          message: 'No se encontró el documento'
+        });
+      }
+
+      // Actualizar el estado si es necesario
+      if (tipoDocumento === 'soat' || tipoDocumento === 'tecnomecanica') {
+        const doc = documento[0];
+        if (new Date(doc.fecha_fin) <= new Date() && doc.estado === 'vigente') {
+          await connection.execute(
+            `UPDATE plantilla_documentos_vehiculos 
+             SET estado = 'vencido' 
+             WHERE id = ?`,
+            [doc.id]
+          );
+          doc.estado = 'vencido';
+        }
+      }
+      
+      res.json({ 
+        documento: documento[0],
+        message: 'Documento encontrado correctamente'
+      });
+    } catch (error) {
+      console.error('Error al obtener documento:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Error al obtener el documento',
+        error: error.message 
+      });
+    }
+  };
+  
+  // Guardar o actualizar documento de vehículo
+  controller.saveVehiculoDocumento = async (req, res) => {
+    try {
+        const { vehiculoId, solicitudId, tipoDocumento, documentoId, fechaInicio, fechaFin } = req.body;
+        if (!['soat', 'tecnomecanica'].includes(tipoDocumento)) {
+            return res.status(400).json({ success: false, message: 'Tipo de documento no válido' });
+        }
+        if (!fechaInicio || !fechaFin) {
+            return res.status(400).json({ success: false, message: 'Las fechas de inicio y fin son requeridas' });
+        }
+        if (new Date(fechaFin) <= new Date(fechaInicio)) {
+            return res.status(400).json({ success: false, message: 'La fecha fin debe ser posterior a la fecha inicio' });
+        }
+
+        const fechaInicioFormateada = new Date(fechaInicio).toISOString().split('T')[0];
+        const fechaFinFormateada = new Date(fechaFin).toISOString().split('T')[0];
+
+        if (documentoId) {
+            const [result] = await connection.execute(
+                `UPDATE plantilla_documentos_vehiculos 
+                 SET fecha_inicio = ?, fecha_fin = ?, estado = CASE WHEN ? > CURDATE() THEN 'vigente' ELSE 'vencido' END,
+                 updated_at = NOW() WHERE id = ?`,
+                [fechaInicioFormateada, fechaFinFormateada, fechaFinFormateada, documentoId]
+            );
+            if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Documento no encontrado' });
+        } else {
+            const [result] = await connection.execute(
+                `INSERT INTO plantilla_documentos_vehiculos 
+                 (vehiculo_id, solicitud_id, tipo_documento, fecha_inicio, fecha_fin, estado) 
+                 VALUES (?, ?, ?, ?, ?, CASE WHEN ? > CURDATE() THEN 'vigente' ELSE 'vencido' END)`,
+                [vehiculoId, solicitudId, tipoDocumento, fechaInicioFormateada, fechaFinFormateada, fechaFinFormateada]
+            );
+            if (result.affectedRows === 0) return res.status(500).json({ success: false, message: 'Error al crear el documento' });
+        }
+
+        res.json({ success: true, message: documentoId ? 'Documento actualizado correctamente' : 'Documento creado correctamente' });
+    } catch (error) {
+        console.error('Error al guardar documento:', error);
+        res.status(500).json({ success: false, message: 'Error al guardar el documento', error: error.message });
+    }
+};
+  
+  // Alternar estado de licencia
+  controller.toggleLicencia = async (req, res) => {
+    try {
+        const { vehiculoId, solicitudId, tipoLicencia, activar } = req.body;
+        
+        console.log('Datos recibidos en toggleLicencia:', { vehiculoId, solicitudId, tipoLicencia, activar });
+        
+        // Validar parámetros requeridos
+        if (!vehiculoId || !solicitudId || !tipoLicencia) {
+            return res.status(400).json({
+                success: false,
+                message: 'Faltan parámetros requeridos: vehiculoId, solicitudId y tipoLicencia son obligatorios'
+            });
+        }
+        
+        // Validar que activar sea un booleano
+        if (typeof activar !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: 'El parámetro activar debe ser un valor booleano'
+            });
+        }
+        
+        // Validar que tipoLicencia sea uno de los valores permitidos
+        if (!['licencia_conduccion', 'licencia_transito'].includes(tipoLicencia)) {
+            return res.status(400).json({
+                success: false,
+                message: `Tipo de licencia no válido: ${tipoLicencia}. Debe ser 'licencia_conduccion' o 'licencia_transito'`
+            });
+        }
+        
+        // Verificar que el vehículo exista
+        const [vehiculo] = await connection.execute(
+            'SELECT id FROM vehiculos WHERE id = ?',
+            [vehiculoId]
+        );
+        
+        if (vehiculo.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `No se encontró el vehículo con ID ${vehiculoId}`
+            });
+        }
+        
+        // Verificar si ya existe un registro para esta licencia
+        const [existing] = await connection.execute(
+            `SELECT id FROM licencias_vehiculo WHERE vehiculo_id = ? AND tipo = ?`,
+            [vehiculoId, tipoLicencia]
+        );
+
+        // Actualizar o insertar el registro
+        let result;
+        if (existing.length > 0) {
+            [result] = await connection.execute(
+                `UPDATE licencias_vehiculo SET estado = ?, fecha_actualizacion = NOW() WHERE vehiculo_id = ? AND tipo = ?`,
+                [activar, vehiculoId, tipoLicencia]
+            );
+            console.log('Actualización de licencia completada:', result);
+        } else {
+            [result] = await connection.execute(
+                `INSERT INTO licencias_vehiculo (vehiculo_id, solicitud_id, tipo, estado) VALUES (?, ?, ?, ?)`,
+                [vehiculoId, solicitudId, tipoLicencia, activar]
+            );
+            console.log('Inserción de licencia completada:', result);
+        }
+
+        // Determinar el nombre legible del tipo de licencia
+        const tipoLegible = tipoLicencia === 'licencia_conduccion' ? 'Licencia de Conducción' : 'Licencia de Tránsito';
+
+        // Responder con éxito
+        res.json({
+            success: true,
+            message: activar 
+                ? `${tipoLegible} aprobada correctamente` 
+                : `Aprobación de ${tipoLegible} cancelada correctamente`
+        });
+    } catch (error) {
+        console.error('Error al actualizar licencia:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al actualizar el estado de la licencia',
+            error: error.message
+        });
+    }
+};
   
 module.exports = controller;

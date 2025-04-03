@@ -9,6 +9,13 @@ router.post('/api/sst/plantilla-ss', controller.guardarOActualizarPlantillaSS);
 router.put('/api/sst/plantilla-ss/:id', controller.guardarOActualizarPlantillaSS);
 router.get('/api/sst/historial-cursos/:colaboradorId', controller.getHistorialCursos);
 router.post('/api/filtrar-solicitudes-sst', controller.filtrarSolicitudesSst);
+router.get('/api/sst/filtrar-solicitudes', controller.filtrarSolicitudesSst);
+
+// Rutas para gestión de documentos de vehículos
+router.get('/api/sst/vehiculo-documento/:vehiculoId/:tipoDocumento', controller.getVehiculoDocumento);
+router.post('/api/sst/vehiculo-documento', controller.saveVehiculoDocumento);
+router.put('/api/sst/vehiculo-documento', controller.saveVehiculoDocumento);
+router.post('/api/sst/toggle-licencia', controller.toggleLicencia);
 
 // Verificación de que la función 'vistaSst' está definida en el controlador
 console.log('Verificando controller.vistaSst...');

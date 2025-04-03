@@ -2,6 +2,82 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/db');
 
+// Obtener mensajes de un chat (ruta adicional para compatibilidad con sst.ejs)
+router.get('/mensajes/:solicitudId/:tipo', async (req, res) => {
+  try {
+    const { solicitudId, tipo } = req.params;
+    const limit = req.query.limit || 20;
+
+    console.log(`[chat.routes] Solicitud de mensajes para solicitud ${solicitudId}, tipo ${tipo} (ruta /mensajes)`);
+
+    // Manejo especial para chat global
+    let queryParams;
+    let chatQuery;
+    
+    if (solicitudId === 'global' && tipo === 'soporte') {
+      const userId = req.query.userId;
+      if (!userId) {
+        return res.status(400).json({ error: 'Se requiere userId en query para chat global' });
+      }
+      chatQuery = 'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?';
+      queryParams = ['global-' + userId, 'soporte'];
+    } else {
+      chatQuery = 'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?';
+      queryParams = [solicitudId, tipo];
+    }
+
+    const [chats] = await db.query(chatQuery, queryParams);
+
+    let chatId;
+    if (chats.length === 0) {
+      return res.json([]);
+    } else {
+      chatId = chats[0].id;
+    }
+
+    let query = `
+      SELECT m.id, m.chat_id, m.usuario_id, m.contenido, m.leido, m.created_at, u.username
+      FROM mensajes m
+      JOIN chats c ON m.chat_id = c.id
+      LEFT JOIN users u ON m.usuario_id = u.id
+      WHERE m.chat_id = ?
+      ORDER BY m.created_at ASC LIMIT ?
+    `;
+    
+    const [mensajes] = await db.query(query, [chatId, parseInt(limit)]);
+    console.log(`[chat.routes] Mensajes encontrados vía /mensajes: ${mensajes.length}`);
+
+    const userId = req.query.userId || '';
+    
+    const mensajesProcesados = mensajes.map(m => {
+      let contentObj;
+      try {
+        contentObj = typeof m.contenido === 'string' ? JSON.parse(m.contenido) : m.contenido;
+      } catch {
+        contentObj = { text: m.contenido || 'Mensaje sin contenido' };
+      }
+
+      return {
+        id: m.id,
+        chatId: m.chat_id,
+        solicitudId: parseInt(solicitudId),
+        usuario_id: m.usuario_id,
+        username: m.username || 'Usuario',
+        content: contentObj.text || JSON.stringify(contentObj),
+        leido: Boolean(m.leido),
+        created_at: new Date(m.created_at).toISOString(),
+        type: tipo,
+        isSender: userId ? parseInt(m.usuario_id) === parseInt(userId) : false
+      };
+    });
+
+    res.json(mensajesProcesados);
+  } catch (error) {
+    console.error('[chat.routes] Error al obtener mensajes (ruta /mensajes):', error);
+    res.status(500).json({ error: 'Error al obtener mensajes', details: error.message });
+  }
+});
+
 // Obtener mensajes de un chat
 router.get('/:solicitudId/:tipo', async (req, res) => {
   try {
@@ -14,10 +90,19 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
 
     console.log(`[chat.routes] Usuario ${userId} solicitando mensajes para solicitud ${solicitudId}, tipo ${tipo}`);
 
-    const [chats] = await db.query(
-      'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
-      [solicitudId, tipo]
-    );
+    // Manejo especial para chat global
+    let queryParams;
+    let chatQuery;
+    
+    if (solicitudId === 'global' && tipo === 'soporte') {
+      chatQuery = 'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?';
+      queryParams = ['global-' + userId, 'soporte'];
+    } else {
+      chatQuery = 'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?';
+      queryParams = [solicitudId, tipo];
+    }
+
+    const [chats] = await db.query(chatQuery, queryParams);
 
     let chatId;
     if (chats.length === 0) {
@@ -77,10 +162,9 @@ router.get('/:solicitudId/:tipo', async (req, res) => {
 });
 
 // Marcar mensajes como leídos
-router.post('/:solicitudId/:tipo/mark-read', async (req, res) => {
+router.post('/marcar-todos-leidos', async (req, res) => {
   try {
-    const { solicitudId, tipo } = req.params;
-    const { userId } = req.body;
+    const { solicitudId, tipo, userId } = req.body;
 
     if (!userId) {
       return res.status(400).json({ success: false, message: 'Se requiere userId' });
@@ -88,9 +172,18 @@ router.post('/:solicitudId/:tipo/mark-read', async (req, res) => {
 
     console.log(`Marcando mensajes como leídos: solicitud ${solicitudId}, tipo ${tipo}, usuario ${userId}`);
 
+    // Manejo especial para chat global
+    let queryParams;
+    
+    if (solicitudId === 'global' && tipo === 'soporte') {
+      queryParams = ['global-' + userId, 'soporte'];
+    } else {
+      queryParams = [solicitudId, tipo];
+    }
+
     const [chats] = await db.query(
       'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
-      [solicitudId, tipo]
+      queryParams
     );
 
     if (chats.length === 0) {
@@ -163,6 +256,67 @@ router.post('/iniciar/:solicitudId/:tipo', async (req, res) => {
       return res.status(400).json({ error: 'Se requiere el ID del usuario' });
     }
 
+    // Manejo especial para chat global de soporte
+    if (solicitudId === 'global' && tipo === 'soporte') {
+      console.log('[chat.routes] Inicializando chat global de soporte para usuario:', userId);
+      
+      // Verificar si ya existe un chat global para este usuario
+      const [existingChats] = await db.query(
+        'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
+        ['global-' + userId, 'soporte']
+      );
+
+      let chatId;
+      let esNuevo = false;
+
+      if (existingChats.length === 0) {
+        // Crear nuevo chat global
+        const [result] = await db.query(
+          'INSERT INTO chats (solicitud_id, tipo, metadatos) VALUES (?, ?, ?)',
+          ['global-' + userId, 'soporte', JSON.stringify({
+            created_at: new Date().toISOString(),
+            created_by: userId,
+            is_global: true
+          })]
+        );
+
+        chatId = result.insertId;
+        esNuevo = true;
+
+        // Obtener usuarios de soporte
+        const [soporteUsers] = await db.query(`
+          SELECT u.id FROM users u
+          JOIN roles r ON u.role_id = r.id
+          WHERE r.role_name = 'soporte' LIMIT 1
+        `);
+        
+        if (soporteUsers.length > 0) {
+          await db.query(
+            'INSERT INTO chat_participantes (chat_id, usuario_id) VALUES (?, ?), (?, ?)',
+            [chatId, userId, chatId, soporteUsers[0].id]
+          );
+        } else {
+          // Si no hay usuario de soporte, solo agregamos al usuario actual
+          await db.query(
+            'INSERT INTO chat_participantes (chat_id, usuario_id) VALUES (?, ?)',
+            [chatId, userId]
+          );
+          console.log('[chat.routes] Advertencia: No hay usuarios de soporte disponibles');
+        }
+      } else {
+        chatId = existingChats[0].id;
+      }
+
+      console.log('[chat.routes] Chat global de soporte inicializado:', chatId);
+      
+      return res.json({
+        success: true,
+        chatId: chatId,
+        esNuevo: esNuevo,
+        isGlobal: true
+      });
+    }
+
     const [chats] = await db.query(
       'SELECT id FROM chats WHERE solicitud_id = ? AND tipo = ?',
       [solicitudId, tipo]
@@ -218,6 +372,8 @@ router.post('/iniciar/:solicitudId/:tipo', async (req, res) => {
           WHERE r.role_name = 'soporte' LIMIT 1
         `);
         if (soporteUsers.length > 0) {
+          // Solo agregamos como participantes al usuario que inicia el chat (contratista) y al usuario de soporte
+          // Eliminamos la inclusión de otros roles (SST, interventor) que no deberían ver estos mensajes
           await db.query(
             'INSERT INTO chat_participantes (chat_id, usuario_id) VALUES (?, ?), (?, ?)',
             [chatId, solicitud.usuario_id, chatId, soporteUsers[0].id]
@@ -316,6 +472,26 @@ router.get('/status/:solicitudId', async (req, res) => {
       error: 'Error al verificar estado del chat',
       details: error.message
     });
+  }
+});
+
+// Marcar un mensaje individual como leído
+router.post('/marcar-leido', async (req, res) => {
+  try {
+    const { messageId } = req.body;
+
+    if (!messageId) {
+      return res.status(400).json({ success: false, message: 'Se requiere messageId' });
+    }
+
+    console.log(`Marcando mensaje ${messageId} como leído`);
+
+    await db.query(`UPDATE mensajes SET leido = TRUE WHERE id = ?`, [messageId]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error al marcar mensaje como leído:', error);
+    res.status(500).json({ success: false, error: 'Error al marcar mensaje como leído' });
   }
 });
 
