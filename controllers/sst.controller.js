@@ -1010,30 +1010,20 @@ controller.getColaboradores = async (req, res) => {
 
 controller.filtrarSolicitudesSst = async (req, res) => {
     console.log('🔍 Iniciando filtrado de solicitudes SST');
-    console.log('Método HTTP:', req.method);
+    
     const token = req.cookies.token;
     if (!token) {
-        console.log('❌ No se encontró token en las cookies');
         return res.status(401).json({ message: 'No autorizado' });
     }
   
     try {
-        console.log('🔐 Verificando token...');
         const decoded = jwt.verify(token, SECRET_KEY);
         if (decoded.role !== 'sst') {
-            console.log('⛔ Usuario no tiene rol SST:', decoded.role);
             return res.status(403).json({ message: 'Acceso denegado' });
         }
-        console.log('✅ Token verificado correctamente para rol SST');
   
         // Obtener parámetros según el método HTTP
-        let params = {};
-        if (req.method === 'GET') {
-            params = req.query || {};
-        } else if (req.method === 'POST') {
-            params = req.body || {};
-        }
-        
+        const params = req.method === 'GET' ? req.query : req.body;
         console.log('📝 Parámetros recibidos:', params);
       
         const { id, cedula, interventor, estado, fechaInicio, fechaFin, nit, empresa, lugar, vigencia, placa, colaboradorId, vehiculoId } = params;
@@ -1059,84 +1049,64 @@ controller.filtrarSolicitudesSst = async (req, res) => {
             LEFT JOIN users us ON us.id = s.interventor_id
             LEFT JOIN lugares l ON s.lugar = l.id
             LEFT JOIN colaboradores c ON c.solicitud_id = s.id
+            LEFT JOIN vehiculos v ON v.solicitud_id = s.id
+            WHERE 1=1
         `;
-        
-        // Agregar join con vehículos cuando se filtra por placa o vehiculoId
-        if (placa || vehiculoId) {
-            query += `
-                LEFT JOIN vehiculos v ON v.solicitud_id = s.id
-            `;
-        }
-        
-        query += ` WHERE 1=1`;
         
         const placeholders = [];
   
-        // Agregar condiciones de filtrado con logs
+        // Agregar condiciones de filtrado
         if (id) {
             query += ' AND s.id = ?';
             placeholders.push(id);
-            console.log('🔍 Filtrando por ID:', id);
         }
         if (cedula) {
             query += ' AND c.cedula LIKE ?';
             placeholders.push(`%${cedula}%`);
-            console.log('🔍 Filtrando por cédula:', cedula);
         }
         if (colaboradorId) {
             query += ' AND c.id = ?';
             placeholders.push(colaboradorId);
-            console.log('🔍 Filtrando por ID de colaborador:', colaboradorId);
         }
         if (vehiculoId) {
             query += ' AND v.id = ?';
             placeholders.push(vehiculoId);
-            console.log('🔍 Filtrando por ID de vehículo:', vehiculoId);
         }
         if (placa) {
             query += ' AND v.matricula LIKE ?';
             placeholders.push(`%${placa}%`);
-            console.log('🔍 Filtrando por placa:', placa);
         }
         if (interventor) {
             query += ' AND us.username LIKE ?';
             placeholders.push(`%${interventor}%`);
-            console.log('🔍 Filtrando por interventor:', interventor);
         }
         if (estado) {
             query += ' AND s.estado = ?';
-            placeholders.push(estado);
-            console.log('🔍 Filtrando por estado:', estado);
+            placeholders.push(estado.toLowerCase());
         }
         if (fechaInicio) {
             query += ' AND s.inicio_obra >= ?';
             placeholders.push(fechaInicio);
-            console.log('🔍 Filtrando por fecha inicio:', fechaInicio);
         }
         if (fechaFin) {
             query += ' AND s.fin_obra <= ?';
             placeholders.push(fechaFin);
-            console.log('🔍 Filtrando por fecha fin:', fechaFin);
         }
         if (nit) {
             query += ' AND s.nit LIKE ?';
             placeholders.push(`%${nit}%`);
-            console.log('🔍 Filtrando por NIT:', nit);
         }
         if (empresa) {
             query += ' AND s.empresa LIKE ?';
             placeholders.push(`%${empresa}%`);
-            console.log('🔍 Filtrando por empresa:', empresa);
         }
         if (lugar) {
             query += ' AND l.nombre_lugar = ?';
             placeholders.push(lugar);
-            console.log('🔍 Filtrando por lugar:', lugar);
         }
         if (vigencia) {
             query += ' AND (CASE WHEN DATE(s.fin_obra) < CURDATE() THEN "Vencida" ELSE "Vigente" END) = ?';
             placeholders.push(vigencia);
-            console.log('🔍 Filtrando por vigencia:', vigencia);
         }
   
         query += ' GROUP BY s.id ORDER BY s.id DESC';
@@ -1147,16 +1117,13 @@ controller.filtrarSolicitudesSst = async (req, res) => {
         console.log(`✅ Se encontraron ${solicitudes.length} solicitudes`);
       
         // Obtener documentos
-        const solicitudesIds = solicitudes.map(s => s.solicitud_id);
-        
-        if (solicitudesIds.length > 0) {
-            console.log('📄 Buscando documentos para las solicitudes:', solicitudes.length);
+        if (solicitudes.length > 0) {
+            const solicitudesIds = solicitudes.map(s => s.solicitud_id);
             const placeholdersDocs = solicitudesIds.map(() => '?').join(',');
             const [documentos] = await connection.execute(
                 `SELECT solicitud_id, url FROM sst_documentos WHERE solicitud_id IN (${placeholdersDocs})`,
                 solicitudesIds
             );
-            console.log(`✅ Se encontraron ${documentos.length} documentos`);
             
             // Agregar URLs de documentos
             solicitudes.forEach(solicitud => {
@@ -1165,15 +1132,12 @@ controller.filtrarSolicitudesSst = async (req, res) => {
             });
         }
         
-        console.log('✅ Proceso completado exitosamente');
         res.json(solicitudes);
     } catch (err) {
         console.error('❌ Error al filtrar solicitudes:', err);
-        console.error('Stack trace:', err.stack);
         res.status(500).json({ 
             message: 'Error al filtrar solicitudes', 
-            error: err.message,
-            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+            error: err.message
         });
     }
 };

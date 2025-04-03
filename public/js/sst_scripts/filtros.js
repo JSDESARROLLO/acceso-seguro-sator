@@ -24,6 +24,8 @@ async function filtrarSolicitudes(event) {
       vehiculoId: $('#vehiculoId').val()
     };
     
+    console.log('Enviando filtros:', filtros);
+    
     // Mostrar indicador de carga
     Swal.fire({
       title: 'Filtrando...',
@@ -33,8 +35,6 @@ async function filtrarSolicitudes(event) {
       }
     });
 
-    console.log('Filtrando con los siguientes criterios:', filtros);
-    
     // Realizar petición al servidor
     const response = await fetch('/api/filtrar-solicitudes-sst', {
       method: 'POST',
@@ -44,13 +44,15 @@ async function filtrarSolicitudes(event) {
       body: JSON.stringify(filtros)
     });
     
-    Swal.close();
-
     if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status}`);
+      throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
     }
 
     const solicitudes = await response.json();
+    console.log('Solicitudes recibidas:', solicitudes);
+
+    // Cerrar el indicador de carga
+    Swal.close();
 
     // Actualizar la tabla con los resultados
     actualizarTablaSolicitudes(solicitudes);
@@ -58,8 +60,8 @@ async function filtrarSolicitudes(event) {
     console.error('[SST] Error al filtrar solicitudes:', error);
     Swal.fire({
       icon: 'error',
-      title: 'Error',
-      text: error.message || 'No se pudieron filtrar las solicitudes.'
+      title: 'Error al filtrar',
+      text: 'Hubo un problema al obtener las solicitudes. Por favor, intente nuevamente.'
     });
   }
 }
@@ -69,7 +71,7 @@ function actualizarTablaSolicitudes(solicitudes) {
   const tbody = $('#tablaSolicitudes');
   tbody.empty();
 
-  if (solicitudes.length === 0) {
+  if (!Array.isArray(solicitudes) || solicitudes.length === 0) {
     Swal.fire({
       icon: 'info',
       title: 'Sin resultados',
@@ -79,8 +81,8 @@ function actualizarTablaSolicitudes(solicitudes) {
   }
 
   solicitudes.forEach(solicitud => {
-    const estadoClass = solicitud.solicitud_estado === 'negada' ? 'badge-danger' : 'badge-success';
-    const estadoTexto = solicitud.solicitud_estado === 'negada' ? 'Negada' : 'Aprobado';
+    const estadoClass = getEstadoClass(solicitud.solicitud_estado);
+    const estadoTexto = getEstadoTexto(solicitud.solicitud_estado);
 
     const row = `
       <tr class="solicitud-item" data-id="${solicitud.solicitud_id}">
@@ -113,8 +115,8 @@ function actualizarTablaSolicitudes(solicitudes) {
           ` : `<span class="badge ${estadoClass}">${estadoTexto}</span>`}
         </td>
         <td>
-          <button class="btn btn-primary btn-sm ml-2 open-chat-btn" data-solicitud-id="${solicitud.solicitud_id}">
-            Conversar <span class="badge badge-light unread-count" data-solicitud-id="${solicitud.solicitud_id}">0</span>
+          <button class="btn btn-primary btn-sm open-chat-btn" data-solicitud-id="${solicitud.solicitud_id}">
+            Conversar
           </button>
         </td>
       </tr>
@@ -122,7 +124,30 @@ function actualizarTablaSolicitudes(solicitudes) {
     tbody.append(row);
   });
 
-  // Reasignar eventos a los botones dinámicos
+  // Reasignar eventos
+  reasignarEventos();
+}
+
+// Función auxiliar para obtener la clase CSS según el estado
+function getEstadoClass(estado) {
+  const clases = {
+    'negada': 'badge-danger',
+    'aprobada': 'badge-success'
+  };
+  return clases[estado] || 'badge-secondary';
+}
+
+// Función auxiliar para obtener el texto del estado
+function getEstadoTexto(estado) {
+  const textos = {
+    'negada': 'Negada',
+    'aprobada': 'Aprobada'
+  };
+  return textos[estado] || estado;
+}
+
+// Función para reasignar eventos después de actualizar la tabla
+function reasignarEventos() {
   $('.descargar-btn').off('click').on('click', function() {
     const url = $(this).data('url');
     descargarArchivo(url);
@@ -133,27 +158,20 @@ function actualizarTablaSolicitudes(solicitudes) {
     generarDocumento(id);
   });
 
-  // Reasignar eventos de chat
   $('.open-chat-btn').off('click').on('click', function() {
     const solicitudId = $(this).data('solicitud-id');
     openChatModalSST(solicitudId);
   });
-
-  // Reinicializar los badges de notificación
-  updateSSTNotificationBadges();
 }
 
 // Inicialización cuando el DOM está listo
 $(document).ready(function() {
   // Asignar el manejador de eventos al formulario de filtro
-  $('#filterForm, #formFiltro').on('submit', filtrarSolicitudes);
+  $('#formFiltro').on('submit', filtrarSolicitudes);
 
   // Manejar el botón de limpiar filtros
   $('#limpiarFiltros').on('click', function() {
-    // Limpiar todos los campos del formulario
-    $('#formFiltro input, #formFiltro select').val('');
-    
-    // Opcionalmente, recargar todas las solicitudes
+    $('#formFiltro')[0].reset();
     filtrarSolicitudes();
   });
 
