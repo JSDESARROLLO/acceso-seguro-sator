@@ -146,73 +146,154 @@ controller.eliminarSolicitud = async (req, res) => {
           return res.status(403).send('No tienes permiso para eliminar solicitudes');
       }
 
-      // 1. Retrieve file paths from the solicitud
-      const [solicitud] = await connection.execute(
-          'SELECT arl_documento, pasocial_documento FROM solicitudes WHERE id = ?',
-          [solicitud_id]
-      );
+      // Start a transaction
+      const connection2 = await connection.getConnection();
+      await connection2.beginTransaction();
 
-      if (!solicitud.length) {
-          return res.status(404).send('Solicitud no encontrada');
-      }
+      try {
+          // 1. Retrieve all file paths that need to be deleted
+          const [solicitud] = await connection2.execute(
+              'SELECT arl_documento, pasocial_documento FROM solicitudes WHERE id = ?',
+              [solicitud_id]
+          );
 
-      const { arl_documento, pasocial_documento } = solicitud[0];
-
-      // 2. Retrieve collaborator photos and ID photos
-      const [colaboradores] = await connection.execute(
-          'SELECT foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ?',
-          [solicitud_id]
-      );
-
-      // 3. Retrieve SST documents (ZIP files)
-      const [sstDocumentos] = await connection.execute(
-          'SELECT url FROM sst_documentos WHERE solicitud_id = ?',
-          [solicitud_id]
-      );
-
-      // 4. Delete files from DigitalOcean Spaces
-      const deleteFromSpaces = async (fileUrl) => {
-          if (!fileUrl) return;
-
-          // Extract the key by removing the bucket URL prefix
-          const bucketUrlPrefix = `https://app-storage-contratistas.nyc3.digitaloceanspaces.com/`;
-          const fileKey = fileUrl.startsWith(bucketUrlPrefix) 
-              ? fileUrl.replace(bucketUrlPrefix, '') 
-              : fileUrl.split('/').pop(); // Fallback for simpler URLs
-
-          const command = new DeleteObjectCommand({
-              Bucket: process.env.DO_SPACES_BUCKET,
-              Key: fileKey,
-          });
-
-          try {
-              await s3Client.send(command);
-              console.log(`Archivo eliminado de Spaces: ${fileKey}`);
-          } catch (error) {
-              console.error(`Error al eliminar archivo de Spaces: ${fileKey}`, error);
+          if (!solicitud.length) {
+              await connection2.rollback();
+              connection2.release();
+              return res.status(404).send('Solicitud no encontrada');
           }
-      };
 
-      // Delete ARL and Pasocial documents
-      if (arl_documento) await deleteFromSpaces(arl_documento);
-      if (pasocial_documento) await deleteFromSpaces(pasocial_documento);
+          // Get all files that need to be deleted
+          const [colaboradores] = await connection2.execute(
+              'SELECT id, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ?',
+              [solicitud_id]
+          );
 
-      // Delete collaborator photos and ID photos
-      for (const colaborador of colaboradores) {
-          if (colaborador.foto) await deleteFromSpaces(colaborador.foto);
-          if (colaborador.cedulaFoto) await deleteFromSpaces(colaborador.cedulaFoto);
+          const [vehiculos] = await connection2.execute(
+              'SELECT id, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito FROM vehiculos WHERE solicitud_id = ?',
+              [solicitud_id]
+          );
+
+          const [sstDocumentos] = await connection2.execute(
+              'SELECT url FROM sst_documentos WHERE solicitud_id = ?',
+              [solicitud_id]
+          );
+
+          // 2. Delete all related records in the correct order
+          // First delete all dependent records (child tables)
+          console.log(`[DB] Iniciando eliminación de registros para solicitud ${solicitud_id}`);
+          
+          // 1. Chat system records
+          console.log('[DB] Eliminando registros del sistema de chat...');
+          const [chatResult1] = await connection2.execute('DELETE FROM mensajes WHERE chat_id IN (SELECT id FROM chats WHERE solicitud_id = ?)', [solicitud_id]);
+          console.log(`[DB] Eliminados ${chatResult1.affectedRows} mensajes`);
+          const [chatResult2] = await connection2.execute('DELETE FROM chat_participantes WHERE chat_id IN (SELECT id FROM chats WHERE solicitud_id = ?)', [solicitud_id]);
+          console.log(`[DB] Eliminados ${chatResult2.affectedRows} participantes de chat`);
+          const [chatResult3] = await connection2.execute('DELETE FROM chats WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${chatResult3.affectedRows} chats`);
+    
+          // 2. Vehicle system records
+          console.log('[DB] Eliminando registros del sistema de vehículos...');
+          const [vehResult1] = await connection2.execute('DELETE FROM registros_vehiculos WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${vehResult1.affectedRows} registros de vehículos`);
+          const [vehResult2] = await connection2.execute('DELETE FROM plantilla_documentos_vehiculos WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${vehResult2.affectedRows} documentos de vehículos`);
+          const [vehResult3] = await connection2.execute('DELETE FROM licencias_vehiculo WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminadas ${vehResult3.affectedRows} licencias de vehículos`);
+          const [vehResult4] = await connection2.execute('DELETE FROM vehiculos WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${vehResult4.affectedRows} vehículos`);
+    
+          // 3. Collaborator system records
+          console.log('[DB] Eliminando registros del sistema de colaboradores...');
+          const [colResult1] = await connection2.execute('DELETE FROM registros WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${colResult1.affectedRows} registros de entrada/salida`);
+          const [colResult2] = await connection2.execute('DELETE FROM resultados_capacitaciones WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${colResult2.affectedRows} resultados de capacitaciones`);
+          const [colResult3] = await connection2.execute('DELETE FROM plantilla_seguridad_social WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminadas ${colResult3.affectedRows} plantillas de seguridad social`);
+          const [colResult4] = await connection2.execute('DELETE FROM historial_estados_colaboradores WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${colResult4.affectedRows} registros de historial de estados`);
+          const [colResult5] = await connection2.execute('DELETE FROM politicas_aceptadas_colaboradores WHERE colaborador_id IN (SELECT id FROM colaboradores WHERE solicitud_id = ?)', [solicitud_id]);
+          console.log(`[DB] Eliminadas ${colResult5.affectedRows} políticas aceptadas`);
+          const [colResult6] = await connection2.execute('DELETE FROM colaboradores WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${colResult6.affectedRows} colaboradores`);
+    
+          // 4. SST system records
+          console.log('[DB] Eliminando registros del sistema SST...');
+          const [sstResult] = await connection2.execute('DELETE FROM sst_documentos WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminados ${sstResult.affectedRows} documentos SST`);
+    
+          // 5. Finally delete records directly related to solicitud
+          console.log('[DB] Eliminando registros principales...');
+          const [accionesResult] = await connection2.execute('DELETE FROM acciones WHERE solicitud_id = ?', [solicitud_id]);
+          console.log(`[DB] Eliminadas ${accionesResult.affectedRows} acciones`);
+
+          // 3. Delete files from DigitalOcean Spaces first
+          const deleteFromSpaces = async (fileUrl) => {
+              if (!fileUrl) return;
+
+              const bucketUrlPrefix = `https://app-storage-contratistas.nyc3.digitaloceanspaces.com/`;
+              const fileKey = fileUrl.startsWith(bucketUrlPrefix)
+                  ? fileUrl.replace(bucketUrlPrefix, '')
+                  : fileUrl.split('/').pop();
+
+              const command = new DeleteObjectCommand({
+                  Bucket: process.env.DO_SPACES_BUCKET,
+                  Key: fileKey,
+              });
+
+              try {
+                  await s3Client.send(command);
+                  console.log(`Archivo eliminado de Spaces: ${fileKey}`);
+              } catch (error) {
+                  console.error(`Error al eliminar archivo de Spaces: ${fileKey}`, error);
+              }
+          };
+
+          // Delete all files
+          const { arl_documento, pasocial_documento } = solicitud[0];
+          if (arl_documento) await deleteFromSpaces(arl_documento);
+          if (pasocial_documento) await deleteFromSpaces(pasocial_documento);
+
+          // Delete collaborator files
+          for (const colaborador of colaboradores) {
+              if (colaborador.foto) await deleteFromSpaces(colaborador.foto);
+              if (colaborador.cedulaFoto) await deleteFromSpaces(colaborador.cedulaFoto);
+          }
+
+          // Delete vehicle files
+          for (const vehiculo of vehiculos) {
+              if (vehiculo.foto) await deleteFromSpaces(vehiculo.foto);
+              if (vehiculo.tecnomecanica) await deleteFromSpaces(vehiculo.tecnomecanica);
+              if (vehiculo.soat) await deleteFromSpaces(vehiculo.soat);
+              if (vehiculo.licencia_conduccion) await deleteFromSpaces(vehiculo.licencia_conduccion);
+              if (vehiculo.licencia_transito) await deleteFromSpaces(vehiculo.licencia_transito);
+          }
+
+          // Delete SST documents and their files
+          for (const sstDoc of sstDocumentos) {
+              if (sstDoc.url) {
+                  console.log(`[DB] Eliminando archivo SST: ${sstDoc.url}`);
+                  await deleteFromSpaces(sstDoc.url);
+              }
+          }
+
+          // Finally delete the solicitud itself
+          console.log(`[DB] Eliminando solicitud ${solicitud_id}`);
+          await connection2.execute('DELETE FROM solicitudes WHERE id = ?', [solicitud_id]);
+
+          // Commit the transaction and cleanup
+          await connection2.commit();
+          connection2.release();
+
+          console.log(`Solicitud ${solicitud_id} y todos sus registros asociados eliminados con éxito`);
+          res.status(200).send('Solicitud, registros asociados y archivos eliminados correctamente');
+
+      } catch (error) {
+          await connection2.rollback();
+          connection2.release();
+          throw error;
       }
-
-      // Delete SST documents (ZIP files)
-      for (const sstDoc of sstDocumentos) {
-          if (sstDoc.url) await deleteFromSpaces(sstDoc.url);
-      }
-
-      // 5. Delete the request from the database (cascades to colaboradores, acciones, sst_documentos, etc.)
-      await connection.execute('DELETE FROM solicitudes WHERE id = ?', [solicitud_id]);
-      console.log(`Solicitud ${solicitud_id} eliminada con éxito`);
-
-      res.status(200).send('Solicitud y archivos eliminados correctamente');
   } catch (error) {
       console.error('[CONTROLADOR] Error al eliminar la solicitud:', error);
       res.status(500).send('Error al eliminar la solicitud');

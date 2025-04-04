@@ -1417,14 +1417,18 @@ controller.generarDocumentos = async (req, res) => {
         if (solicitud[0].arl_documento) {
             const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
             if (arlBuffer) {
-                await fs.promises.writeFile(path.join(tempDir, `ARL_${id}.pdf`), arlBuffer);
+                // Obtener la extensión original del archivo
+                const arlExtension = path.extname(solicitud[0].arl_documento);
+                await fs.promises.writeFile(path.join(tempDir, `ARL_${id}${arlExtension}`), arlBuffer);
             }
         }
 
         if (solicitud[0].pasocial_documento) {
             const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
             if (pasocialBuffer) {
-                await fs.promises.writeFile(path.join(tempDir, `Pasocial_${id}.pdf`), pasocialBuffer);
+                // Obtener la extensión original del archivo
+                const pasocialExtension = path.extname(solicitud[0].pasocial_documento);
+                await fs.promises.writeFile(path.join(tempDir, `Pasocial_${id}${pasocialExtension}`), pasocialBuffer);
             }
         }
 

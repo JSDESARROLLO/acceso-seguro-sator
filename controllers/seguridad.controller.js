@@ -191,7 +191,7 @@ controller.getSolicitudDetalles = async (req, res) => {
                     ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
                     : null);
 
-            return res.json({
+            res.json({
                 ...solicitudDetails[0],
                 vehiculos: [{
                     ...vehiculo[0],
@@ -205,7 +205,7 @@ controller.getSolicitudDetalles = async (req, res) => {
             const [colaborador] = await connection.execute(
                 `
                 SELECT 
-                    c.id, c.solicitud_id, c.cedula, c.nombre, c.foto, c.estado,
+                    c.id, c.solicitud_id, c.cedula, c.nombre, c.foto, c.cedulaFoto, c.estado,
                     rc.estado AS curso_siso_estado, rc.fecha_vencimiento AS curso_siso_vencimiento,
                     pss.fecha_inicio AS plantilla_ss_inicio, pss.fecha_fin AS plantilla_ss_fin
                 FROM colaboradores c
@@ -224,7 +224,7 @@ controller.getSolicitudDetalles = async (req, res) => {
                 ) pss ON c.id = pss.colaborador_id
                 WHERE c.id = ?
                 `,
-                [id, id, id]
+                [entityId, entityId, entityId]
             );
 
             if (!colaborador.length) {
@@ -309,7 +309,7 @@ controller.getSolicitudDetalles = async (req, res) => {
                     ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
                     : null);
 
-            return res.json({
+            res.json({
                 ...solicitudDetails[0],
                 colaboradores: [{
                     ...colaborador[0],
@@ -321,7 +321,6 @@ controller.getSolicitudDetalles = async (req, res) => {
                 mensajePlantillaSS
             });
         }
-
     } catch (error) {
         console.error('Error al procesar la solicitud:', error);
         res.status(500).json({ message: 'Error interno del servidor' });
