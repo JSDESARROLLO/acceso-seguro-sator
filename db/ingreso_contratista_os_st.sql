@@ -55,6 +55,14 @@ CREATE TABLE users (
     FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Tabla lugares (movida antes de solicitudes)
+CREATE TABLE lugares (
+    id INT NOT NULL AUTO_INCREMENT,
+    nombre_lugar VARCHAR(255) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY nombre_lugar (nombre_lugar)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Tabla solicitudes
 CREATE TABLE solicitudes (
     id INT NOT NULL AUTO_INCREMENT,
@@ -174,14 +182,6 @@ CREATE TABLE historial_estados_colaboradores (
     PRIMARY KEY (id),
     FOREIGN KEY (colaborador_id) REFERENCES colaboradores (id) ON DELETE CASCADE,
     FOREIGN KEY (solicitud_id) REFERENCES solicitudes (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- Tabla lugares
-CREATE TABLE lugares (
-    id INT NOT NULL AUTO_INCREMENT,
-    nombre_lugar VARCHAR(255) NOT NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY nombre_lugar (nombre_lugar)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Tabla mensajes
