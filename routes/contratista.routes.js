@@ -785,12 +785,11 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
                   const cambios = col.cambios || {};
                   const cambiosList = [];
                   if (cambios.foto) cambiosList.push(`Foto actualizada`);
-                  if (cambios.cedulaFoto)
-                    cambiosList.push(`Cédula foto actualizada  </a>`);
-  
+                  if (cambios.cedulaFoto) cambiosList.push(`Cédula foto actualizada`);
+
                   detallesCambiosHtml += `
                     <li>${colaborador.nombre} (Cédula: ${colaborador.cedula}) - ${
-                      cambiosList.length > 0 ? 'Cambios: ' + cambiosList.join(', ') : 'Detalles no especificados'
+                      cambiosList.length > 0 ? cambiosList.join(', ') : 'Detalles no especificados'
                     }</li>
                   `;
                 }

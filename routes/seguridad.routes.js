@@ -23,19 +23,19 @@ if (typeof controller.vistaSeguridad !== 'function') {
   });
 }
 
-// Ruta para obtener detalles de una solicitud por ID (colaborador)
+// Ruta para obtener detalles de una solicitud por ID (colaborador o vehículo)
 router.get('/api/solicitudes/:id', async (req, res) => {
     try {
-      const solicitudId = req.params.id;
-      console.log(`[RUTAS] Obteniendo detalles de la solicitud con ID: ${solicitudId}`);
-      
-      // Delegamos la lógica de obtener los detalles al controlador
-      await controller.getSolicitudDetalles(req, res);
+        const solicitudId = req.params.id;
+        console.log(`[RUTAS] Obteniendo detalles de la solicitud con ID: ${solicitudId}`);
+        
+        // Delegamos la lógica de obtener los detalles al controlador
+        await controller.getSolicitudDetalles(req, res);
     } catch (err) {
-      console.error('[RUTAS] Error al obtener los detalles de la solicitud:', err);
-      res.status(500).send('Error al obtener los detalles de la solicitud');
+        console.error('[RUTAS] Error al obtener los detalles de la solicitud:', err);
+        res.status(500).send('Error al obtener los detalles de la solicitud');
     }
-});  
+});
 
 // Ruta para obtener detalles de un vehículo por ID
 router.get('/api/solicitudes/vehiculo/:id', async (req, res) => {
@@ -88,8 +88,17 @@ router.post('/api/solicitudes/:id/registrar-entrada-vehiculo', controller.regist
 // Ruta para registrar salida de vehículos
 router.post('/api/solicitudes/:id/registrar-salida-vehiculo', controller.registrarSalidaVehiculo);
 
-// Ruta para acceso por QR
-router.get('/vista-seguridad/:id', controller.qrAccesosModal);
+// Ruta para acceso por QR (colaborador o vehículo)
+router.get('/vista-seguridad/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        console.log(`[RUTAS] Accediendo por QR con ID: ${id}`);
+        await controller.qrAccesosModal(req, res);
+    } catch (err) {
+        console.error('[RUTAS] Error al procesar acceso por QR:', err);
+        res.status(500).send('Error al procesar acceso por QR');
+    }
+});
 
 // Ruta temporal para mostrar tablas
 router.get('/mostrar-tablas', controller.mostrarTablas);
