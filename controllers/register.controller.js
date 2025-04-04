@@ -12,6 +12,15 @@ require('dotenv').config();
 
 const controller = {};
 
+// Función para obtener la IP real del usuario
+const getClientIp = (req) => {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+        return forwardedFor.split(',')[0].trim();
+    }
+    return req.connection.remoteAddress || req.socket.remoteAddress || req.ip;
+};
+
 const registroRoles = process.env.REGISTRO_HABILITAR_SI_NO;
 
 const s3Client = new S3Client({
@@ -60,6 +69,7 @@ controller.registerForm = async (req, res) => {
 console.log('[CONTROLADOR] Verificando controller.register...');
 controller.register = async (req, res) => {
     const { username, password, role, empresa, nit, email, aceptaPolitica } = req.body;
+    const clientIp = getClientIp(req);
     console.log('[CONTROLADOR] Formulario recibido:', { username, password, role, empresa, nit, email, aceptaPolitica });
 
     try {
@@ -162,13 +172,13 @@ controller.register = async (req, res) => {
         if (isContratista && aceptaPolitica) {
             try {
                 console.log('[CONTROLADOR] Generando documento de aceptación para contratista');
-                const documentoUrl = await generateAcceptanceDocument(userId, empresa, nit, email, req.ip);
+                const documentoUrl = await generateAcceptanceDocument(userId, empresa, nit, email, clientIp);
                 console.log('[CONTROLADOR] Documento generado, URL:', documentoUrl);
 
                 console.log('[CONTROLADOR] Guardando registro de aceptación en BD');
                 await connection.execute(
                     'INSERT INTO politicas_aceptadas (usuario_id, fecha_aceptacion, ip_aceptacion, documento_url) VALUES (?, NOW(), ?, ?)',
-                    [userId, req.ip || 'No disponible', documentoUrl]
+                    [userId, clientIp || 'No disponible', documentoUrl]
                 );
 
                 console.log('[CONTROLADOR] Enviando correo de aceptación');
