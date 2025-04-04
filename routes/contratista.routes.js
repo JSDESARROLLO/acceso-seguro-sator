@@ -95,6 +95,19 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 100 } // 10MB máximo, 100 archivos
 });
 
+// Función para limpiar archivos temporales
+async function cleanupTempFiles(filePath) {
+  try {
+    await fs.access(filePath);
+    await fs.unlink(filePath);
+    logInfo('Archivo temporal eliminado:', { filePath });
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      logError(err, 'Limpieza de archivos temporales');
+    }
+  }
+}
+
 // Función para subir archivo a Spaces con reintentos
 async function uploadToSpacesFromDisk(filePath, originalName, folder = 'images/vehiculos', retries = 3) {
   const uuid = uuidv4();
@@ -121,11 +134,19 @@ async function uploadToSpacesFromDisk(filePath, originalName, folder = 'images/v
       const spacesUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${spacesPath}`;
       
       logInfo('Archivo subido exitosamente:', { spacesUrl });
+      
+      // Limpiar archivo temporal después de subirlo exitosamente
+      await cleanupTempFiles(filePath);
+      
       return spacesUrl;
     } catch (error) {
       attempt++;
       logError(error, `uploadToSpacesFromDisk (intento ${attempt}/${retries})`);
-      if (attempt === retries) throw new Error(`Fallo al subir archivo tras ${retries} intentos: ${error.message}`);
+      if (attempt === retries) {
+        // Limpiar archivo temporal si fallan todos los intentos
+        await cleanupTempFiles(filePath);
+        throw new Error(`Fallo al subir archivo tras ${retries} intentos: ${error.message}`);
+      }
       await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Espera exponencial
     }
   }
@@ -1227,16 +1248,8 @@ router.use((err, req, res, next) => {
   
   if (err instanceof multer.MulterError) {
     if (req.files) {
-      Object.values(req.files).flat().forEach(async file => {
-        try {
-          await fs.access(file.path);
-          await fs.unlink(file.path);
-        } catch (err) {
-          // Ignorar errores si el archivo ya no existe
-          if (err.code !== 'ENOENT') {
-            logError(err, 'Limpieza de archivos temporales');
-          }
-        }
+      Object.values(req.files).flat().forEach(file => {
+        cleanupTempFiles(file.path);
       });
     }
     return res.status(400).json({
@@ -1246,16 +1259,8 @@ router.use((err, req, res, next) => {
   }
   
   if (req.files) {
-    Object.values(req.files).flat().forEach(async file => {
-      try {
-        await fs.access(file.path);
-        await fs.unlink(file.path);
-      } catch (err) {
-        // Ignorar errores si el archivo ya no existe
-        if (err.code !== 'ENOENT') {
-          logError(err, 'Limpieza de archivos temporales');
-        }
-      }
+    Object.values(req.files).flat().forEach(file => {
+      cleanupTempFiles(file.path);
     });
   }
   res.status(500).json({
