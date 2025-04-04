@@ -55,8 +55,27 @@
                 <p id="confirmacionTexto" class="text-gray-700"></p>
                 <ul id="listaColaboradoresConfirmacion" class="mt-2 text-gray-600 list-disc pl-5"></ul>
                 <div class="mt-4">
-                    <label for="fechaRegistro" class="form-label">Fecha de Registro:</label>
-                    <input type="datetime-local" id="fechaRegistro" class="form-control w-full" required>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="fechaRegistro" class="form-label">Fecha del Evento:</label>
+                            <input type="date" id="fechaRegistro" class="form-control w-full" required>
+                            <small class="text-muted">Seleccione la fecha en que ocurrió el evento</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="horaRegistro" class="form-label">Hora del Evento:</label>
+                            <div class="d-flex gap-2">
+                                <select id="horaSelect" class="form-select" required>
+                                    <option value="">Hora</option>
+                                    <!-- Las opciones se generarán con JavaScript -->
+                                </select>
+                                <select id="minutoSelect" class="form-select" required>
+                                    <option value="">Minuto</option>
+                                    <!-- Las opciones se generarán con JavaScript -->
+                                </select>
+                            </div>
+                            <small class="text-muted">Seleccione la hora exacta en que ocurrió el evento</small>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="px-6 py-4 border-t flex justify-end space-x-3">
@@ -112,6 +131,16 @@
         let modalData = null;
         const estadosVencidos = ['en labor - vencida', 'labor detenida', 'pendiente ingreso - vencido', 'en labor - vencida'];
 
+        // Función para determinar la clase CSS según el estado
+        function getEstadoClass(estado) {
+            if (!estado) return 'bg-secondary';
+            if (estado.includes('pendiente ingreso')) return 'bg-warning';
+            if (estado.includes('vencida')) return 'bg-danger';
+            if (estado === 'en labor') return 'bg-info';
+            if (estado === 'labor detenida') return 'bg-secondary';
+            return 'bg-success';
+        }
+
         function formatFecha(fecha) {
             if (!fecha) return 'N/A';
             const date = new Date(fecha);
@@ -129,6 +158,7 @@
             document.getElementById('detalleFin').textContent = formatFecha(data.fin_obra);
 
             document.getElementById('advertencia').textContent = data.advertencia || '';
+            document.getElementById('mensajeEstado').textContent = data.mensajeEstado || '';
 
             // Ocultar las secciones de colaboradores y vehículos inicialmente
             const colaboradoresContainer = document.getElementById('detalleColaboradores');
@@ -156,8 +186,8 @@
                                 <h6 class="card-title">${colaborador.nombre}</h6>
                                 <p class="card-text">Cédula: ${colaborador.cedula}</p>
                                 <p class="card-text">ID Colaborador: ${colaborador.id}</p>
-                                <p class="card-text">Curso SISO: ${colaborador.cursoSiso}</p>
-                                <p class="card-text">Plantilla SS: ${colaborador.plantillaSS}</p>
+                                <p class="card-text">Curso SISO: ${colaborador.cursoSiso || 'No definido'}</p>
+                                <p class="card-text">Plantilla SS: ${colaborador.plantillaSS || 'No definida'}</p>
                                 ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '">'}
                             </div>
                         </div>
@@ -301,7 +331,296 @@
             if (initialData) {
                 llenarModal(initialData);
             }
+            
+            // Inicializar los selectores de hora y minutos
+            inicializarSelectoresHora();
+            
+            // Configurar eventos para el modal de confirmación
+            configurarModalConfirmacion();
         });
+        
+        // Función para inicializar los selectores de hora y minutos
+        function inicializarSelectoresHora() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            // Establecer valores por defecto para fecha
+            document.getElementById('fechaRegistro').value = `${year}-${month}-${day}`;
+            
+            // Generar opciones para los selectores de hora y minutos
+            const horaSelect = document.getElementById('horaSelect');
+            const minutoSelect = document.getElementById('minutoSelect');
+            
+            // Limpiar opciones existentes
+            horaSelect.innerHTML = '<option value="">Hora</option>';
+            minutoSelect.innerHTML = '<option value="">Minuto</option>';
+            
+            // Generar opciones para horas (0-23)
+            for (let i = 0; i < 24; i++) {
+                const option = document.createElement('option');
+                option.value = String(i).padStart(2, '0');
+                option.textContent = String(i).padStart(2, '0');
+                if (i === parseInt(hours)) {
+                    option.selected = true;
+                }
+                horaSelect.appendChild(option);
+            }
+            
+            // Generar opciones para minutos (0-59)
+            for (let i = 0; i < 60; i++) {
+                const option = document.createElement('option');
+                option.value = String(i).padStart(2, '0');
+                option.textContent = String(i).padStart(2, '0');
+                if (i === parseInt(minutes)) {
+                    option.selected = true;
+                }
+                minutoSelect.appendChild(option);
+            }
+        }
+        
+        // Función para configurar el modal de confirmación
+        function configurarModalConfirmacion() {
+            const modal = document.getElementById('confirmacionModal');
+            const cerrarModal = document.getElementById('cerrarModal');
+            const cancelarBtn = document.getElementById('cancelarBtn');
+            const confirmarRegistroBtn = document.getElementById('confirmarRegistroBtn');
+            
+            // Asegurar que los campos de fecha sean editables
+            document.getElementById('fechaRegistro').addEventListener('click', function() {
+                this.focus();
+            });
+            
+            // Asegurar que los selectores de hora y minutos sean editables
+            document.getElementById('horaSelect').addEventListener('click', function() {
+                this.focus();
+            });
+            
+            document.getElementById('minutoSelect').addEventListener('click', function() {
+                this.focus();
+            });
+
+            cerrarModal.addEventListener('click', () => {
+                if (!procesoEnCurso) {
+                    modal.classList.add('hidden');
+                }
+            });
+            
+            cancelarBtn.addEventListener('click', () => {
+                if (!procesoEnCurso) {
+                    modal.classList.add('hidden');
+                }
+            });
+
+            window.mostrarConfirmacionModal = function(tipo) {
+                if (procesoEnCurso) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'Proceso en curso', 
+                        text: 'Hay un registro en proceso. Por favor, espere a que se complete.' 
+                    });
+                    return;
+                }
+
+                // Actualizar la fecha y hora actual
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                
+                // Establecer valores por defecto para fecha
+                document.getElementById('fechaRegistro').value = `${year}-${month}-${day}`;
+                
+                // Establecer valores por defecto para hora y minutos
+                document.getElementById('horaSelect').value = hours;
+                document.getElementById('minutoSelect').value = minutes;
+
+                tipoRegistro = tipo;
+                const checkboxes = document.querySelectorAll('.colaborador-checkbox:checked, .vehiculo-checkbox:checked');
+                if (!checkboxes.length) {
+                    Swal.fire({ icon: 'warning', title: 'Selecciona elementos', text: `Debes seleccionar al menos un colaborador o vehículo para registrar su ${tipo}.` });
+                    return;
+                }
+
+                if (modalData.mensajeCursoSiso || modalData.mensajePlantillaSS || 
+                    (modalData.vehiculos && modalData.vehiculos.some(veh => veh.mensajesAdvertencia))) {
+                    let mensaje = '';
+                    if (modalData.mensajeCursoSiso) mensaje += modalData.mensajeCursoSiso + ' ';
+                    if (modalData.mensajePlantillaSS) mensaje += modalData.mensajePlantillaSS + ' ';
+                    if (modalData.vehiculos) {
+                        modalData.vehiculos.forEach(veh => {
+                            if (veh.mensajesAdvertencia) {
+                                mensaje += veh.mensajesAdvertencia.join(' ') + ' ';
+                            }
+                        });
+                    }
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Restricción de Registro',
+                        text: mensaje.trim(),
+                        confirmButtonText: 'Entendido'
+                    });
+                    return;
+                }
+
+                colaboradoresSeleccionados = Array.from(checkboxes).map(checkbox => {
+                    const cardBody = checkbox.closest('.card-body');
+                    const isVehiculo = checkbox.classList.contains('vehiculo-checkbox');
+                    return {
+                        id: checkbox.value.trim(),
+                        nombre: isVehiculo ? `Vehículo ${cardBody.querySelector('.card-title').textContent.split(': ')[1]}` : cardBody.querySelector('.card-title').textContent.trim(),
+                        cedula: isVehiculo ? checkbox.value.trim() : cardBody.querySelector('.card-text').textContent.replace('Cédula: ', '').trim()
+                    };
+                });
+
+                document.getElementById('listaColaboradoresConfirmacion').innerHTML = colaboradoresSeleccionados
+                    .map(col => `<li>${col.nombre} - ${col.id.startsWith('VH-') ? 'ID' : 'C.C'} ${col.cedula}</li>`)
+                    .join('');
+                document.getElementById('confirmacionTexto').textContent = `¿Estás seguro de registrar la ${tipo} de los siguientes elementos?`;
+                
+                // Cerrar el modal de detalles antes de mostrar el modal de confirmación
+                const detallesModal = bootstrap.Modal.getInstance(document.getElementById('detallesModal'));
+                if (detallesModal) {
+                    detallesModal.hide();
+                }
+                
+                // Mostrar el modal de confirmación
+                modal.classList.remove('hidden');
+            };
+
+            document.getElementById('registrarEntradaBtn').onclick = () => {
+                if (!procesoEnCurso) {
+                    mostrarConfirmacionModal('entrada');
+                }
+            };
+            
+            document.getElementById('registrarSalidaBtn').onclick = () => {
+                if (!procesoEnCurso) {
+                    mostrarConfirmacionModal('salida');
+                }
+            };
+
+            confirmarRegistroBtn.addEventListener('click', async () => {
+                if (procesoEnCurso) {
+                    return;
+                }
+
+                procesoEnCurso = true;
+                confirmarRegistroBtn.disabled = true;
+                cancelarBtn.disabled = true;
+                cerrarModal.disabled = true;
+
+                const fechaRegistro = document.getElementById('fechaRegistro').value;
+                const horaRegistro = document.getElementById('horaSelect').value;
+                const minutoRegistro = document.getElementById('minutoSelect').value;
+                const fechaHoraCompleta = `${fechaRegistro}T${horaRegistro}:${minutoRegistro}`;
+                const solicitudId = document.getElementById('detalleId').textContent;
+                const detalleEstado = document.getElementById('detalleEstado').textContent;
+
+                if (!colaboradoresSeleccionados.length) {
+                    Swal.fire({ icon: 'warning', title: 'Elementos no seleccionados', text: 'Debes seleccionar al menos un elemento.' });
+                    procesoEnCurso = false;
+                    confirmarRegistroBtn.disabled = false;
+                    cancelarBtn.disabled = false;
+                    cerrarModal.disabled = false;
+                    return;
+                }
+                if (!fechaRegistro || !horaRegistro || !minutoRegistro) {
+                    Swal.fire({ icon: 'warning', title: 'Fecha y hora requeridas', text: 'Por favor, ingresa la fecha y hora del evento.' });
+                    procesoEnCurso = false;
+                    confirmarRegistroBtn.disabled = false;
+                    cancelarBtn.disabled = false;
+                    cerrarModal.disabled = false;
+                    return;
+                }
+
+                try {
+                    // Separar colaboradores y vehículos
+                    const colaboradores = colaboradoresSeleccionados.filter(item => !item.id.startsWith('VH-'));
+                    const vehiculos = colaboradoresSeleccionados.filter(item => item.id.startsWith('VH-'));
+
+                    let response;
+                    if (tipoRegistro === 'entrada') {
+                        if (colaboradores.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-entrada`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    estado_actual: detalleEstado, 
+                                    solicitudId, 
+                                    colaboradores, 
+                                    fecha: fechaHoraCompleta,
+                                    fecha_registro: new Date().toISOString() // Fecha actual del sistema
+                                })
+                            });
+                        }
+                        if (vehiculos.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-entrada-vehiculo`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    estado_actual: detalleEstado, 
+                                    solicitudId, 
+                                    vehiculos, 
+                                    fecha: fechaHoraCompleta,
+                                    fecha_registro: new Date().toISOString() // Fecha actual del sistema
+                                })
+                            });
+                        }
+                    } else if (tipoRegistro === 'salida') {
+                        if (colaboradores.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-salida`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    estado_actual: detalleEstado, 
+                                    solicitudId, 
+                                    colaboradores, 
+                                    fecha: fechaHoraCompleta,
+                                    fecha_registro: new Date().toISOString() // Fecha actual del sistema
+                                })
+                            });
+                        }
+                        if (vehiculos.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-salida-vehiculo`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    estado_actual: detalleEstado, 
+                                    solicitudId, 
+                                    vehiculos, 
+                                    fecha: fechaHoraCompleta,
+                                    fecha_registro: new Date().toISOString() // Fecha actual del sistema
+                                })
+                            });
+                        }
+                    }
+
+                    const result = await response.json();
+                    if (response.ok) {
+                        Swal.fire({ icon: 'success', title: 'Registro exitoso', text: result.message });
+                        document.querySelectorAll('.colaborador-checkbox:checked').forEach(checkbox => checkbox.checked = false);
+                        document.querySelectorAll('.vehiculo-checkbox:checked').forEach(checkbox => checkbox.checked = false);
+                        modal.classList.add('hidden');
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error', text: result.message });
+                    }
+                } catch (error) {
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Hubo un problema al registrar la operación.' });
+                    console.error('Error al registrar:', error);
+                } finally {
+                    procesoEnCurso = false;
+                    confirmarRegistroBtn.disabled = false;
+                    cancelarBtn.disabled = false;
+                    cerrarModal.disabled = false;
+                }
+            });
+        }
 
         async function verDetalles(id) {
             try {
@@ -364,187 +683,6 @@
         let tipoRegistro = '';
         let colaboradoresSeleccionados = [];
         let procesoEnCurso = false; // Variable para controlar si hay un proceso en curso
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const modal = document.getElementById('confirmacionModal');
-            const cerrarModal = document.getElementById('cerrarModal');
-            const cancelarBtn = document.getElementById('cancelarBtn');
-            const confirmarRegistroBtn = document.getElementById('confirmarRegistroBtn');
-
-            cerrarModal.addEventListener('click', () => {
-                if (!procesoEnCurso) {
-                    modal.classList.add('hidden');
-                }
-            });
-            cancelarBtn.addEventListener('click', () => {
-                if (!procesoEnCurso) {
-                    modal.classList.add('hidden');
-                }
-            });
-
-            window.mostrarConfirmacionModal = function(tipo) {
-                if (procesoEnCurso) {
-                    Swal.fire({ 
-                        icon: 'warning', 
-                        title: 'Proceso en curso', 
-                        text: 'Hay un registro en proceso. Por favor, espere a que se complete.' 
-                    });
-                    return;
-                }
-
-                tipoRegistro = tipo;
-                const checkboxes = document.querySelectorAll('.colaborador-checkbox:checked, .vehiculo-checkbox:checked');
-                if (!checkboxes.length) {
-                    Swal.fire({ icon: 'warning', title: 'Selecciona elementos', text: `Debes seleccionar al menos un colaborador o vehículo para registrar su ${tipo}.` });
-                    return;
-                }
-
-                if (modalData.mensajeCursoSiso || modalData.mensajePlantillaSS || 
-                    (modalData.vehiculos && modalData.vehiculos.some(veh => veh.mensajesAdvertencia))) {
-                    let mensaje = '';
-                    if (modalData.mensajeCursoSiso) mensaje += modalData.mensajeCursoSiso + ' ';
-                    if (modalData.mensajePlantillaSS) mensaje += modalData.mensajePlantillaSS + ' ';
-                    if (modalData.vehiculos) {
-                        modalData.vehiculos.forEach(veh => {
-                            if (veh.mensajesAdvertencia) {
-                                mensaje += veh.mensajesAdvertencia.join(' ') + ' ';
-                            }
-                        });
-                    }
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Restricción de Registro',
-                        text: mensaje.trim(),
-                        confirmButtonText: 'Entendido'
-                    });
-                    return;
-                }
-
-                colaboradoresSeleccionados = Array.from(checkboxes).map(checkbox => {
-                    const cardBody = checkbox.closest('.card-body');
-                    const isVehiculo = checkbox.classList.contains('vehiculo-checkbox');
-                    return {
-                        id: checkbox.value.trim(),
-                        nombre: isVehiculo ? `Vehículo ${cardBody.querySelector('.card-title').textContent.split(': ')[1]}` : cardBody.querySelector('.card-title').textContent.trim(),
-                        cedula: isVehiculo ? checkbox.value.trim() : cardBody.querySelector('.card-text').textContent.replace('Cédula: ', '').trim()
-                    };
-                });
-
-                document.getElementById('listaColaboradoresConfirmacion').innerHTML = colaboradoresSeleccionados
-                    .map(col => `<li>${col.nombre} - ${col.id.startsWith('VH-') ? 'ID' : 'C.C'} ${col.cedula}</li>`)
-                    .join('');
-                document.getElementById('confirmacionTexto').textContent = `¿Estás seguro de registrar la ${tipo} de los siguientes elementos?`;
-                modal.classList.remove('hidden');
-            };
-
-            document.getElementById('registrarEntradaBtn').onclick = () => {
-                if (!procesoEnCurso) {
-                    mostrarConfirmacionModal('entrada');
-                }
-            };
-            document.getElementById('registrarSalidaBtn').onclick = () => {
-                if (!procesoEnCurso) {
-                    mostrarConfirmacionModal('salida');
-                }
-            };
-
-            confirmarRegistroBtn.addEventListener('click', async () => {
-                if (procesoEnCurso) {
-                    return;
-                }
-
-                procesoEnCurso = true;
-                confirmarRegistroBtn.disabled = true;
-                cancelarBtn.disabled = true;
-                cerrarModal.disabled = true;
-
-                const fechaRegistro = document.getElementById('fechaRegistro').value;
-                const solicitudId = document.getElementById('detalleId').textContent;
-                const detalleEstado = document.getElementById('detalleEstado').textContent;
-
-                if (!colaboradoresSeleccionados.length) {
-                    Swal.fire({ icon: 'warning', title: 'Elementos no seleccionados', text: 'Debes seleccionar al menos un elemento.' });
-                    procesoEnCurso = false;
-                    confirmarRegistroBtn.disabled = false;
-                    cancelarBtn.disabled = false;
-                    cerrarModal.disabled = false;
-                    return;
-                }
-                if (!fechaRegistro) {
-                    Swal.fire({ icon: 'warning', title: 'Fecha requerida', text: 'Por favor, ingresa la fecha de registro.' });
-                    procesoEnCurso = false;
-                    confirmarRegistroBtn.disabled = false;
-                    cancelarBtn.disabled = false;
-                    cerrarModal.disabled = false;
-                    return;
-                }
-
-                try {
-                    // Separar colaboradores y vehículos
-                    const colaboradores = colaboradoresSeleccionados.filter(item => !item.id.startsWith('VH-'));
-                    const vehiculos = colaboradoresSeleccionados.filter(item => item.id.startsWith('VH-'));
-
-                    let response;
-                    if (tipoRegistro === 'entrada') {
-                        if (colaboradores.length > 0) {
-                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-entrada`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, colaboradores, fecha: fechaRegistro })
-                            });
-                        }
-                        if (vehiculos.length > 0) {
-                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-entrada-vehiculo`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, vehiculos, fecha: fechaRegistro })
-                            });
-                        }
-                    } else if (tipoRegistro === 'salida') {
-                        if (colaboradores.length > 0) {
-                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-salida`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, colaboradores, fecha: fechaRegistro })
-                            });
-                        }
-                        if (vehiculos.length > 0) {
-                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-salida-vehiculo`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, vehiculos, fecha: fechaRegistro })
-                            });
-                        }
-                    }
-
-                    const result = await response.json();
-                    if (response.ok) {
-                        Swal.fire({ icon: 'success', title: 'Registro exitoso', text: result.message });
-                        document.querySelectorAll('.colaborador-checkbox:checked').forEach(checkbox => checkbox.checked = false);
-                        document.querySelectorAll('.vehiculo-checkbox:checked').forEach(checkbox => checkbox.checked = false);
-                        modal.classList.add('hidden');
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: result.message });
-                    }
-                } catch (error) {
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Hubo un problema al registrar la operación.' });
-                    console.error('Error al registrar:', error);
-                } finally {
-                    procesoEnCurso = false;
-                    confirmarRegistroBtn.disabled = false;
-                    cancelarBtn.disabled = false;
-                    cerrarModal.disabled = false;
-                }
-            });
-        });
     </script>
 </body>
 </html>
-
-<% function getEstadoClass(estado) {
-    if (estado.includes('pendiente ingreso')) return 'bg-warning';
-    if (estado.includes('vencida')) return 'bg-danger';
-    if (estado === 'en labor') return 'bg-info';
-    if (estado === 'labor detenida') return 'bg-secondary';
-    return 'bg-success';
-} %>
