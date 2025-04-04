@@ -27,25 +27,20 @@
     </nav>
 
     <div class="container mt-5">
-        <!-- Buscador y Botón Escanear QR -->
+        <!-- Buscador -->
         <div class="mb-4 d-flex justify-content-between align-items-center gap-3">
             <div class="d-flex align-items-center gap-2 w-75 w-md-50">
                 <input 
                     type="text" 
                     id="buscarId" 
                     class="form-control" 
-                    placeholder="Buscar por ID de Colaborador" 
-                    inputmode="numeric" 
-                    pattern="[0-9]+" 
-                    title="Ingrese solo números" 
+                    placeholder="Buscar por ID de Colaborador o Vehículo (ej: 123 o VH-11)" 
+                    title="Ingrese ID de colaborador o vehículo" 
                     required>
                 <button class="btn btn-primary" onclick="buscar()">
                     <i class="bi bi-search me-1"></i> Buscar
                 </button>
             </div>
-            <button class="btn btn-secondary ocultar" onclick="escanearQR()">
-                <i class="bi bi-qr-code-scan me-1"></i> Escanear QR
-            </button>
         </div>
     </div>
 
@@ -98,6 +93,9 @@
                     </div>
                     <h5 class="mt-4">Colaboradores</h5>
                     <div id="detalleColaboradores" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3"></div>
+                    
+                    <h5 class="mt-4">Vehículos</h5>
+                    <div id="detalleVehiculos" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -114,14 +112,6 @@
         let modalData = null;
         const estadosVencidos = ['en labor - vencida', 'labor detenida', 'pendiente ingreso - vencido', 'en labor - vencida'];
 
-        function getEstadoClass(estado) {
-            if (estado.includes('pendiente ingreso')) return 'bg-warning';
-            if (estado.includes('vencida')) return 'bg-danger';
-            if (estado === 'en labor') return 'bg-info';
-            if (estado === 'labor detenida') return 'bg-secondary';
-            return 'bg-success';
-        }
-
         function formatFecha(fecha) {
             if (!fecha) return 'N/A';
             const date = new Date(fecha);
@@ -132,7 +122,7 @@
             modalData = data;
             document.getElementById('detalleId').textContent = data.id || 'N/A';
             document.getElementById('detalleEmpresa').textContent = data.empresa || 'N/A';
-            document.getElementById('detalleLugar').textContent = data.lugar || 'N/A';
+            document.getElementById('detalleLugar').textContent = data.nombre_lugar || 'N/A';
             document.getElementById('detalleLabor').textContent = data.labor || 'N/A';
             document.getElementById('detalleInterventor').textContent = data.interventor || 'N/A';
             document.getElementById('detalleInicio').textContent = formatFecha(data.inicio_obra);
@@ -140,35 +130,71 @@
 
             document.getElementById('advertencia').textContent = data.advertencia || '';
 
-            const colaborador = data.colaboradores && data.colaboradores[0];
-            document.getElementById('mensajeEstado').textContent = colaborador && colaborador.estado === 0 ? 'Este colaborador le fue detenido su Ingreso' : '';
+            // Ocultar las secciones de colaboradores y vehículos inicialmente
+            const colaboradoresContainer = document.getElementById('detalleColaboradores');
+            const vehiculosContainer = document.getElementById('detalleVehiculos');
+            const colaboradoresTitle = document.querySelector('h5.mt-4:first-of-type');
+            const vehiculosTitle = document.querySelector('h5.mt-4:last-of-type');
+            
+            colaboradoresContainer.style.display = 'none';
+            vehiculosContainer.style.display = 'none';
+            colaboradoresTitle.style.display = 'none';
+            vehiculosTitle.style.display = 'none';
+
+            // Mostrar datos según el tipo de búsqueda
+            if (data.colaboradores && data.colaboradores.length > 0) {
+                colaboradoresContainer.style.display = 'block';
+                colaboradoresTitle.style.display = 'block';
+                colaboradoresContainer.innerHTML = '';
+                data.colaboradores.forEach(colaborador => {
+                    const colDiv = document.createElement('div');
+                    colDiv.classList.add('col-md-4', 'mb-3');
+                    colDiv.innerHTML = `
+                        <div class="card">
+                            <img src="${colaborador.foto}" class="card-img-top" alt="Foto de ${colaborador.nombre}">
+                            <div class="card-body">
+                                <h6 class="card-title">${colaborador.nombre}</h6>
+                                <p class="card-text">Cédula: ${colaborador.cedula}</p>
+                                <p class="card-text">ID Colaborador: ${colaborador.id}</p>
+                                <p class="card-text">Curso SISO: ${colaborador.cursoSiso}</p>
+                                <p class="card-text">Plantilla SS: ${colaborador.plantillaSS}</p>
+                                ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '">'}
+                            </div>
+                        </div>
+                    `;
+                    colaboradoresContainer.appendChild(colDiv);
+                });
+            }
+
+            if (data.vehiculos && data.vehiculos.length > 0) {
+                vehiculosContainer.style.display = 'block';
+                vehiculosTitle.style.display = 'block';
+                vehiculosContainer.innerHTML = '';
+                data.vehiculos.forEach(vehiculo => {
+                    const vehDiv = document.createElement('div');
+                    vehDiv.classList.add('col-md-4', 'mb-3');
+                    vehDiv.innerHTML = `
+                        <div class="card">
+                            <img src="${vehiculo.foto}" class="card-img-top" alt="Foto del vehículo ${vehiculo.matricula}">
+                            <div class="card-body">
+                                <h6 class="card-title">Vehículo: ${vehiculo.matricula}</h6>
+                                <p class="card-text">ID Vehículo: VH-${vehiculo.id}</p>
+                                <p class="card-text">SOAT: ${vehiculo.soat_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.soat_fin) : 'No definido'}</p>
+                                <p class="card-text">Tecnomecánica: ${vehiculo.tecnomecanica_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.tecnomecanica_fin) : 'No definida'}</p>
+                                <p class="card-text">Licencia Conducción: ${vehiculo.licencia_conduccion ? 'Aprobada' : 'No aprobada'}</p>
+                                <p class="card-text">Licencia Tránsito: ${vehiculo.licencia_transito ? 'Aprobada' : 'No aprobada'}</p>
+                                ${vehiculo.mensajesAdvertencia ? `<p class="card-text text-danger">${vehiculo.mensajesAdvertencia.join('<br>')}</p>` : ''}
+                                ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '">'}
+                            </div>
+                        </div>
+                    `;
+                    vehiculosContainer.appendChild(vehDiv);
+                });
+            }
 
             const estadoElement = document.getElementById('detalleEstado');
             estadoElement.textContent = data.estado_actual || 'Desconocido';
             estadoElement.className = 'badge ' + getEstadoClass(data.estado_actual);
-
-            const colaboradoresContainer = document.getElementById('detalleColaboradores');
-            colaboradoresContainer.innerHTML = '';
-            if (colaborador) {
-                const colDiv = document.createElement('div');
-                colDiv.classList.add('col-md-4', 'mb-3');
-                colDiv.innerHTML = `
-                    <div class="card">
-                        <img src="${colaborador.foto}" class="card-img-top" alt="Foto de ${colaborador.nombre}">
-                        <div class="card-body">
-                            <h6 class="card-title">${colaborador.nombre}</h6>
-                            <p class="card-text">Cédula: ${colaborador.cedula}</p>
-                            <p class="card-text">ID Colaborador: ${colaborador.id}</p>
-                            <p class="card-text">Curso SISO: ${colaborador.cursoSiso}</p>
-                            <p class="card-text">Plantilla SS: ${colaborador.plantillaSS}</p>
-                            ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '">'}
-                        </div>
-                    </div>
-                `;
-                colaboradoresContainer.appendChild(colDiv);
-            } else {
-                colaboradoresContainer.innerHTML = '<p>No hay colaborador disponible.</p>';
-            }
 
             configurarBotones(data);
             const modal = new bootstrap.Modal(document.getElementById('detallesModal'));
@@ -180,18 +206,33 @@
             const registrarEntradaBtn = document.getElementById('registrarEntradaBtn');
             const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
 
-            const colaborador = data.colaboradores && data.colaboradores[0];
-            const colaboradorInactivo = colaborador && colaborador.estado === 0;
+            // Verificar si hay colaboradores o vehículos inactivos
+            const colaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
+            const vehiculosInactivos = data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
 
-            // Condiciones para deshabilitar botones basadas en Curso SISO y Plantilla SS
-            const cursoSisoProblema = colaborador && (colaborador.cursoSiso === 'Vencido' || colaborador.cursoSiso === 'Perdido' || colaborador.cursoSiso === 'No');
-            const plantillaSSProblema = colaborador && (colaborador.plantillaSS === 'Vencida' || colaborador.plantillaSS === 'No definida');
+            // Condiciones para deshabilitar botones basadas en documentos
+            const cursoSisoProblema = data.colaboradores && data.colaboradores.some(col => 
+                col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
+            );
+            const plantillaSSProblema = data.colaboradores && data.colaboradores.some(col => 
+                col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
+            );
+            const vehiculosProblema = data.vehiculos && data.vehiculos.some(veh => 
+                veh.mensajesAdvertencia && veh.mensajesAdvertencia.length > 0
+            );
 
             // Mostrar advertencias específicas
-            if (data.mensajeCursoSiso || data.mensajePlantillaSS) {
+            if (data.mensajeCursoSiso || data.mensajePlantillaSS || (data.vehiculos && data.vehiculos.some(veh => veh.mensajesAdvertencia))) {
                 let mensaje = '';
                 if (data.mensajeCursoSiso) mensaje += data.mensajeCursoSiso + ' ';
-                if (data.mensajePlantillaSS) mensaje += data.mensajePlantillaSS;
+                if (data.mensajePlantillaSS) mensaje += data.mensajePlantillaSS + ' ';
+                if (data.vehiculos) {
+                    data.vehiculos.forEach(veh => {
+                        if (veh.mensajesAdvertencia) {
+                            mensaje += veh.mensajesAdvertencia.join(' ') + ' ';
+                        }
+                    });
+                }
                 Swal.fire({
                     icon: 'warning',
                     title: 'Restricción de Registro',
@@ -201,11 +242,13 @@
             }
 
             // Configurar botón de Registrar Ingreso
-            if (colaboradorInactivo || estadosVencidos.includes(data.estado_actual) || data.advertencia || data.estado_actual === 'en labor' || cursoSisoProblema || plantillaSSProblema) {
+            if (colaboradoresInactivos || vehiculosInactivos || estadosVencidos.includes(data.estado_actual) || 
+                data.advertencia || data.estado_actual === 'en labor' || cursoSisoProblema || 
+                plantillaSSProblema || vehiculosProblema) {
                 registrarIngresoBtn.disabled = true;
                 registrarIngresoBtn.classList.add('btn-secondary');
                 registrarIngresoBtn.classList.remove('btn-primary');
-                registrarIngresoBtn.textContent = colaboradorInactivo ? 'Ingreso cancelado' : 'No disponible';
+                registrarIngresoBtn.textContent = colaboradoresInactivos || vehiculosInactivos ? 'Ingreso cancelado' : 'No disponible';
             } else {
                 registrarIngresoBtn.disabled = false;
                 registrarIngresoBtn.classList.remove('btn-secondary');
@@ -229,7 +272,8 @@
             }
 
             // Configurar botones de Registrar Entrada y Salida
-            if (colaboradorInactivo || data.advertencia || estadosVencidos.includes(data.estado_actual) || cursoSisoProblema || plantillaSSProblema) {
+            if (colaboradoresInactivos || vehiculosInactivos || data.advertencia || estadosVencidos.includes(data.estado_actual) || 
+                cursoSisoProblema || plantillaSSProblema || vehiculosProblema) {
                 registrarEntradaBtn.disabled = true;
                 registrarEntradaBtn.classList.add('btn-secondary');
                 registrarEntradaBtn.classList.remove('btn-success');
@@ -261,27 +305,65 @@
 
         async function verDetalles(id) {
             try {
-                const response = await fetch(`/api/solicitudes/${id}`);
+                // Limpiar el ID de espacios y convertir a mayúsculas
+                const cleanId = id.trim().toUpperCase();
+                
+                console.log('Buscando:', { id, cleanId }); // Para depuración
+
+                // Usar la misma ruta que usa el QR
+                const url = `/api/solicitudes/${cleanId}`;
+                console.log('URL de búsqueda:', url); // Para depuración
+
+                const response = await fetch(url);
                 if (!response.ok) {
-                    Swal.fire({ icon: 'error', title: 'Solicitud no encontrada', text: 'El colaborador no tiene una solicitud asignada o está pendiente de aprobación.' });
+                    const errorData = await response.json();
+                    Swal.fire({ 
+                        icon: 'error', 
+                        title: 'Solicitud no encontrada', 
+                        text: errorData.message || 'No se ha encontrado registro de esta solicitud.' 
+                    });
                     return;
                 }
+
                 const data = await response.json();
+                if (!data) {
+                    Swal.fire({ 
+                        icon: 'error', 
+                        title: 'Error', 
+                        text: 'No se recibieron datos válidos del servidor.' 
+                    });
+                    return;
+                }
+
                 llenarModal(data);
             } catch (error) {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Ocurrió un error al obtener los detalles de la solicitud.' });
-                console.error(error);
+                console.error('Error al obtener detalles:', error);
+                Swal.fire({ 
+                    icon: 'error', 
+                    title: 'Error', 
+                    text: 'Ocurrió un error al obtener los detalles de la solicitud. Por favor, intente nuevamente.' 
+                });
             }
         }
 
         function buscar() {
-            const id = document.getElementById('buscarId').value;
-            if (id) verDetalles(id);
-            else alert('Por favor, ingrese un ID válido.');
+            const id = document.getElementById('buscarId').value.trim();
+            if (!id) {
+                Swal.fire({ 
+                    icon: 'warning', 
+                    title: 'ID requerido', 
+                    text: 'Por favor, ingrese un ID válido.' 
+                });
+                return;
+            }
+
+            // Enviar el ID completo sin modificarlo
+            verDetalles(id);
         }
 
         let tipoRegistro = '';
         let colaboradoresSeleccionados = [];
+        let procesoEnCurso = false; // Variable para controlar si hay un proceso en curso
 
         document.addEventListener('DOMContentLoaded', () => {
             const modal = document.getElementById('confirmacionModal');
@@ -289,21 +371,46 @@
             const cancelarBtn = document.getElementById('cancelarBtn');
             const confirmarRegistroBtn = document.getElementById('confirmarRegistroBtn');
 
-            cerrarModal.addEventListener('click', () => modal.classList.add('hidden'));
-            cancelarBtn.addEventListener('click', () => modal.classList.add('hidden'));
+            cerrarModal.addEventListener('click', () => {
+                if (!procesoEnCurso) {
+                    modal.classList.add('hidden');
+                }
+            });
+            cancelarBtn.addEventListener('click', () => {
+                if (!procesoEnCurso) {
+                    modal.classList.add('hidden');
+                }
+            });
 
             window.mostrarConfirmacionModal = function(tipo) {
-                tipoRegistro = tipo;
-                const checkboxes = document.querySelectorAll('.colaborador-checkbox:checked');
-                if (!checkboxes.length) {
-                    Swal.fire({ icon: 'warning', title: 'Selecciona colaboradores', text: `Debes seleccionar al menos un colaborador para registrar su ${tipo}.` });
+                if (procesoEnCurso) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'Proceso en curso', 
+                        text: 'Hay un registro en proceso. Por favor, espere a que se complete.' 
+                    });
                     return;
                 }
 
-                if (modalData.mensajeCursoSiso || modalData.mensajePlantillaSS) {
+                tipoRegistro = tipo;
+                const checkboxes = document.querySelectorAll('.colaborador-checkbox:checked, .vehiculo-checkbox:checked');
+                if (!checkboxes.length) {
+                    Swal.fire({ icon: 'warning', title: 'Selecciona elementos', text: `Debes seleccionar al menos un colaborador o vehículo para registrar su ${tipo}.` });
+                    return;
+                }
+
+                if (modalData.mensajeCursoSiso || modalData.mensajePlantillaSS || 
+                    (modalData.vehiculos && modalData.vehiculos.some(veh => veh.mensajesAdvertencia))) {
                     let mensaje = '';
                     if (modalData.mensajeCursoSiso) mensaje += modalData.mensajeCursoSiso + ' ';
-                    if (modalData.mensajePlantillaSS) mensaje += modalData.mensajePlantillaSS;
+                    if (modalData.mensajePlantillaSS) mensaje += modalData.mensajePlantillaSS + ' ';
+                    if (modalData.vehiculos) {
+                        modalData.vehiculos.forEach(veh => {
+                            if (veh.mensajesAdvertencia) {
+                                mensaje += veh.mensajesAdvertencia.join(' ') + ' ';
+                            }
+                        });
+                    }
                     Swal.fire({
                         icon: 'warning',
                         title: 'Restricción de Registro',
@@ -315,48 +422,106 @@
 
                 colaboradoresSeleccionados = Array.from(checkboxes).map(checkbox => {
                     const cardBody = checkbox.closest('.card-body');
+                    const isVehiculo = checkbox.classList.contains('vehiculo-checkbox');
                     return {
                         id: checkbox.value.trim(),
-                        nombre: cardBody.querySelector('.card-title').textContent.trim(),
-                        cedula: cardBody.querySelector('.card-text').textContent.replace('Cédula: ', '').trim()
+                        nombre: isVehiculo ? `Vehículo ${cardBody.querySelector('.card-title').textContent.split(': ')[1]}` : cardBody.querySelector('.card-title').textContent.trim(),
+                        cedula: isVehiculo ? checkbox.value.trim() : cardBody.querySelector('.card-text').textContent.replace('Cédula: ', '').trim()
                     };
                 });
 
                 document.getElementById('listaColaboradoresConfirmacion').innerHTML = colaboradoresSeleccionados
-                    .map(col => `<li>${col.nombre} - C.C ${col.cedula}</li>`)
+                    .map(col => `<li>${col.nombre} - ${col.id.startsWith('VH-') ? 'ID' : 'C.C'} ${col.cedula}</li>`)
                     .join('');
-                document.getElementById('confirmacionTexto').textContent = `¿Estás seguro de registrar la ${tipo} de los siguientes colaboradores?`;
+                document.getElementById('confirmacionTexto').textContent = `¿Estás seguro de registrar la ${tipo} de los siguientes elementos?`;
                 modal.classList.remove('hidden');
             };
 
-            document.getElementById('registrarEntradaBtn').onclick = () => mostrarConfirmacionModal('entrada');
-            document.getElementById('registrarSalidaBtn').onclick = () => mostrarConfirmacionModal('salida');
+            document.getElementById('registrarEntradaBtn').onclick = () => {
+                if (!procesoEnCurso) {
+                    mostrarConfirmacionModal('entrada');
+                }
+            };
+            document.getElementById('registrarSalidaBtn').onclick = () => {
+                if (!procesoEnCurso) {
+                    mostrarConfirmacionModal('salida');
+                }
+            };
 
             confirmarRegistroBtn.addEventListener('click', async () => {
+                if (procesoEnCurso) {
+                    return;
+                }
+
+                procesoEnCurso = true;
+                confirmarRegistroBtn.disabled = true;
+                cancelarBtn.disabled = true;
+                cerrarModal.disabled = true;
+
                 const fechaRegistro = document.getElementById('fechaRegistro').value;
                 const solicitudId = document.getElementById('detalleId').textContent;
                 const detalleEstado = document.getElementById('detalleEstado').textContent;
 
                 if (!colaboradoresSeleccionados.length) {
-                    Swal.fire({ icon: 'warning', title: 'Colaboradores no seleccionados', text: 'Debes seleccionar al menos un colaborador.' });
+                    Swal.fire({ icon: 'warning', title: 'Elementos no seleccionados', text: 'Debes seleccionar al menos un elemento.' });
+                    procesoEnCurso = false;
+                    confirmarRegistroBtn.disabled = false;
+                    cancelarBtn.disabled = false;
+                    cerrarModal.disabled = false;
                     return;
                 }
                 if (!fechaRegistro) {
                     Swal.fire({ icon: 'warning', title: 'Fecha requerida', text: 'Por favor, ingresa la fecha de registro.' });
+                    procesoEnCurso = false;
+                    confirmarRegistroBtn.disabled = false;
+                    cancelarBtn.disabled = false;
+                    cerrarModal.disabled = false;
                     return;
                 }
 
                 try {
-                    const response = await fetch(`/api/solicitudes/${solicitudId}/registrar-${tipoRegistro}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, colaboradores: colaboradoresSeleccionados, fecha: fechaRegistro })
-                    });
+                    // Separar colaboradores y vehículos
+                    const colaboradores = colaboradoresSeleccionados.filter(item => !item.id.startsWith('VH-'));
+                    const vehiculos = colaboradoresSeleccionados.filter(item => item.id.startsWith('VH-'));
+
+                    let response;
+                    if (tipoRegistro === 'entrada') {
+                        if (colaboradores.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-entrada`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, colaboradores, fecha: fechaRegistro })
+                            });
+                        }
+                        if (vehiculos.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-entrada-vehiculo`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, vehiculos, fecha: fechaRegistro })
+                            });
+                        }
+                    } else if (tipoRegistro === 'salida') {
+                        if (colaboradores.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-salida`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, colaboradores, fecha: fechaRegistro })
+                            });
+                        }
+                        if (vehiculos.length > 0) {
+                            response = await fetch(`/api/solicitudes/${solicitudId}/registrar-salida-vehiculo`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ estado_actual: detalleEstado, solicitudId, vehiculos, fecha: fechaRegistro })
+                            });
+                        }
+                    }
 
                     const result = await response.json();
                     if (response.ok) {
                         Swal.fire({ icon: 'success', title: 'Registro exitoso', text: result.message });
                         document.querySelectorAll('.colaborador-checkbox:checked').forEach(checkbox => checkbox.checked = false);
+                        document.querySelectorAll('.vehiculo-checkbox:checked').forEach(checkbox => checkbox.checked = false);
                         modal.classList.add('hidden');
                     } else {
                         Swal.fire({ icon: 'error', title: 'Error', text: result.message });
@@ -364,85 +529,14 @@
                 } catch (error) {
                     Swal.fire({ icon: 'error', title: 'Error', text: 'Hubo un problema al registrar la operación.' });
                     console.error('Error al registrar:', error);
+                } finally {
+                    procesoEnCurso = false;
+                    confirmarRegistroBtn.disabled = false;
+                    cancelarBtn.disabled = false;
+                    cerrarModal.disabled = false;
                 }
             });
         });
-
-        function escanearQR() {
-            const overlay = document.createElement('div');
-            overlay.style.position = 'fixed';
-            overlay.style.top = '0';
-            overlay.style.left = '0';
-            overlay.style.width = '100%';
-            overlay.style.height = '100%';
-            overlay.style.background = 'rgba(0, 0, 0, 0.8)';
-            overlay.style.zIndex = '1000';
-
-            overlay.innerHTML = `
-                <div style="position: relative; width: 100%; max-width: 400px; margin: 0 auto; height: auto; aspect-ratio: 3/4; border-radius: 10px; overflow: hidden; background-color: #000;">
-                    <video id="cameraVideo" style="width: 100%; height: 100%;" playsinline></video>
-                    <div style="position: absolute; bottom: 10px; width: 100%; display: flex; justify-content: center; padding: 0 10px;">
-                        <button id="closeCamera" style="background: red; color: white; border: none; padding: 5px 10px; border-radius: 5px;">Cerrar</button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(overlay);
-
-            const video = document.getElementById('cameraVideo');
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            let stream = null;
-
-            const startCamera = async () => {
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    video.srcObject = stream;
-                    video.play();
-                    scanQRCode();
-                } catch (err) {
-                    Swal.fire({ 
-                        icon: 'error', 
-                        title: 'Error', 
-                        text: 'No se pudo acceder a la cámara. Por favor, verifica los permisos.' 
-                    });
-                    document.body.removeChild(overlay);
-                }
-            };
-
-            const scanQRCode = () => {
-                const scan = () => {
-                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                        const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-                        if (code) {
-                            console.log("QR detectado:", code.data);
-                            stopCamera(); 
-                            window.open(code.data, '_blank');
-                            return;
-                        }
-                        requestAnimationFrame(scan);
-                    } else {
-                        requestAnimationFrame(scan);
-                    }
-                };
-                scan();
-            };
-
-            const stopCamera = () => {
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                }
-                document.body.removeChild(overlay);
-            };
-
-            startCamera();
-            document.getElementById('closeCamera').onclick = stopCamera;
-        }
     </script>
 </body>
 </html>
