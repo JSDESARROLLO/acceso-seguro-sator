@@ -3,8 +3,6 @@ const controller = require('../controllers/seguridad.controller');
 
 const router = express.Router();
 
-
-
 // Depuración de la importación del controlador
 console.log('vista  controller:', controller);  // Para depurar que controller se importó correctamente
 
@@ -25,9 +23,7 @@ if (typeof controller.vistaSeguridad !== 'function') {
   });
 }
 
-
-
-// Ruta para obtener detalles de una solicitud por ID
+// Ruta para obtener detalles de una solicitud por ID (colaborador)
 router.get('/api/solicitudes/:id', async (req, res) => {
     try {
       const solicitudId = req.params.id;
@@ -39,11 +35,21 @@ router.get('/api/solicitudes/:id', async (req, res) => {
       console.error('[RUTAS] Error al obtener los detalles de la solicitud:', err);
       res.status(500).send('Error al obtener los detalles de la solicitud');
     }
-  });  
+});  
 
+// Ruta para obtener detalles de un vehículo por ID
+router.get('/api/solicitudes/vehiculo/:id', async (req, res) => {
+    try {
+      const vehiculoId = req.params.id;
+      console.log(`[RUTAS] Obteniendo detalles del vehículo con ID: ${vehiculoId}`);
+      await controller.getVehiculoDetalles(req, res);
+    } catch (err) {
+      console.error('[RUTAS] Error al obtener los detalles del vehículo:', err);
+      res.status(500).send('Error al obtener los detalles del vehículo');
+    }
+});
 
-
-// Ruta para registrar ingreso (actualizar estado a "en labor")
+// Ruta para registrar ingreso
 router.put('/api/solicitudes/:id/registrar-ingreso', async (req, res) => {
     try {
         console.log('[RUTAS] Registrando ingreso para la solicitud...');
@@ -56,29 +62,36 @@ router.put('/api/solicitudes/:id/registrar-ingreso', async (req, res) => {
 
 // Ruta para registrar entrada
 router.post('/api/solicitudes/:id/registrar-entrada', async (req, res) => {
-  try {
-      console.log('[RUTAS] Registrando entrada para la solicitud...');
-      await controller.registrarEntrada(req, res);
-  } catch (err) {
-      console.error('[RUTAS] Error al registrar entrada:', err);
-      res.status(500).send('Error al registrar entrada');
-  }
+    try {
+        console.log('[RUTAS] Registrando entrada para la solicitud...');
+        await controller.registrarEntrada(req, res);
+    } catch (err) {
+        console.error('[RUTAS] Error al registrar entrada:', err);
+        res.status(500).send('Error al registrar entrada');
+    }
 });
 
 // Ruta para registrar salida
 router.post('/api/solicitudes/:id/registrar-salida', async (req, res) => {
-  try {
-      console.log('[RUTAS] Registrando salida para la solicitud...');
-      await controller.registrarSalida(req, res);
-  } catch (err) {
-      console.error('[RUTAS] Error al registrar salida:', err);
-      res.status(500).send('Error al registrar salida');
-  }
+    try {
+        console.log('[RUTAS] Registrando salida para la solicitud...');
+        await controller.registrarSalida(req, res);
+    } catch (err) {
+        console.error('[RUTAS] Error al registrar salida:', err);
+        res.status(500).send('Error al registrar salida');
+    }
 });
 
+// Ruta para registrar entrada de vehículos
+router.post('/api/solicitudes/:id/registrar-entrada-vehiculo', controller.registrarEntradaVehiculo);
 
-  router.get('/vista-seguridad/:id', controller.qrAccesosModal);
+// Ruta para registrar salida de vehículos
+router.post('/api/solicitudes/:id/registrar-salida-vehiculo', controller.registrarSalidaVehiculo);
 
+// Ruta para acceso por QR
+router.get('/vista-seguridad/:id', controller.qrAccesosModal);
 
+// Ruta temporal para mostrar tablas
+router.get('/mostrar-tablas', controller.mostrarTablas);
 
 module.exports = router;

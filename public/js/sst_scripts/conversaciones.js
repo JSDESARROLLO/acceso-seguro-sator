@@ -579,6 +579,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Solicitar permisos para notificaciones
+  if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+
+  // Inicializar el socket manager con el ID del usuario
+  if (window.sstUserId) {
+    window.socketManager.initialize(window.sstUserId);
+  } else {
+    console.error('No se encontró el ID del usuario SST');
+  }
 });
 
 // Exportar funciones para que estén disponibles globalmente
@@ -706,27 +718,6 @@ async function loadMoreMessages(solicitudId, type) {
     isLoadingMore = false;
   }
 }
-
-// Inicialización cuando el documento está listo
-document.addEventListener('DOMContentLoaded', async () => {
-  if ("Notification" in window && Notification.permission !== "granted") {
-    Notification.requestPermission();
-  }
-
-  const solicitudIds = Array.from(document.querySelectorAll('.unread-count[data-solicitud-id]'))
-    .map(el => el.dataset.solicitudId);
-  for (const id of solicitudIds) {
-    await updateUnreadCounter(id, 'sst');
-    await updateUnreadCounter(id, 'soporte');
-  }
-
-  document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-});
 
 // Función auxiliar para cargar mensajes iniciales con reintentos
 async function loadInitialMessagesWithRetry(solicitudId, type, userId, retries = 3) {

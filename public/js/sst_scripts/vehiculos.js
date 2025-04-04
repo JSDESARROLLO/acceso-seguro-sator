@@ -541,7 +541,7 @@ $(document).ready(function() {
 // Función para guardar documento
 async function guardarDocumento(tipoDocumento) {
   try {
-    console.log('📤 Enviando datos al servidor:', { vehiculoId: document.getElementById('vehiculoId' + tipoDocumento).value, solicitudId: document.getElementById('solicitudId' + tipoDocumento).value, tipoDocumento });
+    console.log('📤 Iniciando guardado de documento:', tipoDocumento);
     
     // Verificar que SweetAlert2 esté disponible
     if (typeof Swal === 'undefined') {
@@ -549,15 +549,59 @@ async function guardarDocumento(tipoDocumento) {
       alert('Error: No se pudo mostrar el diálogo de progreso');
       return;
     }
+
+    // Determinar los sufijos según el tipo de documento
+    const sufijo = tipoDocumento === 'soat' ? 'Soat' : 
+                  tipoDocumento === 'tecnomecanica' ? 'Tecno' : '';
+
+    // Depuración de elementos del formulario
+    const vehiculoIdElement = document.getElementById('vehiculoId' + sufijo);
+    const solicitudIdElement = document.getElementById('solicitudId' + sufijo);
+    const documentoIdElement = document.getElementById('documentoId' + sufijo);
+    const fechaInicioElement = document.getElementById('fechaInicio' + sufijo);
+    const fechaFinElement = document.getElementById('fechaFin' + sufijo);
+
+    console.log('🔍 Elementos del formulario:', {
+      vehiculoIdElement,
+      solicitudIdElement,
+      documentoIdElement,
+      fechaInicioElement,
+      fechaFinElement,
+      sufijo
+    });
+
+    if (!vehiculoIdElement || !solicitudIdElement || !fechaInicioElement || !fechaFinElement) {
+      console.error('❌ Elementos del formulario no encontrados');
+      await Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No se encontraron todos los campos necesarios del formulario',
+        customClass: {
+          popup: 'animated fadeInDown'
+        }
+      });
+      return;
+    }
     
-    const vehiculoId = document.getElementById('vehiculoId' + tipoDocumento).value;
-    const solicitudId = document.getElementById('solicitudId' + tipoDocumento).value;
+    const vehiculoId = vehiculoIdElement.value;
+    const solicitudId = solicitudIdElement.value;
+    const documentoId = documentoIdElement ? documentoIdElement.value : '';
+    const fechaInicio = fechaInicioElement.value;
+    const fechaFin = fechaFinElement.value;
     
-    if (!vehiculoId || !solicitudId) {
+    console.log('📝 Valores del formulario:', {
+      vehiculoId,
+      solicitudId,
+      documentoId,
+      fechaInicio,
+      fechaFin
+    });
+    
+    if (!vehiculoId || !solicitudId || !fechaInicio || !fechaFin) {
       await Swal.fire({
         icon: 'warning',
         title: 'Campos Requeridos',
-        text: 'Por favor, ingrese el ID del vehículo y la solicitud',
+        text: 'Por favor, complete todos los campos del formulario',
         customClass: {
           popup: 'animated fadeInDown'
         }
@@ -565,26 +609,29 @@ async function guardarDocumento(tipoDocumento) {
       return;
     }
 
+    // Preparar los datos del formulario
     const formData = {
       vehiculoId,
       solicitudId,
       tipoDocumento,
-      documentoId: document.getElementById('documentoId' + tipoDocumento).value,
-      fechaInicio: document.getElementById('fechaInicio' + tipoDocumento).value,
-      fechaFin: document.getElementById('fechaFin' + tipoDocumento).value
+      documentoId,
+      fechaInicio,
+      fechaFin
     };
+
+    console.log('📤 Datos a enviar al servidor:', formData);
       
-      const response = await fetch('/api/sst/vehiculo-documento', {
-        method: formData.documentoId ? 'PUT' : 'POST',
+    const response = await fetch('/api/sst/vehiculo-documento', {
+      method: formData.documentoId ? 'PUT' : 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-        body: JSON.stringify(formData)
-      });
+      body: JSON.stringify(formData)
+    });
 
     const responseData = await response.json();
-    console.log("se recibe respuesta de informacion enviada: ", responseData);
+    console.log('📥 Respuesta del servidor:', responseData);
 
     if (!response.ok) {
       throw new Error(responseData.message || 'Error al guardar el documento');
@@ -603,7 +650,7 @@ async function guardarDocumento(tipoDocumento) {
     $(`#definir${tipoDocumento.charAt(0).toUpperCase() + tipoDocumento.slice(1)}Modal`).modal('hide');
     await mostrarVehiculos(solicitudId);
   } catch (error) {
-    console.error('❌ Error en el proceso:', error, ', servidor:', formData);
+    console.error('❌ Error en el proceso:', error);
     await Swal.fire({
       icon: 'error',
       title: 'Error',
