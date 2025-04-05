@@ -202,6 +202,62 @@
       border-color: #80bdff;
       box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
     }
+
+    /* Estilos para el modal personalizado */
+    .custom-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      overflow-y: auto;
+    }
+
+    .custom-modal-content {
+      background-color: #fff;
+      margin: 2rem auto;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 90%;
+      width: 1200px;
+      position: relative;
+      animation: modalFadeIn 0.3s ease-out;
+    }
+
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .custom-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .custom-modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+    }
+
+    .custom-modal-close:hover {
+      color: #333;
+    }
   </style>
 
   <script>
@@ -514,84 +570,80 @@
     </div>
   </div>
 
-  <!-- Modal para Ver Colaboradores y Vehículos -->
-  <div class="modal fade" id="colaboradoresModal" tabindex="-1" role="dialog" aria-labelledby="colaboradoresModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="colaboradoresModalLabel">Gestión de Colaboradores y Vehículos</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
-            <span aria-hidden="true">×</span>
-          </button>
+  <!-- Modal personalizado para Colaboradores y Vehículos -->
+  <div id="colaboradoresModal" class="custom-modal">
+    <div class="custom-modal-content">
+      <div class="custom-modal-header">
+        <h5 class="modal-title">Gestión de Colaboradores y Vehículos</h5>
+        <button type="button" class="custom-modal-close" onclick="cerrarModalColaboradores()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p><strong>ID de la Solicitud:</strong> <span id="colaboradoresId"></span></p>
+        <p><strong>Empresa:</strong> <span id="colaboradoresEmpresa"></span></p>
+        <p><strong>Contratista:</strong> <span id="colaboradoresContratista"></span></p>
+        
+        <!-- Filtro de tipo (Colaboradores/Vehículos) -->
+        <div class="mb-3">
+          <label for="filtroTipo" class="form-label">Tipo:</label>
+          <select class="form-select" id="filtroTipo">
+            <option value="colaboradores">Colaboradores</option>
+            <option value="vehiculos">Vehículos</option>
+          </select>
         </div>
-        <div class="modal-body">
-          <p><strong>ID de la Solicitud:</strong> <span id="colaboradoresId"></span></p>
-          <p><strong>Empresa:</strong> <span id="colaboradoresEmpresa"></span></p>
-          <p><strong>Contratista:</strong> <span id="colaboradoresContratista"></span></p>
-          
-          <!-- Filtro de tipo (Colaboradores/Vehículos) -->
-          <div class="mb-3">
-            <label for="filtroTipo" class="form-label">Tipo:</label>
-            <select class="form-select" id="filtroTipo">
-              <option value="colaboradores">Colaboradores</option>
-              <option value="vehiculos">Vehículos</option>
-            </select>
-          </div>
 
-          <!-- Filtro de estado (solo para colaboradores) -->
-          <div class="mb-3" id="filtroEstadoContainer">
-            <label for="filtroEstado" class="form-label">Filtrar por Estado:</label>
-            <select class="form-select" id="filtroEstado">
-              <option value="todos">Todos</option>
-              <option value="habilitados">Habilitados</option>
-              <option value="inhabilitados">Inhabilitados</option>
-            </select>
-          </div>
+        <!-- Filtro de estado (solo para colaboradores) -->
+        <div class="mb-3" id="filtroEstadoContainer">
+          <label for="filtroEstado" class="form-label">Filtrar por Estado:</label>
+          <select class="form-select" id="filtroEstado">
+            <option value="todos">Todos</option>
+            <option value="habilitados">Habilitados</option>
+            <option value="inhabilitados">Inhabilitados</option>
+          </select>
+        </div>
 
-          <!-- Tabla de Colaboradores -->
-          <div id="tablaColaboradoresContainer">
-            <div class="table-responsive">
-              <table class="table table-bordered">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Cédula</th>
-                    <th>Estado</th>
-                    <th>Curso SISO</th>
-                    <th>Plantilla SS</th>
-                    <th>Definir Plantilla SS</th>
-                    <th>Historial</th>
-                  </tr>
-                </thead>
-                <tbody id="tablaColaboradores"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Tabla de Vehículos -->
-          <div id="tablaVehiculosContainer" style="display: none;">
-            <div class="table-responsive">
-              <table class="table table-bordered">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Placa</th>
-                    <th>Estado</th>
-                    <th>SOAT</th>
-                    <th>Tecnomecánica</th>
-                    <th>Licencia Conducción</th>
-                    <th>Licencia Tránsito</th>
-                  </tr>
-                </thead>
-                <tbody id="tablaVehiculos"></tbody>
-              </table>
-            </div>
+        <!-- Tabla de Colaboradores -->
+        <div id="tablaColaboradoresContainer">
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Cédula</th>
+                  <th>Estado</th>
+                  <th>Curso SISO</th>
+                  <th>Plantilla SS</th>
+                  <th>Definir Plantilla SS</th>
+                  <th>Historial</th>
+                </tr>
+              </thead>
+              <tbody id="tablaColaboradores"></tbody>
+            </table>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+
+        <!-- Tabla de Vehículos -->
+        <div id="tablaVehiculosContainer" style="display: none;">
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Placa</th>
+                  <th>Estado</th>
+                  <th>SOAT</th>
+                  <th>Tecnomecánica</th>
+                  <th>Licencia Conducción</th>
+                  <th>Licencia Tránsito</th>
+                </tr>
+              </thead>
+              <tbody id="tablaVehiculos"></tbody>
+            </table>
+          </div>
         </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="cerrarModalColaboradores()">Cerrar</button>
       </div>
     </div>
   </div>
@@ -848,5 +900,45 @@
       </div>
     </div>
   </div>
+
+  <script>
+    // Función para abrir el modal personalizado
+    function abrirModalColaboradores() {
+      const modal = document.getElementById('colaboradoresModal');
+      modal.style.display = 'block';
+      document.body.style.overflow = 'hidden'; // Prevenir scroll del body
+    }
+
+    // Función para cerrar el modal personalizado
+    function cerrarModalColaboradores() {
+      const modal = document.getElementById('colaboradoresModal');
+      modal.style.display = 'none';
+      document.body.style.overflow = ''; // Restaurar scroll del body
+      
+      // Limpiar todos los datos
+      $('#tablaColaboradores').empty();
+      $('#tablaVehiculos').empty();
+      $('#colaboradoresId').text('');
+      $('#colaboradoresEmpresa').text('');
+      $('#colaboradoresContratista').text('');
+      
+      // Resetear filtros
+      $('#filtroTipo').val('colaboradores');
+      $('#filtroEstado').val('todos');
+      
+      // Mostrar contenedor de colaboradores por defecto
+      $('#tablaColaboradoresContainer').show();
+      $('#tablaVehiculosContainer').hide();
+      $('#filtroEstadoContainer').show();
+    }
+
+    // Cerrar modal al hacer clic fuera del contenido
+    window.onclick = function(event) {
+      const modal = document.getElementById('colaboradoresModal');
+      if (event.target === modal) {
+        cerrarModalColaboradores();
+      }
+    }
+  </script>
 </body>
 </html>

@@ -1,6 +1,14 @@
 class SocketManager {
     constructor() {
-        this.socket = null;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        this.socket = io(`${protocol}//${host}`, {
+            transports: ['websocket'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000
+        });
+
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 3000; // 3 segundos
@@ -8,47 +16,33 @@ class SocketManager {
         this.isConnected = false;
     }
 
-    initialize(userId) {
-        if (this.socket) {
-            console.log('Socket ya inicializado');
-            return;
-        }
-
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        this.socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-        this.setupEventListeners();
-        this.authenticate(userId);
-    }
-
-    setupEventListeners() {
-        this.socket.onopen = () => {
-            console.log('Socket conectado');
+    initialize() {
+        this.socket.on('connect', () => {
+            console.log('✅ Socket conectado');
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.processMessageQueue();
-        };
+        });
 
-        this.socket.onclose = () => {
-            console.log('Socket desconectado');
+        this.socket.on('connect_error', (error) => {
+            console.error('❌ Error de conexión Socket:', error);
+        });
+
+        this.socket.on('disconnect', (reason) => {
+            console.log('⚠️ Socket desconectado:', reason);
             this.isConnected = false;
             this.attemptReconnect();
-        };
+        });
 
-        this.socket.onerror = (error) => {
-            console.error('Error en el socket:', error);
-        };
-
-        this.socket.onmessage = (event) => {
+        this.socket.on('message', (message) => {
             try {
-                const message = JSON.parse(event.data);
                 if (message.type === 'nuevo_mensaje') {
                     this.handleNewMessage(message);
                 }
             } catch (error) {
                 console.error('Error al procesar mensaje:', error);
             }
-        };
+        });
     }
 
     attemptReconnect() {
@@ -56,7 +50,7 @@ class SocketManager {
             this.reconnectAttempts++;
             console.log(`Intento de reconexión ${this.reconnectAttempts}`);
             setTimeout(() => {
-                this.initialize(window.sstUserId);
+                this.initialize();
             }, this.reconnectDelay);
         } else {
             console.log('No se pudo reconectar');
@@ -64,20 +58,16 @@ class SocketManager {
     }
 
     authenticate(userId) {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({
-                type: 'identify',
+        if (this.socket && this.socket.connected) {
+            this.socket.emit('identify', {
                 userId: userId
-            }));
+            });
         }
     }
 
     sendMessage(data) {
-        if (this.isConnected && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({
-                type: 'message',
-                ...data
-            }));
+        if (this.isConnected && this.socket.connected) {
+            this.socket.emit('message', data);
         } else {
             this.messageQueue.push(data);
         }
@@ -129,9 +119,7 @@ class SocketManager {
 
     disconnect() {
         if (this.socket) {
-            this.socket.close();
-            this.socket = null;
-            this.isConnected = false;
+            this.socket.disconnect();
         }
     }
 }

@@ -9,7 +9,7 @@ function formatearFecha(fecha) {
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// Función para mostrar vehículos de una solicitud
+// Función para mostrar vehículos
 function mostrarVehiculos(solicitudId) {
   if (!solicitudId) {
     console.warn('No se proporcionó ID de solicitud para mostrar vehículos');
@@ -419,8 +419,9 @@ $(document).ready(function() {
   
   // Manejar cierre de modales sin actualizar
   $('#definirSoatModal, #definirTecnomecanicaModal').on('hidden.bs.modal', function (e) {
-    // Solo limpiar el formulario
+    // Limpiar el formulario y ocultar mensajes de validación
     $(this).find('form').trigger('reset');
+    $('#validacionFechasDoc').hide();
   });
 
   // Manejar botones de cancelar
@@ -459,6 +460,7 @@ $(document).ready(function() {
       return;
     }
 
+    // Limpiar ambas tablas antes de cambiar
     $('#tablaColaboradores').empty();
     $('#tablaVehiculos').empty();
 
@@ -466,7 +468,7 @@ $(document).ready(function() {
       $('#tablaColaboradoresContainer').show();
       $('#tablaVehiculosContainer').hide();
       $('#filtroEstadoContainer').show();
-      mostrarColaboradores(solicitudId); // Asume que esta función está en colaboradores.js
+      mostrarColaboradores(solicitudId);
     } else if (tipo === 'vehiculos') {
       $('#tablaColaboradoresContainer').hide();
       $('#tablaVehiculosContainer').show();

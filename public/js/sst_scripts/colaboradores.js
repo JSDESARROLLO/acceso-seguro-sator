@@ -17,113 +17,82 @@ function formatearFecha(fecha) {
 
 // Función para ver colaboradores
 function verColaboradores(solicitudId) {
-  if (!solicitudId) {
-    console.warn('No se proporcionó ID de solicitud');
-    return;
-  }
-
-  // Limpiar todas las tablas y contenedores
+  // Limpiar todos los datos antes de mostrar el modal
   $('#tablaColaboradores').empty();
   $('#tablaVehiculos').empty();
   $('#colaboradoresId').text('');
   $('#colaboradoresEmpresa').text('');
   $('#colaboradoresContratista').text('');
+  
+  // Resetear filtros
+  $('#filtroTipo').val('colaboradores');
+  $('#filtroEstado').val('todos');
+  
+  // Mostrar contenedor de colaboradores por defecto
+  $('#tablaColaboradoresContainer').show();
+  $('#tablaVehiculosContainer').hide();
+  $('#filtroEstadoContainer').show();
+
+  // Agregar skeleton loader
+  const skeletonRows = Array(3).fill().map(() => `
+      <tr>
+          <td><div class="skeleton-loader" style="width: 30px; height: 20px;"></div></td>
+          <td><div class="skeleton-loader" style="width: 150px; height: 20px;"></div></td>
+          <td><div class="skeleton-loader" style="width: 100px; height: 20px;"></div></td>
+          <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
+          <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
+          <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
+          <td><div class="skeleton-loader" style="width: 120px; height: 20px;"></div></td>
+          <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
+      </tr>
+  `).join('');
+  $('#tablaColaboradores').html(skeletonRows);
+
+  // Mostrar el modal personalizado
+  abrirModalColaboradores();
 
   // Obtener datos de la solicitud
-  const solicitudRow = $(`tr[data-id="${solicitudId}"]`);
-  const empresa = solicitudRow.find('td:eq(1)').text();
-  const contratista = solicitudRow.find('td:eq(8)').text();
+  fetch(`/api/sst/solicitudes/${solicitudId}`)
+      .then(response => response.json())
+      .then(data => {
+          $('#colaboradoresId').text(data.id);
+          $('#colaboradoresEmpresa').text(data.empresa);
+          $('#colaboradoresContratista').text(data.contratista);
 
-  // Actualizar información en el modal
-  $('#colaboradoresId').text(solicitudId);
-  $('#colaboradoresEmpresa').text(empresa);
-  $('#colaboradoresContratista').text(contratista);
-
-  // Mostrar el modal
-  $('#colaboradoresModal').modal('show');
-
-  // Agregar skeleton loader en la tabla de colaboradores
-  const tbody = $('#tablaColaboradores');
-  const skeletonRows = Array(5).fill().map(() => `
-    <tr>
-      <td><div class="skeleton-loader" style="width: 30px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 150px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 60px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 100px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 100px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 120px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
-    </tr>
-  `).join('');
-  
-  tbody.html(skeletonRows);
-
-  // Cargar datos reales
-  fetch(`/api/sst/colaboradores/${solicitudId}`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(data => {
-      tbody.empty();
-      if (data && data.colaboradores && data.colaboradores.length > 0) {
-        data.colaboradores.forEach(colaborador => {
-          // Determinar clases y estados para curso SISO
-          let cursoSisoClase = '';
-          let cursoSisoTexto = 'No definido';
-          if (colaborador.cursoSiso === 'Vencido') {
-            cursoSisoClase = 'vencido';
-            cursoSisoTexto = 'Vencido';
-          } else if (colaborador.cursoSiso === 'Aprobado') {
-            cursoSisoClase = 'vigente';
-            cursoSisoTexto = 'Aprobado';
-          } else {
-            cursoSisoClase = 'no-definido';
-          }
-
-          // Determinar clases y estados para plantilla SS
-          let plantillaSSClase = 'no-definido';
-          let plantillaSSTexto = 'No definida';
-          if (colaborador.plantillaSS) {
-            const fechaFin = new Date(colaborador.plantillaSS.fecha_fin);
-            plantillaSSClase = fechaFin > new Date() ? 'vigente' : 'vencido';
-            plantillaSSTexto = `${formatearFecha(colaborador.plantillaSS.fecha_inicio)} - ${formatearFecha(colaborador.plantillaSS.fecha_fin)}`;
-          }
-          
-          const row = `
-            <tr class="${colaborador.estado ? 'colaborador-habilitado' : 'colaborador-inhabilitado'}">
-              <td>${colaborador.id}</td>
-              <td>${colaborador.nombre}</td>
-              <td>${colaborador.cedula}</td>
-              <td>${colaborador.estado ? 'Habilitado' : 'Deshabilitado'}</td>
-              <td><span class="${cursoSisoClase}">${cursoSisoTexto}</span></td>
-              <td><span class="${plantillaSSClase}">${plantillaSSTexto}</span></td>
-              <td>
-                <button class="btn btn-sm btn-primary" 
-                        onclick="definirPlantillaSS(${colaborador.id}, ${solicitudId}, '${colaborador.plantillaSS ? colaborador.plantillaSS.id : ''}')">
-                  Definir
-                </button>
-              </td>
-              <td>
-                <button class="btn btn-sm btn-info" onclick="verHistorial(${colaborador.id})">
-                  Ver Historial
-                </button>
-              </td>
-            </tr>
-          `;
-          tbody.append(row);
-        });
-      } else {
-        tbody.html('<tr><td colspan="8" class="text-center">No hay colaboradores asociados a esta solicitud</td></tr>');
-      }
-    })
-    .catch(error => {
-      console.error('Error al cargar colaboradores:', error);
-      tbody.html('<tr><td colspan="8" class="text-danger text-center">Error al cargar los colaboradores: ' + error.message + '</td></tr>');
-    });
+          // Cargar colaboradores
+          return fetch(`/api/sst/colaboradores/${solicitudId}`);
+      })
+      .then(response => response.json())
+      .then(colaboradores => {
+          $('#tablaColaboradores').empty();
+          colaboradores.forEach(colaborador => {
+              const row = `
+                  <tr class="${colaborador.estado === 'inhabilitado' ? 'colaborador-inhabilitado' : 'colaborador-habilitado'}">
+                      <td>${colaborador.id}</td>
+                      <td>${colaborador.nombre}</td>
+                      <td>${colaborador.cedula}</td>
+                      <td>${colaborador.estado}</td>
+                      <td class="${getEstadoClase(colaborador.curso_siso)}">${colaborador.curso_siso || 'No definido'}</td>
+                      <td class="${getEstadoClase(colaborador.plantilla_ss)}">${colaborador.plantilla_ss || 'No definido'}</td>
+                      <td>
+                          <button class="btn btn-primary btn-sm" onclick="definirPlantillaSS('${colaborador.id}', '${solicitudId}')">
+                              Definir
+                          </button>
+                      </td>
+                      <td>
+                          <button class="btn btn-info btn-sm" onclick="verHistorial('${colaborador.id}')">
+                              Ver Historial
+                          </button>
+                      </td>
+                  </tr>
+              `;
+              $('#tablaColaboradores').append(row);
+          });
+      })
+      .catch(error => {
+          console.error('Error al cargar datos:', error);
+          $('#tablaColaboradores').html('<tr><td colspan="8" class="text-center">Error al cargar los datos</td></tr>');
+      });
 }
 
 // Función para mostrar colaboradores
