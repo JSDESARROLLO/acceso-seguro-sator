@@ -1085,46 +1085,34 @@ controller.registrarSalidaVehiculo = async (req, res) => {
 };
 
 controller.registrarIngreso = async (req, res) => {
+    const { id } = req.params;
+    const conn = await connection.getConnection();
+    
     try {
-        const token = req.cookies.token;
-        if (!token) return res.redirect('/login');
-
-        const decoded = jwt.verify(token, SECRET_KEY);
-        if (decoded.role !== 'seguridad') return res.redirect('/login');
-
-        const { id: userId } = decoded;
-        const { id: solicitudId } = req.params;
-
-        // Verificar que la solicitud existe y está en estado aprobado
-        const [solicitud] = await connection.execute(
-            'SELECT estado FROM solicitudes WHERE id = ?',
-            [solicitudId]
-        );
-
-        if (!solicitud.length) {
-            return res.status(404).json({ message: 'Solicitud no encontrada' });
-        }
-
-        if (solicitud[0].estado !== 'aprobada') {
-            return res.status(400).json({ message: 'La solicitud no está aprobada' });
-        }
-
+        await conn.beginTransaction();
+        
         // Actualizar el estado de la solicitud a 'en labor'
-        await connection.execute(
-            'UPDATE solicitudes SET estado = "en labor" WHERE id = ?',
-            [solicitudId]
+        await conn.execute(
+            'UPDATE solicitudes SET estado = ? WHERE id = ?',
+            ['en labor', id]
         );
-
-        // Registrar la acción en la tabla de acciones
-        await connection.execute(
-            'INSERT INTO acciones (solicitud_id, usuario_id, accion, created_at) VALUES (?, ?, "registro ingreso", ?)',
-            [solicitudId, userId, fechaMySQL]
-        );
-
-        res.status(200).json({ message: 'Ingreso registrado correctamente' });
+        
+        await conn.commit();
+        
+        res.json({
+            success: true,
+            message: 'Solicitud actualizada a "en labor" correctamente'
+        });
     } catch (error) {
+        await conn.rollback();
         console.error('[CONTROLLER] Error al registrar ingreso:', error);
-        res.status(500).json({ message: 'Error al registrar el ingreso', error });
+        res.status(500).json({
+            success: false,
+            message: 'Error al registrar el ingreso',
+            error: error.message
+        });
+    } finally {
+        conn.release();
     }
 };
 
