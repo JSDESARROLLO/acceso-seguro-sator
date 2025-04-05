@@ -76,26 +76,53 @@ function verColaboradores(solicitudId) {
               return;
           }
 
-          colaboradores.forEach(colaborador => {
+          colaboradores.forEach(col => {
+              // Determinar clases y valores para plantilla SS
+              const plantillaSS = col.plantillaSS 
+                ? `${formatearFecha(col.plantillaSS.fecha_inicio)} - ${formatearFecha(col.plantillaSS.fecha_fin)}` 
+                : 'No definida';
+
+              // Determinar si la plantilla está vigente
+              let plantillaClase = 'no-definido';
+              if (col.plantillaSS) {
+                const fechaFin = new Date(col.plantillaSS.fecha_fin);
+                plantillaClase = fechaFin > new Date() ? 'vigente' : 'vencido';
+              }
+              
+              // Determinar clase para curso SISO
+              let cursoSisoClase = '';
+              if (col.cursoSiso === 'Vencido') {
+                cursoSisoClase = 'vencido';
+              } else if (col.cursoSiso === 'Aprobado') {
+                cursoSisoClase = 'vigente';
+              } else {
+                cursoSisoClase = 'no-definido';
+              }
+              
+              // Determinar clase para la fila según estado del colaborador
+              const filaClase = col.estado ? 'colaborador-habilitado' : 'colaborador-inhabilitado';
+              
               const row = `
-                  <tr class="${colaborador.estado === 'inhabilitado' ? 'colaborador-inhabilitado' : 'colaborador-habilitado'}">
-                      <td>${colaborador.id}</td>
-                      <td>${colaborador.nombre}</td>
-                      <td>${colaborador.cedula}</td>
-                      <td>${colaborador.estado}</td>
-                      <td class="${window.getEstadoClase(colaborador.estado)}">${window.getEstadoTexto(colaborador.estado)}</td>
-                      <td class="${window.getEstadoClase(colaborador.plantilla_ss)}">${colaborador.plantilla_ss || 'No definido'}</td>
-                      <td>
-                          <button class="btn btn-primary btn-sm" onclick="definirPlantillaSS('${colaborador.id}', '${solicitudId}')">
-                              Definir
-                          </button>
-                      </td>
-                      <td>
-                          <button class="btn btn-info btn-sm" onclick="verHistorial('${colaborador.id}')">
-                              Ver Historial
-                          </button>
-                      </td>
-                  </tr>
+                <tr data-estado="${col.estado ? 'habilitado' : 'inhabilitado'}" class="${filaClase}">
+                  <td>${col.id}</td>
+                  <td>${col.nombre}</td>
+                  <td>${col.cedula}</td>
+                  <td>${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
+                  <td class="${cursoSisoClase}">${col.cursoSiso || 'No definido'}</td>
+                  <td class="${plantillaClase}">${plantillaSS}</td>
+                  <td>
+                    <button class="btn btn-sm btn-primary" 
+                            onclick="definirPlantillaSS(${col.id}, ${solicitudId}, '${col.plantillaSS ? col.plantillaSS.id : ''}')">
+                      Definir
+                    </button>
+                  </td>
+                  <td>
+                    <button class="btn btn-sm btn-info" 
+                            onclick="verHistorial(${col.id})">
+                      Ver
+                    </button>
+                  </td>
+                </tr>
               `;
               $('#tablaColaboradores').append(row);
           });

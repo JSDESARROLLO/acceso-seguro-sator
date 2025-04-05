@@ -5,6 +5,7 @@ const router = express.Router();
   
 router.get('/api/sst/colaboradores/:solicitudId', controller.getColaboradores);
 router.get('/api/sst/solicitudes/:solicitudId', controller.getSolicitudDetails);
+router.get('/api/sst/vehiculos/:solicitudId', controller.getVehiculos);
 router.get('/api/sst/plantilla-ss/:documentoId', controller.getPlantillaSS);
 router.post('/api/sst/plantilla-ss', controller.guardarOActualizarPlantillaSS);
 router.put('/api/sst/plantilla-ss', controller.guardarOActualizarPlantillaSS);

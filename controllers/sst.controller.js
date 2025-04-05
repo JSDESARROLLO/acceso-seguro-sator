@@ -1587,4 +1587,58 @@ controller.getSolicitudDetails = async (req, res) => {
     }
 };
 
-module.exports = controller;
+// Función para obtener los vehículos de una solicitud
+async function getVehiculos(req, res) {
+  try {
+    const { solicitudId } = req.params;
+    
+    // Log para depuración
+    logInfo('Obteniendo vehículos para la solicitud', { solicitudId });
+    
+    // Consulta SQL para obtener los vehículos con sus documentos
+    const query = `
+      SELECT v.*, 
+             s.id as soat_id, s.fecha_inicio as soat_inicio, s.fecha_fin as soat_fin,
+             t.id as tecno_id, t.fecha_inicio as tecno_inicio, t.fecha_fin as tecno_fin
+      FROM vehiculos v
+      LEFT JOIN documentos_vehiculo s ON v.id = s.vehiculo_id AND s.tipo_documento = 'soat'
+      LEFT JOIN documentos_vehiculo t ON v.id = t.vehiculo_id AND t.tipo_documento = 'tecnomecanica'
+      WHERE v.solicitud_id = ?
+    `;
+    
+    const [vehiculos] = await connection.execute(query, [solicitudId]);
+    
+    // Formatear los datos para la respuesta
+    const vehiculosFormateados = vehiculos.map(v => ({
+      id: v.id,
+      placa: v.placa,
+      estado: v.estado,
+      licencia_conduccion: v.licencia_conduccion === 1,
+      licencia_transito: v.licencia_transito === 1,
+      soat: v.soat_id ? {
+        id: v.soat_id,
+        fecha_inicio: v.soat_inicio,
+        fecha_fin: v.soat_fin
+      } : null,
+      tecnomecanica: v.tecno_id ? {
+        id: v.tecno_id,
+        fecha_inicio: v.tecno_inicio,
+        fecha_fin: v.tecno_fin
+      } : null
+    }));
+    
+    res.json({ success: true, vehiculos: vehiculosFormateados });
+  } catch (error) {
+    logError(error, 'Error al obtener los vehículos');
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al obtener los vehículos',
+      error: error.message 
+    });
+  }
+}
+
+module.exports = {
+  ...controller,
+  getVehiculos
+};
