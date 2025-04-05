@@ -431,6 +431,8 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
         FROM users u
         JOIN roles r ON u.role_id = r.id
         WHERE r.role_name = 'sst'
+        AND u.email IS NOT NULL
+        AND u.email != ''
       `);
   
       // Log de los datos recibidos
