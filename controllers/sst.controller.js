@@ -455,6 +455,7 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
         // Array para almacenar documentos faltantes
         const documentosFaltantes = [];
         const timestamp = format(new Date(), 'dd/MM/yyyy HH:mm:ss');
+        const timestampFile = format(new Date(), 'yyyyMMdd_HHmmss');
 
         // Formatear fechas de la solicitud
         const solicitudFormateada = {
@@ -542,8 +543,11 @@ Empresa: ${solicitud.empresa}
 Lista de documentos faltantes:
 ${documentosFaltantes.map((doc, index) => `${index + 1}. ${doc}`).join('\n')}`;
 
-            const txtPath = path.join(path.dirname(process.mainModule.filename), '..', 'temp', `documentos_faltantes_${solicitud.id}.txt`);
+            const txtPath = path.join(path.dirname(process.mainModule.filename), '..', 'temp', `documentos_faltantes_${solicitud.id}_${timestampFile}.txt`);
             await fs.promises.writeFile(txtPath, contenidoTxt, 'utf8');
+            console.log('📄 Archivo de documentos faltantes generado:', txtPath);
+        } else {
+            console.log('✅ No hay documentos faltantes para la solicitud:', solicitud.id);
         }
 
         // Cargar la plantilla HTML
@@ -1414,18 +1418,34 @@ controller.generarDocumentos = async (req, res) => {
         console.log('💾 HTML guardado en:', htmlPath);
 
         // 7. Verificar y copiar el archivo de documentos faltantes si existe
-        const docsFaltantesPath = path.join(__dirname, '..', 'temp', `documentos_faltantes_${id}.txt`);
+        const docsFaltantesPattern = path.join(__dirname, '..', 'temp', `documentos_faltantes_${id}_*.txt`);
         let tieneDocsFaltantes = false;
         try {
-            await fs.promises.access(docsFaltantesPath);
-            await fs.promises.copyFile(
-                docsFaltantesPath,
-                path.join(tempDir, `documentos_faltantes_${id}.txt`)
-            );
-            tieneDocsFaltantes = true;
-            console.log('📄 Archivo de documentos faltantes copiado al directorio temporal');
+            const files = await fs.promises.readdir(path.join(__dirname, '..', 'temp'));
+            const docsFaltantesFiles = files.filter(file => file.startsWith(`documentos_faltantes_${id}_`) && file.endsWith('.txt'));
+            
+            if (docsFaltantesFiles.length > 0) {
+                // Ordenar por fecha (el más reciente primero)
+                docsFaltantesFiles.sort().reverse();
+                const latestFile = docsFaltantesFiles[0];
+                
+                // Verificar si el archivo tiene contenido
+                const fileContent = await fs.promises.readFile(path.join(__dirname, '..', 'temp', latestFile), 'utf8');
+                if (fileContent.trim().length > 0) {
+                    await fs.promises.copyFile(
+                        path.join(__dirname, '..', 'temp', latestFile),
+                        path.join(tempDir, `documentos_faltantes_${id}.txt`)
+                    );
+                    tieneDocsFaltantes = true;
+                    console.log('📄 Archivo de documentos faltantes copiado al directorio temporal:', latestFile);
+                } else {
+                    console.log('ℹ️ Archivo de documentos faltantes vacío, no se incluirá en el ZIP');
+                }
+            } else {
+                console.log('ℹ️ No se encontró archivo de documentos faltantes');
+            }
         } catch (error) {
-            console.log('ℹ️ No se encontró archivo de documentos faltantes');
+            console.log('ℹ️ Error al buscar archivo de documentos faltantes:', error.message);
         }
 
         // 8. Generar ARL y Pasocial
@@ -1514,7 +1534,7 @@ controller.generarDocumentos = async (req, res) => {
                     try {
                         await fs.promises.rm(tempDir, { recursive: true, force: true });
                         if (tieneDocsFaltantes) {
-                            await fs.promises.unlink(docsFaltantesPath);
+                            await fs.promises.unlink(path.join(tempDir, `documentos_faltantes_${id}.txt`));
                         }
                         console.log('🧹 Archivos temporales eliminados');
                     } catch (cleanupError) {
