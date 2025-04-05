@@ -83,8 +83,8 @@ function verColaboradores(solicitudId) {
                       <td>${colaborador.nombre}</td>
                       <td>${colaborador.cedula}</td>
                       <td>${colaborador.estado}</td>
-                      <td class="${getEstadoClase(colaborador.curso_siso)}">${colaborador.curso_siso || 'No definido'}</td>
-                      <td class="${getEstadoClase(colaborador.plantilla_ss)}">${colaborador.plantilla_ss || 'No definido'}</td>
+                      <td class="${window.getEstadoClase(colaborador.estado)}">${window.getEstadoTexto(colaborador.estado)}</td>
+                      <td class="${window.getEstadoClase(colaborador.plantilla_ss)}">${colaborador.plantilla_ss || 'No definido'}</td>
                       <td>
                           <button class="btn btn-primary btn-sm" onclick="definirPlantillaSS('${colaborador.id}', '${solicitudId}')">
                               Definir
@@ -462,15 +462,14 @@ window.mostrarColaboradores = mostrarColaboradores;
 window.verHistorial = verHistorial; 
 window.definirPlantillaSS = definirPlantillaSS;
 
-// Función para obtener la clase CSS según el estado
-function getEstadoClase(estado) {
+// Funciones globales para manejo de estados
+window.getEstadoClase = function(estado) {
     return estado === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-}
+};
 
-// Función para obtener el texto del estado
-function getEstadoTexto(estado) {
+window.getEstadoTexto = function(estado) {
     return estado === 1 ? 'Habilitado' : 'Deshabilitado';
-}
+};
 
 // Función para cargar los colaboradores
 async function cargarColaboradores(solicitudId) {
@@ -514,8 +513,8 @@ async function cargarColaboradores(solicitudId) {
                     </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getEstadoClase(colaborador.estado)}">
-                        ${getEstadoTexto(colaborador.estado)}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${window.getEstadoClase(colaborador.estado)}">
+                        ${window.getEstadoTexto(colaborador.estado)}
                     </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
