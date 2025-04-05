@@ -1378,7 +1378,22 @@ controller.generarDocumentos = async (req, res) => {
 
         // 4. Obtener vehículos con todos sus documentos
         const [vehiculos] = await connection.execute(
-            'SELECT id, matricula as placa, estado, foto, soat, tecnomecanica, licencia_conduccion, licencia_transito FROM vehiculos WHERE solicitud_id = ?',
+            `SELECT 
+                v.id,
+                v.matricula as placa,
+                v.estado,
+                v.licencia_conduccion,
+                v.licencia_transito,
+                s.id as soat_id, 
+                s.fecha_inicio as soat_inicio, 
+                s.fecha_fin as soat_fin,
+                t.id as tecno_id, 
+                t.fecha_inicio as tecno_inicio, 
+                t.fecha_fin as tecno_fin
+            FROM vehiculos v
+            LEFT JOIN plantilla_documentos_vehiculos s ON v.id = s.vehiculo_id AND s.tipo_documento = 'soat'
+            LEFT JOIN plantilla_documentos_vehiculos t ON v.id = t.vehiculo_id AND t.tipo_documento = 'tecnomecanica'
+            WHERE v.solicitud_id = ?`,
             [id]
         );
 
@@ -1597,12 +1612,21 @@ async function getVehiculos(req, res) {
     
     // Consulta SQL para obtener los vehículos con sus documentos
     const query = `
-      SELECT v.*, 
-             s.id as soat_id, s.fecha_inicio as soat_inicio, s.fecha_fin as soat_fin,
-             t.id as tecno_id, t.fecha_inicio as tecno_inicio, t.fecha_fin as tecno_fin
+      SELECT 
+        v.id,
+        v.matricula as placa,
+        v.estado,
+        v.licencia_conduccion,
+        v.licencia_transito,
+        s.id as soat_id, 
+        s.fecha_inicio as soat_inicio, 
+        s.fecha_fin as soat_fin,
+        t.id as tecno_id, 
+        t.fecha_inicio as tecno_inicio, 
+        t.fecha_fin as tecno_fin
       FROM vehiculos v
-      LEFT JOIN documentos_vehiculo s ON v.id = s.vehiculo_id AND s.tipo_documento = 'soat'
-      LEFT JOIN documentos_vehiculo t ON v.id = t.vehiculo_id AND t.tipo_documento = 'tecnomecanica'
+      LEFT JOIN plantilla_documentos_vehiculos s ON v.id = s.vehiculo_id AND s.tipo_documento = 'soat'
+      LEFT JOIN plantilla_documentos_vehiculos t ON v.id = t.vehiculo_id AND t.tipo_documento = 'tecnomecanica'
       WHERE v.solicitud_id = ?
     `;
     
