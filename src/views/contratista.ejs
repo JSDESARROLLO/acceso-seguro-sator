@@ -2538,6 +2538,66 @@ function editarVehiculo(button) {
 </script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="/js/socket-manager.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+  
+  <script>
+    // Función para convertir imagen a WebP
+    async function convertImageToWebP(file) {
+      try {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true,
+          fileType: 'image/webp'
+        };
+        
+        const compressedFile = await imageCompression(file, options);
+        return new File([compressedFile], file.name.replace(/\.[^/.]+$/, '.webp'), {
+          type: 'image/webp',
+          lastModified: file.lastModified
+        });
+      } catch (error) {
+        console.error('Error al convertir la imagen:', error);
+        throw error;
+      }
+    }
+
+    // Función para procesar todos los inputs de archivo
+    async function processFileInputs() {
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      
+      for (const input of fileInputs) {
+        input.addEventListener('change', async (e) => {
+          const files = Array.from(e.target.files);
+          const convertedFiles = [];
+          
+          for (const file of files) {
+            if (file.type.startsWith('image/')) {
+              try {
+                const webpFile = await convertImageToWebP(file);
+                convertedFiles.push(webpFile);
+              } catch (error) {
+                console.error('Error al procesar archivo:', file.name, error);
+                convertedFiles.push(file); // Mantener el archivo original si falla la conversión
+              }
+            } else {
+              convertedFiles.push(file); // Mantener archivos que no son imágenes
+            }
+          }
+          
+          // Crear un nuevo DataTransfer para actualizar los archivos
+          const dataTransfer = new DataTransfer();
+          convertedFiles.forEach(file => dataTransfer.items.add(file));
+          input.files = dataTransfer.files;
+        });
+      }
+    }
+
+    // Inicializar el procesamiento de archivos cuando el documento esté listo
+    document.addEventListener('DOMContentLoaded', () => {
+      processFileInputs();
+    });
+  </script>
 </body>
 </html>
 

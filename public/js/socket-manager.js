@@ -14,59 +14,70 @@ class SocketManager {
             return;
         }
 
-        this.socket = io({
-            reconnection: true,
-            reconnectionAttempts: this.maxReconnectAttempts,
-            reconnectionDelay: this.reconnectDelay,
-            timeout: 20000
-        });
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
         this.setupEventListeners();
         this.authenticate(userId);
     }
 
     setupEventListeners() {
-        this.socket.on('connect', () => {
+        this.socket.onopen = () => {
             console.log('Socket conectado');
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.processMessageQueue();
-        });
+        };
 
-        this.socket.on('disconnect', () => {
+        this.socket.onclose = () => {
             console.log('Socket desconectado');
             this.isConnected = false;
-        });
+            this.attemptReconnect();
+        };
 
-        this.socket.on('reconnect_attempt', (attemptNumber) => {
-            console.log(`Intento de reconexión ${attemptNumber}`);
-            this.reconnectAttempts = attemptNumber;
-        });
-
-        this.socket.on('reconnect_failed', () => {
-            console.log('No se pudo reconectar');
-            this.isConnected = false;
-        });
-
-        this.socket.on('error', (error) => {
+        this.socket.onerror = (error) => {
             console.error('Error en el socket:', error);
-        });
+        };
 
-        // Escuchar mensajes nuevos
-        this.socket.on('nuevo_mensaje', (mensaje) => {
-            this.handleNewMessage(mensaje);
-        });
+        this.socket.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                if (message.type === 'nuevo_mensaje') {
+                    this.handleNewMessage(message);
+                }
+            } catch (error) {
+                console.error('Error al procesar mensaje:', error);
+            }
+        };
+    }
+
+    attemptReconnect() {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            console.log(`Intento de reconexión ${this.reconnectAttempts}`);
+            setTimeout(() => {
+                this.initialize(window.sstUserId);
+            }, this.reconnectDelay);
+        } else {
+            console.log('No se pudo reconectar');
+        }
     }
 
     authenticate(userId) {
-        if (this.socket && this.isConnected) {
-            this.socket.emit('autenticar', { userId });
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({
+                type: 'identify',
+                userId: userId
+            }));
         }
     }
 
     sendMessage(data) {
-        if (this.isConnected) {
-            this.socket.emit('enviar_mensaje', data);
+        if (this.isConnected && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({
+                type: 'message',
+                ...data
+            }));
         } else {
             this.messageQueue.push(data);
         }
@@ -80,16 +91,13 @@ class SocketManager {
     }
 
     handleNewMessage(mensaje) {
-        // Verificar si el chat está abierto para esta conversación
         const chatModal = document.getElementById('chatModal');
-        const chatSolicitudId = document.getElementById('chatSolicitudId').textContent;
+        const chatSolicitudId = document.getElementById('chatSolicitudId')?.textContent;
         
         if (chatModal && !chatModal.classList.contains('hidden') && 
-            chatSolicitudId === mensaje.solicitud_id.toString()) {
-            // Si el chat está abierto, mostrar el mensaje
+            chatSolicitudId === mensaje.solicitud_id?.toString()) {
             this.displayMessage(mensaje);
         } else {
-            // Si el chat está cerrado, mostrar notificación
             this.showNotification(mensaje);
         }
     }
@@ -121,7 +129,7 @@ class SocketManager {
 
     disconnect() {
         if (this.socket) {
-            this.socket.disconnect();
+            this.socket.close();
             this.socket = null;
             this.isConnected = false;
         }
