@@ -365,7 +365,11 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
       const { cedula, nombre, colaborador_id = [], matricula, vehiculo_id = [], renovacion, inicio_obra, fin_obra, dias_trabajo, lugar, labor, cambios } = req.body;
   
       // Parsear los cambios si existen
-      const cambiosDetectados = cambios ? JSON.parse(cambios) : null;
+      const cambiosDetectados = cambios ? JSON.parse(cambios) : {
+        colaboradores: { nuevos: [], modificados: [], eliminados: [] },
+        vehiculos: { nuevos: [], modificados: [], eliminados: [] },
+        documentos: { arl: false, pasocial: false }
+      };
   
       // Obtener información de la solicitud y el contratista
       const [solicitudInfo] = await conn.execute(`
@@ -375,6 +379,43 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
         JOIN lugares l ON s.lugar = l.id
         WHERE s.id = ?
       `, [solicitudId]);
+  
+      if (!solicitudInfo || solicitudInfo.length === 0) {
+        throw new Error('No se encontró la solicitud');
+      }
+  
+      // Actualizar datos básicos de la solicitud si se proporcionan
+      if (inicio_obra || fin_obra || dias_trabajo || lugar || labor) {
+        const updateFields = [];
+        const updateValues = [];
+  
+        if (inicio_obra) {
+          updateFields.push('inicio_obra = ?');
+          updateValues.push(inicio_obra);
+        }
+        if (fin_obra) {
+          updateFields.push('fin_obra = ?');
+          updateValues.push(fin_obra);
+        }
+        if (dias_trabajo) {
+          updateFields.push('dias_trabajo = ?');
+          updateValues.push(dias_trabajo);
+        }
+        if (lugar) {
+          updateFields.push('lugar = ?');
+          updateValues.push(lugar);
+        }
+        if (labor) {
+          updateFields.push('labor = ?');
+          updateValues.push(labor);
+        }
+  
+        if (updateFields.length > 0) {
+          const updateQuery = `UPDATE solicitudes SET ${updateFields.join(', ')} WHERE id = ?`;
+          updateValues.push(solicitudId);
+          await conn.execute(updateQuery, updateValues);
+        }
+      }
   
       // Obtener usuarios SST
       const [usuariosSST] = await conn.execute(`
@@ -923,19 +964,42 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
     } catch (error) {
       await conn.rollback();
       logError(error, '/actualizar-solicitud');
+      
+      // Limpiar archivos temporales en caso de error
       if (req.files) {
         Object.values(req.files).flat().forEach(async file => {
           try {
             await fs.access(file.path);
             await fs.unlink(file.path);
           } catch (err) {
+            // Ignorar errores si el archivo ya no existe
             if (err.code !== 'ENOENT') {
               logError(err, 'Limpieza de archivos temporales');
             }
           }
         });
       }
-      res.status(500).json({ success: false, message: error.message });
+
+      // Enviar respuesta de error más específica
+      let errorMessage = 'Error al actualizar la solicitud';
+      let statusCode = 500;
+
+      if (error.message === 'No se encontró la solicitud') {
+        errorMessage = 'La solicitud no existe';
+        statusCode = 404;
+      } else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
+        errorMessage = 'Uno o más campos hacen referencia a registros que no existen';
+        statusCode = 400;
+      } else if (error.code === 'ER_DUP_ENTRY') {
+        errorMessage = 'Ya existe un registro con esos datos';
+        statusCode = 409;
+      }
+
+      res.status(statusCode).json({ 
+        success: false,
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     } finally {
       conn.release();
     }
