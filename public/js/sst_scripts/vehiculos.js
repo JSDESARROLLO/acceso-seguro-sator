@@ -9,117 +9,118 @@ function formatearFecha(fecha) {
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+// Función para obtener la clase CSS según el estado
+function getEstadoClase(estado) {
+    return estado === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+}
+
+// Función para obtener el texto del estado
+function getEstadoTexto(estado) {
+    return estado === 1 ? 'Habilitado' : 'Deshabilitado';
+}
+
 // Función para mostrar vehículos
 function mostrarVehiculos(solicitudId) {
-  if (!solicitudId) {
-    console.warn('No se proporcionó ID de solicitud para mostrar vehículos');
-    return;
-  }
+    if (!solicitudId) {
+        console.warn('No se proporcionó ID de solicitud para mostrar vehículos');
+        return;
+    }
 
-  // Limpiar la tabla de vehículos
-  const tbody = $('#tablaVehiculos');
-  tbody.empty();
-  
-  // Agregar skeleton loader
-  const skeletonRows = Array(3).fill().map(() => `
-    <tr>
-      <td><div class="skeleton-loader" style="width: 30px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 60px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 150px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 150px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 100px; height: 20px;"></div></td>
-      <td><div class="skeleton-loader" style="width: 100px; height: 20px;"></div></td>
-    </tr>
-  `).join('');
-  
-  tbody.html(skeletonRows);
+    const tbody = $('#tablaVehiculos');
+    tbody.empty();
+    
+    // Agregar skeleton loader
+    const skeletonRows = Array(3).fill().map(() => `
+        <tr>
+            <td><div class="skeleton-loader" style="width: 30px; height: 20px;"></div></td>
+            <td><div class="skeleton-loader" style="width: 80px; height: 20px;"></div></td>
+            <td><div class="skeleton-loader" style="width: 60px; height: 20px;"></div></td>
+            <td><div class="skeleton-loader" style="width: 150px; height: 20px;"></div></td>
+            <td><div class="skeleton-loader" style="width: 150px; height: 20px;"></div></td>
+            <td><div class="skeleton-loader" style="width: 100px; height: 20px;"></div></td>
+            <td><div class="skeleton-loader" style="width: 100px; height: 20px;"></div></td>
+        </tr>
+    `).join('');
+    
+    tbody.html(skeletonRows);
 
-  // Cargar datos frescos de la base de datos
-  fetch(`/api/sst/colaboradores/${solicitudId}`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(data => {
-      tbody.empty();
-      if (data && data.vehiculos && data.vehiculos.length > 0) {
-        data.vehiculos.forEach(vehiculo => {
-          // Determinar clases y valores para SOAT
-          let soatTexto = 'No definido';
-          let soatClase = 'no-definido';
-          if (vehiculo.soat) {
-            soatTexto = `${formatearFecha(vehiculo.soat.fecha_inicio)} - ${formatearFecha(vehiculo.soat.fecha_fin)}`;
-            const fechaFin = new Date(vehiculo.soat.fecha_fin);
-            soatClase = fechaFin > new Date() ? 'vigente' : 'vencido';
-          }
-          
-          // Determinar clases y valores para Tecnomecánica
-          let tecnoTexto = 'No definido';
-          let tecnoClase = 'no-definido';
-          if (vehiculo.tecnomecanica) {
-            tecnoTexto = `${formatearFecha(vehiculo.tecnomecanica.fecha_inicio)} - ${formatearFecha(vehiculo.tecnomecanica.fecha_fin)}`;
-            const fechaFin = new Date(vehiculo.tecnomecanica.fecha_fin);
-            tecnoClase = fechaFin > new Date() ? 'vigente' : 'vencido';
-          }
-          
-          // Determinar textos para los botones de licencias
-          const textoBtnConduccion = vehiculo.licencia_conduccion ? 'Cancelar Aprobación' : 'Aprobar';
-          const textoBtnTransito = vehiculo.licencia_transito ? 'Cancelar Aprobación' : 'Aprobar';
-          
-          // Determinar clases para los botones
-          const claseBtnConduccion = vehiculo.licencia_conduccion ? 'btn-danger' : 'btn-success';
-          const claseBtnTransito = vehiculo.licencia_transito ? 'btn-danger' : 'btn-success';
-          
-          // Determinar clase para la fila según estado del vehículo
-          const filaClase = vehiculo.estado ? 'colaborador-habilitado' : 'colaborador-inhabilitado';
-          
-          const row = `
-            <tr class="${filaClase}">
-              <td>${vehiculo.id}</td>
-              <td>${vehiculo.placa}</td>
-              <td>${vehiculo.estado ? 'Activo' : 'Inactivo'}</td>
-              <td>
-                <span class="${soatClase}" id="estado-soat-${vehiculo.id}">${soatTexto}</span>
-                <button class="btn btn-sm btn-primary ml-2" 
-                        onclick="definirSoat(${vehiculo.id}, ${solicitudId}, '${vehiculo.soat ? vehiculo.soat.id : ''}')">
-                  Definir
-                </button>
-              </td>
-              <td>
-                <span class="${tecnoClase}" id="estado-tecnomecanica-${vehiculo.id}">${tecnoTexto}</span>
-                <button class="btn btn-sm btn-primary ml-2" 
-                        onclick="definirTecnomecanica(${vehiculo.id}, ${solicitudId}, '${vehiculo.tecnomecanica ? vehiculo.tecnomecanica.id : ''}')">
-                  Definir
-                </button>
-              </td>
-              <td>
-                <button class="btn btn-sm ${claseBtnConduccion}" 
-                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'conduccion', ${!vehiculo.licencia_conduccion})">
-                  ${textoBtnConduccion}
-                </button>
-              </td>
-              <td>
-                <button class="btn btn-sm ${claseBtnTransito}" 
-                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'transito', ${!vehiculo.licencia_transito})">
-                  ${textoBtnTransito}
-                </button>
-              </td>
-            </tr>
-          `;
-          tbody.append(row);
+    fetch(`/api/sst/vehiculos/${solicitudId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            tbody.empty();
+            if (data && data.vehiculos && data.vehiculos.length > 0) {
+                data.vehiculos.forEach(vehiculo => {
+                    // Determinar clases y valores para SOAT
+                    let soatTexto = 'No definido';
+                    let soatClase = 'no-definido';
+                    if (vehiculo.soat) {
+                        soatTexto = `${formatearFecha(vehiculo.soat.fecha_inicio)} - ${formatearFecha(vehiculo.soat.fecha_fin)}`;
+                        const fechaFin = new Date(vehiculo.soat.fecha_fin);
+                        soatClase = fechaFin > new Date() ? 'vigente' : 'vencido';
+                    }
+                    
+                    // Determinar clases y valores para Tecnomecánica
+                    let tecnoTexto = 'No definido';
+                    let tecnoClase = 'no-definido';
+                    if (vehiculo.tecnomecanica) {
+                        tecnoTexto = `${formatearFecha(vehiculo.tecnomecanica.fecha_inicio)} - ${formatearFecha(vehiculo.tecnomecanica.fecha_fin)}`;
+                        const fechaFin = new Date(vehiculo.tecnomecanica.fecha_fin);
+                        tecnoClase = fechaFin > new Date() ? 'vigente' : 'vencido';
+                    }
+                    
+                    const row = `
+                        <tr>
+                            <td>${vehiculo.id}</td>
+                            <td>${vehiculo.placa}</td>
+                            <td>
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getEstadoClase(vehiculo.estado)}">
+                                    ${getEstadoTexto(vehiculo.estado)}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="${soatClase}" id="estado-soat-${vehiculo.id}">${soatTexto}</span>
+                                <button class="btn btn-sm btn-primary ml-2" 
+                                        onclick="definirSoat(${vehiculo.id}, ${solicitudId}, '${vehiculo.soat ? vehiculo.soat.id : ''}')">
+                                    Definir
+                                </button>
+                            </td>
+                            <td>
+                                <span class="${tecnoClase}" id="estado-tecnomecanica-${vehiculo.id}">${tecnoTexto}</span>
+                                <button class="btn btn-sm btn-primary ml-2" 
+                                        onclick="definirTecnomecanica(${vehiculo.id}, ${solicitudId}, '${vehiculo.tecnomecanica ? vehiculo.tecnomecanica.id : ''}')">
+                                    Definir
+                                </button>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm ${vehiculo.licencia_conduccion ? 'btn-danger' : 'btn-success'}" 
+                                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'conduccion', ${!vehiculo.licencia_conduccion})">
+                                    ${vehiculo.licencia_conduccion ? 'Cancelar Aprobación' : 'Aprobar'}
+                                </button>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm ${vehiculo.licencia_transito ? 'btn-danger' : 'btn-success'}" 
+                                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'transito', ${!vehiculo.licencia_transito})">
+                                    ${vehiculo.licencia_transito ? 'Cancelar Aprobación' : 'Aprobar'}
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+            } else {
+                tbody.append('<tr><td colspan="7" class="text-center">No hay vehículos asociados a esta solicitud</td></tr>');
+            }
+        })
+        .catch(error => {
+            console.error('Error al cargar vehículos:', error);
+            tbody.empty();
+            tbody.append('<tr><td colspan="7" class="text-danger">Error al cargar los vehículos: ' + error.message + '</td></tr>');
         });
-      } else {
-        tbody.append('<tr><td colspan="7" class="text-center">No hay vehículos asociados a esta solicitud</td></tr>');
-      }
-    })
-    .catch(error => {
-      console.error('Error al cargar vehículos:', error);
-      tbody.empty();
-      tbody.append('<tr><td colspan="7" class="text-danger">Error al cargar los vehículos: ' + error.message + '</td></tr>');
-    });
 }
 
 // Función para alternar estado de licencia

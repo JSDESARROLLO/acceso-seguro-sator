@@ -460,4 +460,86 @@ window.formatearFecha = formatearFecha;
 window.verColaboradores = verColaboradores;
 window.mostrarColaboradores = mostrarColaboradores;
 window.verHistorial = verHistorial; 
-window.definirPlantillaSS = definirPlantillaSS; 
+window.definirPlantillaSS = definirPlantillaSS;
+
+// Función para obtener la clase CSS según el estado
+function getEstadoClase(estado) {
+    return estado === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+}
+
+// Función para obtener el texto del estado
+function getEstadoTexto(estado) {
+    return estado === 1 ? 'Habilitado' : 'Deshabilitado';
+}
+
+// Función para cargar los colaboradores
+async function cargarColaboradores(solicitudId) {
+    try {
+        const response = await fetch(`/api/sst/colaboradores/${solicitudId}`);
+        if (!response.ok) {
+            throw new Error('Error al cargar los colaboradores');
+        }
+        const data = await response.json();
+        
+        // Asegurarse de que tenemos un array de colaboradores
+        const colaboradores = Array.isArray(data) ? data : 
+                            (data.colaboradores || data.data || []);
+        
+        const tbody = document.querySelector('#colaboradoresTable tbody');
+        tbody.innerHTML = '';
+
+        if (colaboradores.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center py-4">
+                        No hay colaboradores registrados para esta solicitud
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        colaboradores.forEach(colaborador => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 h-10 w-10">
+                            <img class="h-10 w-10 rounded-full" src="${colaborador.foto || '/img/default-avatar.png'}" alt="">
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">${colaborador.nombre}</div>
+                            <div class="text-sm text-gray-500">${colaborador.cedula}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getEstadoClase(colaborador.estado)}">
+                        ${getEstadoTexto(colaborador.estado)}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <button onclick="definirPlantilla(${colaborador.id})" class="text-indigo-600 hover:text-indigo-900">
+                        Definir Plantilla
+                    </button>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <button onclick="verHistorial(${colaborador.id})" class="text-indigo-600 hover:text-indigo-900">
+                        Ver Historial
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error('Error al cargar datos:', error);
+        const tbody = document.querySelector('#colaboradoresTable tbody');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center py-4 text-red-600">
+                    Error al cargar los colaboradores: ${error.message}
+                </td>
+            </tr>
+        `;
+    }
+} 
