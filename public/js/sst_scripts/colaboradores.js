@@ -63,8 +63,19 @@ function verColaboradores(solicitudId) {
           return fetch(`/api/sst/colaboradores/${solicitudId}`);
       })
       .then(response => response.json())
-      .then(colaboradores => {
+      .then(data => {
           $('#tablaColaboradores').empty();
+          
+          // Asegurarse de que colaboradores sea un array
+          const colaboradores = Array.isArray(data) ? data : 
+                              (data.colaboradores ? data.colaboradores : 
+                              (data.data ? data.data : []));
+          
+          if (colaboradores.length === 0) {
+              $('#tablaColaboradores').append('<tr><td colspan="8" class="text-center">No hay colaboradores registrados</td></tr>');
+              return;
+          }
+
           colaboradores.forEach(colaborador => {
               const row = `
                   <tr class="${colaborador.estado === 'inhabilitado' ? 'colaborador-inhabilitado' : 'colaborador-habilitado'}">

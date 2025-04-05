@@ -108,5 +108,5 @@ class SocketManager {
     }
 }
 
-// Exportar la clase
-window.SocketManager = SocketManager; 
+// Exportar la clase al objeto window
+window.socketManager = new SocketManager(); 
