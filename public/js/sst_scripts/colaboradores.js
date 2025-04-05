@@ -22,14 +22,28 @@ function verColaboradores(solicitudId) {
     return;
   }
 
-  // Mostrar el modal inmediatamente
+  // Limpiar todas las tablas y contenedores
+  $('#tablaColaboradores').empty();
+  $('#tablaVehiculos').empty();
+  $('#colaboradoresId').text('');
+  $('#colaboradoresEmpresa').text('');
+  $('#colaboradoresContratista').text('');
+
+  // Obtener datos de la solicitud
+  const solicitudRow = $(`tr[data-id="${solicitudId}"]`);
+  const empresa = solicitudRow.find('td:eq(1)').text();
+  const contratista = solicitudRow.find('td:eq(8)').text();
+
+  // Actualizar información en el modal
+  $('#colaboradoresId').text(solicitudId);
+  $('#colaboradoresEmpresa').text(empresa);
+  $('#colaboradoresContratista').text(contratista);
+
+  // Mostrar el modal
   $('#colaboradoresModal').modal('show');
 
-  // Limpiar y mostrar skeleton loader en la tabla
+  // Agregar skeleton loader en la tabla de colaboradores
   const tbody = $('#tablaColaboradores');
-  tbody.empty();
-  
-  // Agregar skeleton loader
   const skeletonRows = Array(5).fill().map(() => `
     <tr>
       <td><div class="skeleton-loader" style="width: 30px; height: 20px;"></div></td>
@@ -45,22 +59,12 @@ function verColaboradores(solicitudId) {
   
   tbody.html(skeletonRows);
 
-  // Obtener datos de la solicitud
-  const solicitudRow = $(`tr[data-id="${solicitudId}"]`);
-  const empresa = solicitudRow.find('td:eq(1)').text();
-  const contratista = solicitudRow.find('td:eq(8)').text();
-
-  // Actualizar información en el modal
-  $('#colaboradoresId').text(solicitudId);
-  $('#colaboradoresEmpresa').text(empresa);
-  $('#colaboradoresContratista').text(contratista);
-
   // Cargar datos reales
   fetch(`/api/sst/colaboradores/${solicitudId}`)
     .then(response => {
-    if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status}`);
-    }
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
       return response.json();
     })
     .then(data => {
@@ -351,6 +355,10 @@ $(document).ready(function() {
     const tipo = $(this).val();
     const solicitudId = $('#colaboradoresId').text();
     
+    // Limpiar ambas tablas antes de cambiar
+    $('#tablaColaboradores').empty();
+    $('#tablaVehiculos').empty();
+    
     if (tipo === 'colaboradores') {
       $('#tablaColaboradoresContainer').show();
       $('#tablaVehiculosContainer').hide();
@@ -443,6 +451,27 @@ $(document).ready(function() {
         text: error.message
       });
     }
+  });
+
+  // Manejar cierre del modal
+  $('#colaboradoresModal').on('hidden.bs.modal', function () {
+    // Limpiar todas las tablas y contenedores
+    $('#tablaColaboradores').empty();
+    $('#tablaVehiculos').empty();
+    $('#colaboradoresId').text('');
+    $('#colaboradoresEmpresa').text('');
+    $('#colaboradoresContratista').text('');
+    
+    // Resetear el filtro de tipo
+    $('#filtroTipo').val('colaboradores');
+    
+    // Resetear el filtro de estado
+    $('#filtroEstado').val('todos');
+    
+    // Mostrar contenedor de colaboradores por defecto
+    $('#tablaColaboradoresContainer').show();
+    $('#tablaVehiculosContainer').hide();
+    $('#filtroEstadoContainer').show();
   });
 });
 

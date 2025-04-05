@@ -16,6 +16,7 @@ function mostrarVehiculos(solicitudId) {
     return;
   }
 
+  // Limpiar la tabla de vehículos
   const tbody = $('#tablaVehiculos');
   tbody.empty();
   
@@ -34,6 +35,7 @@ function mostrarVehiculos(solicitudId) {
   
   tbody.html(skeletonRows);
 
+  // Cargar datos frescos de la base de datos
   fetch(`/api/sst/colaboradores/${solicitudId}`)
     .then(response => {
       if (!response.ok) {
