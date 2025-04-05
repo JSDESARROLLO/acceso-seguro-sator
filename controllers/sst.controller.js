@@ -1548,4 +1548,43 @@ controller.generarDocumentos = async (req, res) => {
     }
 };
 
+controller.getSolicitudDetails = async (req, res) => {
+    try {
+        const solicitudId = req.params.solicitudId;
+        console.log('📋 Obteniendo detalles de la solicitud:', solicitudId);
+
+        const query = `
+            SELECT s.*, u.username as nombre_usuario, l.nombre_lugar
+            FROM solicitudes s
+            LEFT JOIN users u ON s.usuario_id = u.id
+            LEFT JOIN lugares l ON s.lugar = l.id
+            WHERE s.id = ?
+        `;
+
+        const [solicitud] = await connection.execute(query, [solicitudId]);
+
+        if (!solicitud || solicitud.length === 0) {
+            console.error('❌ Solicitud no encontrada:', solicitudId);
+            return res.status(404).json({ 
+                error: 'Solicitud no encontrada',
+                message: 'No se encontró la solicitud solicitada'
+            });
+        }
+
+        // Formatear fechas
+        const solicitudData = solicitud[0];
+        solicitudData.inicio_obra = format(new Date(solicitudData.inicio_obra), 'dd/MM/yyyy');
+        solicitudData.fin_obra = format(new Date(solicitudData.fin_obra), 'dd/MM/yyyy');
+
+        console.log('✅ Detalles de la solicitud obtenidos correctamente');
+        res.json(solicitudData);
+    } catch (error) {
+        console.error('❌ Error al obtener detalles de la solicitud:', error);
+        res.status(500).json({ 
+            error: 'Error interno del servidor',
+            message: 'Ocurrió un error al obtener los detalles de la solicitud'
+        });
+    }
+};
+
 module.exports = controller;
