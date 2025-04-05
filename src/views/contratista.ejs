@@ -1241,6 +1241,28 @@ form.addEventListener('submit', async (e) => {
 
     // Preparar datos para enviar
     const formData = new FormData(form);
+    
+    // Procesar archivos antes de enviarlos
+    const fileInputs = form.querySelectorAll('input[type="file"]');
+    for (const input of fileInputs) {
+        if (input.files.length > 0) {
+            const files = Array.from(input.files);
+            for (const file of files) {
+                if (file.type.startsWith('image/')) {
+                    try {
+                        const webpFile = await convertImageToWebP(file);
+                        formData.append(input.name, webpFile);
+                    } catch (error) {
+                        console.error('Error al procesar archivo:', file.name, error);
+                        formData.append(input.name, file); // Mantener el archivo original si falla la conversión
+                    }
+                } else {
+                    formData.append(input.name, file);
+                }
+            }
+        }
+    }
+    
     formData.append('cambios', JSON.stringify(cambios));
     formData.append('renovacion', esRenovacion ? 'true' : 'false');
 

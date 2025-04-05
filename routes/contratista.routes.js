@@ -66,20 +66,28 @@ const storage = multer.diskStorage({
 // Validación de tipos de archivo
 const fileFilter = (req, file, cb) => {
   const allowedTypes = {
-    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/jpeg': ['.jpg', '.jpeg', '.jfif', '.jpe'],
     'image/png': ['.png'],
     'application/pdf': ['.pdf'],
     'application/msword': ['.doc'],
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-    'image/webp': ['.webp']
+    'image/webp': ['.webp'],
+    'image/gif': ['.gif'],
+    'image/bmp': ['.bmp'],
+    'image/x-ms-bmp': ['.bmp']
   };
   
   const ext = path.extname(file.originalname).toLowerCase();
-  const mimeType = file.mimetype;
+  const mimeType = file.mimetype.toLowerCase();
   
   logInfo('Validando archivo:', { filename: file.originalname, mimeType, extension: ext });
 
-  if (allowedTypes[mimeType] && allowedTypes[mimeType].includes(ext)) {
+  // Verificar si es una imagen o documento permitido
+  const isAllowedType = Object.entries(allowedTypes).some(([type, extensions]) => {
+    return type.toLowerCase() === mimeType || extensions.includes(ext);
+  });
+
+  if (isAllowedType) {
     logInfo('Archivo válido');
     cb(null, true);
   } else {
