@@ -1274,6 +1274,7 @@ router.get('/obtener-historial-colaborador/:colaboradorId', async (req, res) => 
         DATE_FORMAT(r.fecha_hora, '%d/%m/%Y %H:%i:%s') as fecha_hora,
         r.estado_actual,
         s.lugar,
+        l.nombre_lugar,
         DATE_FORMAT(r.created_at, '%d/%m/%Y %H:%i:%s') as registro_hecho,
         us.username AS usuario_registro
       FROM registros r
@@ -1281,6 +1282,7 @@ router.get('/obtener-historial-colaborador/:colaboradorId', async (req, res) => 
       JOIN solicitudes s ON r.solicitud_id = s.id
       JOIN users u ON s.usuario_id = u.id
       JOIN users us ON r.usuario_id = us.id
+      JOIN lugares l ON s.lugar = l.id
       WHERE r.colaborador_id = ?
       ORDER BY r.fecha_hora DESC
     `, [colaboradorId]);

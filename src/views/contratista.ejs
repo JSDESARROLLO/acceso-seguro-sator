@@ -986,7 +986,7 @@
                     <td>${r.fecha_hora || 'N/A'}</td>
                     <td><span class="badge badge-${r.estado_actual === 'Ingreso' ? 'success' : 'danger'}">${r.estado_actual || 'N/A'}</span></td>
                     <td><span class="badge badge-${r.tipo?.toLowerCase() === 'entrada' ? 'success' : 'danger'}">${r.tipo || 'N/A'}</span></td>
-                    <td>${r.lugar || 'N/A'}</td>
+                    <td>${r.nombre_lugar || 'N/A'}</td>
                     <td>${r.usuario_registro || 'N/A'}</td>
                 </tr>
             `).join('') : '<tr><td colspan="5" class="text-center">No hay registros</td></tr>';
