@@ -892,14 +892,26 @@
             const tbody = document.getElementById('tablaColaboradores');
             tbody.innerHTML = data.colaboradores.length === 0 ? `
                 <tr><td colspan="8" class="text-center">No hay colaboradores para mostrar</td></tr>
-            ` : data.colaboradores.map(col => `
+            ` : data.colaboradores.map(col => {
+                // Extraer las fechas de la plantilla SS si existe
+                let plantillaClass = 'text-red-500 font-semibold';
+                if (col.plantilla_ss && col.plantilla_ss !== 'No definida') {
+                    const fechas = col.plantilla_ss.split(' - ');
+                    if (fechas.length === 2) {
+                        const fechaFin = fechas[1].split('/').reverse().join('-'); // Convertir dd/mm/yyyy a yyyy-mm-dd
+                        const hoy = new Date().toISOString().split('T')[0];
+                        plantillaClass = fechaFin >= hoy ? 'text-green-500 font-semibold' : 'text-red-500 font-semibold';
+                    }
+                }
+                
+                return `
                 <tr data-colaborador-id="${col.id}" data-estado="${col.estado ? 'habilitado' : 'inhabilitado'}">
                     <td>${col.id}</td>
                     <td>${col.nombre}</td>
                     <td>${col.cedula}</td>
                     <td class="estado-colaborador">${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
                     <td>No definido</td>
-                    <td>No definida</td>
+                    <td class="${plantillaClass}">${col.plantilla_ss || 'No definida'}</td>
                     <td class="acciones-colaborador">
                         <button class="btn btn-${col.estado ? 'danger' : 'success'} btn-sm accion-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="${!col.estado}">
                             ${col.estado ? 'Deshabilitar' : 'Restaurar'}
@@ -907,7 +919,7 @@
                     </td>
                     <td><button class="btn btn-info btn-sm ver-historial" data-colaborador-id="${col.id}">Ver</button></td>
                 </tr>
-            `).join('');
+            `}).join('');
 
             $('#modalDisabledCollaborators').modal('show');
             aplicarFiltroEstado();

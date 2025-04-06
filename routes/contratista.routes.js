@@ -1083,10 +1083,32 @@ router.get('/obtener-datos-solicitud/:id', async (req, res) => {
       return res.status(404).json({ error: 'Solicitud no encontrada' });
     }
 
-    const [colaboradores] = await connection.execute(
-      'SELECT id, cedula, nombre, foto, cedulaFoto, estado, solicitud_id FROM colaboradores WHERE solicitud_id = ? AND estado = 1',
-      [id]
-    );
+    const [colaboradores] = await connection.execute(`
+      SELECT 
+        c.id, 
+        c.cedula, 
+        c.nombre, 
+        c.foto, 
+        c.cedulaFoto, 
+        c.estado,
+        COALESCE(
+          (
+            SELECT CONCAT(
+              DATE_FORMAT(pss.fecha_inicio, '%d/%m/%Y'),
+              ' - ',
+              DATE_FORMAT(pss.fecha_fin, '%d/%m/%Y')
+            )
+            FROM plantilla_seguridad_social pss 
+            WHERE pss.colaborador_id = c.id 
+            AND pss.solicitud_id = c.solicitud_id
+            ORDER BY pss.fecha_fin DESC 
+            LIMIT 1
+          ),
+          'No definida'
+        ) as plantilla_ss
+      FROM colaboradores c
+      WHERE c.solicitud_id = ?
+    `, [id]);
 
     const solicitudData = {
       ...solicitud[0],
@@ -1245,15 +1267,40 @@ router.get('/obtener-colaboradores-todos/:solicitudId', async (req, res) => {
 
     if (!solicitudData.length) return res.status(404).json({ success: false, message: 'Solicitud no encontrada' });
 
-    const [colaboradores] = await connection.execute(
-      'SELECT id, cedula, nombre, foto, cedulaFoto, estado FROM colaboradores WHERE solicitud_id = ?',
-      [solicitudId]
-    );
+    const [colaboradores] = await connection.execute(`
+      SELECT 
+        c.id, 
+        c.cedula, 
+        c.nombre, 
+        c.foto, 
+        c.cedulaFoto, 
+        c.estado,
+        COALESCE(
+          (
+            SELECT CONCAT(
+              DATE_FORMAT(pss.fecha_inicio, '%d/%m/%Y'),
+              ' - ',
+              DATE_FORMAT(pss.fecha_fin, '%d/%m/%Y')
+            )
+            FROM plantilla_seguridad_social pss 
+            WHERE pss.colaborador_id = c.id 
+            AND pss.solicitud_id = c.solicitud_id
+            ORDER BY pss.fecha_fin DESC 
+            LIMIT 1
+          ),
+          'No definida'
+        ) as plantilla_ss
+      FROM colaboradores c
+      WHERE c.solicitud_id = ?
+    `, [solicitudId]);
 
     res.json({
       success: true,
       solicitud: solicitudData[0],
-      colaboradores: colaboradores.map(col => ({ ...col, estado: Boolean(col.estado) }))
+      colaboradores: colaboradores.map(col => ({ 
+        ...col, 
+        estado: Boolean(col.estado)
+      }))
     });
   } catch (error) {
     logError(error, '/obtener-colaboradores-todos');
