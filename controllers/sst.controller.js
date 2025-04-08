@@ -751,10 +751,20 @@ controller.getColaboradores = async (req, res) => {
                  FROM plantilla_seguridad_social pss 
                  WHERE pss.colaborador_id = c.id 
                  ORDER BY pss.fecha_fin DESC LIMIT 1) as plantillaSS,
-                (SELECT rc.estado 
+                (SELECT 
+                    CASE 
+                        WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento > CURDATE() THEN 'Aprobado'
+                        WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento <= CURDATE() THEN 'Vencido'
+                        WHEN rc.estado = 'PERDIDO' THEN 'Perdido'
+                        WHEN rc.estado IS NOT NULL THEN 'No definido'
+                        ELSE 'No realizado'
+                    END
                  FROM resultados_capacitaciones rc 
+                 JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
                  WHERE rc.colaborador_id = c.id 
-                 ORDER BY rc.fecha_vencimiento DESC LIMIT 1) as cursoSiso
+                 AND cap.nombre LIKE '%Curso siso%'
+                 ORDER BY rc.created_at DESC LIMIT 1
+                ) as cursoSiso
             FROM colaboradores c 
             WHERE c.solicitud_id = ?`;
 
@@ -789,7 +799,7 @@ controller.getColaboradores = async (req, res) => {
                 ...col,
                 estado: Boolean(col.estado),
                 plantillaSS: plantillaSS,
-                cursoSiso: col.cursoSiso === 1 ? 'Aprobado' : col.cursoSiso === 0 ? 'Vencido' : 'No definido'
+                cursoSiso: col.cursoSiso
             };
         });
 

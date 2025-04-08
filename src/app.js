@@ -524,8 +524,7 @@ async function saveMessageToDatabase(message) {
     throw error;
   }
 }
-
 const PORT = process.env.PORT || 3900;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor corriendo en http://0.0.0.0:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

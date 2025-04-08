@@ -187,16 +187,63 @@ controller.getSolicitudData = async (req, res) => {
   controller.getDisabledCollaborators = async (req, res) => {
     const { id } = req.params; // id de la solicitud
     try {
-      const [colaboradores] = await connection.execute(
-        'SELECT id, nombre, cedula FROM colaboradores WHERE solicitud_id = ? AND estado = false',
-        [id]
-      );
-      res.json(colaboradores);
+        const [colaboradores] = await connection.execute(`
+            SELECT 
+                c.id, 
+                c.nombre, 
+                c.cedula,
+                c.estado,
+                COALESCE(
+                    (
+                        SELECT CONCAT(
+                            DATE_FORMAT(pss.fecha_inicio, '%d/%m/%Y'),
+                            ' - ',
+                            DATE_FORMAT(pss.fecha_fin, '%d/%m/%Y')
+                        )
+                        FROM plantilla_seguridad_social pss 
+                        WHERE pss.colaborador_id = c.id 
+                        AND pss.solicitud_id = c.solicitud_id
+                        ORDER BY pss.fecha_fin DESC 
+                        LIMIT 1
+                    ),
+                    'No definida'
+                ) as plantilla_ss,
+                (SELECT 
+                    CASE 
+                        WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento > CURDATE() THEN 'Aprobado'
+                        WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento <= CURDATE() THEN 'Vencido'
+                        WHEN rc.estado = 'PERDIDO' THEN 'Perdido'
+                        WHEN rc.estado IS NOT NULL THEN 'No definido'
+                        ELSE 'No realizado'
+                    END
+                 FROM resultados_capacitaciones rc 
+                 JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
+                 WHERE rc.colaborador_id = c.id 
+                 AND cap.nombre LIKE '%Curso siso%'
+                 ORDER BY rc.created_at DESC LIMIT 1
+                ) as cursoSiso
+            FROM colaboradores c
+            WHERE c.solicitud_id = ? 
+        `, [id]);
+
+        // Log para depuración
+        console.log('Datos de colaboradores:', JSON.stringify(colaboradores, null, 2));
+
+        const [solicitud] = await connection.execute(
+            'SELECT empresa FROM solicitudes WHERE id = ?',
+            [id]
+        );
+
+        res.json({
+            success: true,
+            solicitud: solicitud[0],
+            colaboradores: colaboradores
+        });
     } catch (error) {
-      console.error('Error fetching disabled collaborators:', error);
-      res.status(500).json({ message: 'Error fetching disabled collaborators' });
+        console.error('Error fetching disabled collaborators:', error);
+        res.status(500).json({ message: 'Error fetching disabled collaborators' });
     }
-  };
+};
   
 
 

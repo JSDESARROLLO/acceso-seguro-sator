@@ -1075,8 +1075,7 @@ router.get('/obtener-datos-solicitud/:id', async (req, res) => {
       LEFT JOIN lugares l ON s.lugar = l.id
       WHERE s.id = ?
     `, [id]);
-
-    logInfo('Resultado de la consulta:', { solicitud });
+ 
 
     if (!solicitud[0]) {
       logError('Solicitud no encontrada:', { id });
@@ -1105,7 +1104,25 @@ router.get('/obtener-datos-solicitud/:id', async (req, res) => {
             LIMIT 1
           ),
           'No definida'
-        ) as plantilla_ss
+        ) as plantilla_ss,
+        COALESCE(
+          (
+            SELECT 
+              CASE
+                WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento >= CURDATE() THEN 'Aprobado'
+                WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento < CURDATE() THEN 'Vencido'
+                WHEN rc.estado IS NOT NULL THEN 'Perdido'
+                ELSE 'No realizado'
+              END
+            FROM resultados_capacitaciones rc
+            JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
+            WHERE rc.colaborador_id = c.id
+            AND cap.nombre LIKE '%Curso siso%'
+            ORDER BY rc.created_at DESC
+            LIMIT 1
+          ),
+          'No realizado'
+        ) as curso_siso
       FROM colaboradores c
       WHERE c.solicitud_id = ?
     `, [id]);
@@ -1119,8 +1136,7 @@ router.get('/obtener-datos-solicitud/:id', async (req, res) => {
       interventor_id: solicitud[0].interventor_id,
       lugar: solicitud[0].lugar_id // Asegurarnos de que el lugar se incluya correctamente
     };
-
-    logInfo('Datos procesados:', { solicitudData });
+ 
 
     res.json({
       solicitud: solicitudData,
@@ -1289,7 +1305,25 @@ router.get('/obtener-colaboradores-todos/:solicitudId', async (req, res) => {
             LIMIT 1
           ),
           'No definida'
-        ) as plantilla_ss
+        ) as plantilla_ss,
+        COALESCE(
+          (
+            SELECT 
+              CASE
+                WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento >= CURDATE() THEN 'Aprobado'
+                WHEN rc.estado = 'APROBADO' AND rc.fecha_vencimiento < CURDATE() THEN 'Vencido'
+                WHEN rc.estado IS NOT NULL THEN 'Perdido'
+                ELSE 'No realizado'
+              END
+            FROM resultados_capacitaciones rc
+            JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
+            WHERE rc.colaborador_id = c.id
+            AND cap.nombre LIKE '%Curso siso%'
+            ORDER BY rc.created_at DESC
+            LIMIT 1
+          ),
+          'No realizado'
+        ) as curso_siso
       FROM colaboradores c
       WHERE c.solicitud_id = ?
     `, [solicitudId]);
