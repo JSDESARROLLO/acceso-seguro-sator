@@ -7,10 +7,41 @@ const WebSocket = require('ws');
 const db = require('../db/db');
 const jwt = require('jsonwebtoken');
 const { S3Client } = require('@aws-sdk/client-s3');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Configuración de seguridad con helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com"],
+      imgSrc: ["'self'", "data:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"]
+    }
+  },
+  crossOriginEmbedderPolicy: true,
+  crossOriginOpenerPolicy: true,
+  crossOriginResourcePolicy: { policy: "same-site" },
+  dnsPrefetchControl: true,
+  frameguard: { action: 'deny' },
+  hidePoweredBy: true,
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  ieNoOpen: true,
+  noSniff: true,
+  originAgentCluster: true,
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  xssFilter: true
+}));
 
 // Configuración de DigitalOcean Spaces con AWS SDK v3
 const s3Client = new S3Client({
