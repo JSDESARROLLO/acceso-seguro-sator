@@ -1,0 +1,14 @@
+# Security Contact Information
+Contact: mailto:jcdesarrollo25@gmail.com
+Expires: 2029-12-31T23:59:59.000Z
+Preferred-Languages: es, en
+
+# Sistema de gestión de ingresos y salidas de uso interno
+# Internal access management system
+Notice: Este sistema es de uso exclusivo para personal autorizado
+Usage: Sistema desarrollado para la gestión de ingresos y salidas de Sator
+# Please report security issues promptly
+Acknowledgments: https://www.acceso-seguro-sator.com/security-acknowledgments
+Canonical: https://www.acceso-seguro-sator.com/.well-known/security.txt
+Permission: Este sistema es una herramienta autorizada para la gestión de accesos de Sator
+Hiring: Este dominio es operado por un proveedor autorizado de servicios tecnológicos para Sator 

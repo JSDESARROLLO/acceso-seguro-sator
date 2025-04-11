@@ -1,0 +1,19 @@
+# Sistema de gestión de ingresos y salidas - Uso interno
+# Prohibido el acceso de bots y rastreadores
+User-agent: *
+Disallow: /
+
+# Sistema de uso exclusivo para personal autorizado
+# No se permite el rastreo de ninguna sección del sistema
+Disallow: /api/
+Disallow: /admin/
+Disallow: /uploads/
+Disallow: /private/
+Disallow: /capacitaciones/
+Disallow: /contratista/
+Disallow: /interventor/
+Disallow: /sst/
+
+# Política de rastreo
+Crawl-delay: 10
+Allow: /$ 

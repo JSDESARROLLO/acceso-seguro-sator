@@ -18,23 +18,31 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com"],
-      imgSrc: ["'self'", "data:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com", "https:", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com"],
+      connectSrc: ["'self'", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'none'"]
+      frameSrc: ["'none'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      upgradeInsecureRequests: []
     }
   },
-  crossOriginEmbedderPolicy: true,
-  crossOriginOpenerPolicy: true,
+  crossOriginEmbedderPolicy: { policy: "credentialless" },
+  crossOriginOpenerPolicy: { policy: "same-origin" },
   crossOriginResourcePolicy: { policy: "same-site" },
   dnsPrefetchControl: true,
   frameguard: { action: 'deny' },
   hidePoweredBy: true,
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  hsts: { 
+    maxAge: 31536000, 
+    includeSubDomains: true, 
+    preload: true 
+  },
   ieNoOpen: true,
   noSniff: true,
   originAgentCluster: true,
@@ -42,6 +50,24 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   xssFilter: true
 }));
+
+// Agregar cabeceras de seguridad adicionales
+app.use((req, res, next) => {
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Download-Options', 'noopen');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// Forzar HTTPS
+app.use((req, res, next) => {
+  if (!req.secure && req.get('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
+    return res.redirect('https://' + req.get('host') + req.url);
+  }
+  next();
+});
 
 // Configuración de DigitalOcean Spaces con AWS SDK v3
 const s3Client = new S3Client({

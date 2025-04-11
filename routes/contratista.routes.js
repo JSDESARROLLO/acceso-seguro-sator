@@ -116,6 +116,21 @@ async function cleanupTempFiles(filePath) {
   }
 }
 
+// Función para limpiar todos los archivos temporales de una solicitud
+async function cleanupAllTempFiles(files) {
+  if (!files || !Array.isArray(files)) return;
+  
+  for (const file of files) {
+    try {
+      if (file.path) {
+        await cleanupTempFiles(file.path);
+      }
+    } catch (error) {
+      logError(error, 'Limpieza de archivos temporales en batch');
+    }
+  }
+}
+
 // Función para subir archivo a Spaces con reintentos
 async function uploadToSpacesFromDisk(filePath, originalName, folder = 'images/vehiculos', retries = 3) {
   const uuid = uuidv4();
@@ -341,24 +356,14 @@ router.post('/generar-solicitud', upload.any(), async (req, res) => {
     await conn.rollback();
     logError(error, '/generar-solicitud');
     // Limpiar archivos temporales en caso de error
-    if (req.files) {
-      Object.values(req.files).flat().forEach(async file => {
-        try {
-          await fs.access(file.path);
-          await fs.unlink(file.path);
-        } catch (err) {
-          // Ignorar errores si el archivo ya no existe
-          if (err.code !== 'ENOENT') {
-            logError(err, 'Limpieza de archivos temporales');
-          }
-        }
-      });
-    }
+    await cleanupAllTempFiles(req.files);
     res.status(500).json({ 
       error: 'Error al crear la solicitud',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
+    // Limpiar archivos temporales después de procesar la solicitud
+    await cleanupAllTempFiles(req.files);
     conn.release();
   }
 });
@@ -976,19 +981,7 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
       logError(error, '/actualizar-solicitud');
       
       // Limpiar archivos temporales en caso de error
-      if (req.files) {
-        Object.values(req.files).flat().forEach(async file => {
-          try {
-            await fs.access(file.path);
-            await fs.unlink(file.path);
-          } catch (err) {
-            // Ignorar errores si el archivo ya no existe
-            if (err.code !== 'ENOENT') {
-              logError(err, 'Limpieza de archivos temporales');
-            }
-          }
-        });
-      }
+      await cleanupAllTempFiles(req.files);
 
       // Enviar respuesta de error más específica
       let errorMessage = 'Error al actualizar la solicitud';
@@ -1011,6 +1004,8 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     } finally {
+      // Limpiar archivos temporales después de procesar la solicitud
+      await cleanupAllTempFiles(req.files);
       conn.release();
     }
   });
