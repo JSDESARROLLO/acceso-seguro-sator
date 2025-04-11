@@ -58,6 +58,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Download-Options', 'noopen');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Permissions-Policy', 
+    'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()'
+  );
   next();
 });
 
