@@ -27,6 +27,14 @@
     </nav>
 
     <div class="container mt-5">
+        <!-- Mensaje de error -->
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Error:</strong> <%= error %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <% } %>
+        
         <!-- Buscador -->
         <div class="mb-4 d-flex justify-content-between align-items-center gap-3">
             <div class="d-flex align-items-center gap-2 w-75 w-md-50">
@@ -213,7 +221,6 @@
                                 <p class="card-text">Tecnomecánica: ${vehiculo.tecnomecanica_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.tecnomecanica_fin) : 'No definida'}</p>
                                 <p class="card-text">Licencia Conducción: ${vehiculo.licencia_conduccion ? 'Aprobada' : 'No aprobada'}</p>
                                 <p class="card-text">Licencia Tránsito: ${vehiculo.licencia_transito ? 'Aprobada' : 'No aprobada'}</p>
-                                ${vehiculo.mensajesAdvertencia ? `<p class="card-text text-danger">${vehiculo.mensajesAdvertencia.join('<br>')}</p>` : ''}
                                 ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '">'}
                             </div>
                         </div>
@@ -630,7 +637,7 @@
                 console.log('Buscando:', { id, cleanId }); // Para depuración
 
                 // Usar la misma ruta que usa el QR
-                const url = `/api/solicitudes/${cleanId}`;
+                const url = `/api/solicitudes/seguridad/${cleanId}`;
                 console.log('URL de búsqueda:', url); // Para depuración
 
                 const response = await fetch(url);

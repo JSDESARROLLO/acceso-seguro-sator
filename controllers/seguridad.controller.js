@@ -379,7 +379,13 @@ controller.qrAccesosModal = async (req, res) => {
 
             if (!vehiculo.length) {
                 console.log(`Vehículo con ID ${entityId} no encontrado`);
-                return res.redirect('/vista-seguridad');
+                return res.render('seguridad', {
+                    solicitud: [],
+                    modalData: null,
+                    error: 'Vehículo no encontrado',
+                    title: 'Control de Seguridad - Grupo Argos',
+                    username: username
+                });
             }
 
             const solicitudId = vehiculo[0].solicitud_id;
@@ -448,38 +454,6 @@ controller.qrAccesosModal = async (req, res) => {
                 : (lugarSolicitud !== username
                     ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
                     : null);
-
-            // Consulta para 'solicitud' (mantenida por compatibilidad con la vista)
-            const [solicitud] = await connection.execute(`
-                SELECT 
-                    s.id, 
-                    s.empresa, 
-                    s.nit, 
-                    s.estado, 
-                    us.username AS interventor, 
-                    s.lugar,
-                    l.nombre_lugar,
-                    DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
-                    DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
-                    CASE
-                        WHEN s.estado = 'aprobada' AND CURDATE() > DATE(s.fin_obra) THEN 'pendiente ingreso - vencido'
-                        WHEN s.estado = 'aprobada' THEN 'pendiente ingreso'
-                        WHEN s.estado = 'en labor' AND CURDATE() > DATE(s.fin_obra) THEN 'en labor - vencida'
-                        WHEN s.estado = 'en labor' THEN 'en labor'
-                        WHEN s.estado = 'labor detenida' THEN 'labor detenida'
-                        ELSE s.estado
-                    END AS estado_actual
-                FROM solicitudes s
-                JOIN acciones a ON s.id = a.solicitud_id
-                JOIN users us ON us.id = s.interventor_id
-                JOIN lugares l ON s.lugar = l.id
-                JOIN users seguridad ON l.id = (SELECT id FROM lugares WHERE nombre_lugar = seguridad.username)
-                WHERE s.estado IN ('aprobada', 'en labor', 'labor detenida')
-                AND a.accion = 'aprobada'
-                AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
-                AND seguridad.id = ?
-                ORDER BY s.id DESC
-            `, [userId]);
 
             // Renderizar la vista con los datos del vehículo
             res.render('seguridad', {
@@ -606,38 +580,6 @@ controller.qrAccesosModal = async (req, res) => {
                 : (lugarSolicitud !== username
                     ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
                     : null);
-
-            // Consulta para 'solicitud' (mantenida por compatibilidad con la vista)
-            const [solicitud] = await connection.execute(`
-                SELECT 
-                    s.id, 
-                    s.empresa, 
-                    s.nit, 
-                    s.estado, 
-                    us.username AS interventor, 
-                    s.lugar,
-                    l.nombre_lugar,
-                    DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
-                    DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
-                    CASE
-                        WHEN s.estado = 'aprobada' AND CURDATE() > DATE(s.fin_obra) THEN 'pendiente ingreso - vencido'
-                        WHEN s.estado = 'aprobada' THEN 'pendiente ingreso'
-                        WHEN s.estado = 'en labor' AND CURDATE() > DATE(s.fin_obra) THEN 'en labor - vencida'
-                        WHEN s.estado = 'en labor' THEN 'en labor'
-                        WHEN s.estado = 'labor detenida' THEN 'labor detenida'
-                        ELSE s.estado
-                    END AS estado_actual
-                FROM solicitudes s
-                JOIN acciones a ON s.id = a.solicitud_id
-                JOIN users us ON us.id = s.interventor_id
-                JOIN lugares l ON s.lugar = l.id
-                JOIN users seguridad ON l.id = (SELECT id FROM lugares WHERE nombre_lugar = seguridad.username)
-                WHERE s.estado IN ('aprobada', 'en labor', 'labor detenida')
-                AND a.accion = 'aprobada'
-                AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
-                AND seguridad.id = ?
-                ORDER BY s.id DESC
-            `, [userId]);
 
             // Renderizar la vista con los datos
             res.render('seguridad', {

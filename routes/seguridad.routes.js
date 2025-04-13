@@ -24,7 +24,7 @@ if (typeof controller.vistaSeguridad !== 'function') {
 }
 
 // Ruta para obtener detalles de una solicitud por ID (colaborador o vehículo)
-router.get('/api/solicitudes/:id', async (req, res) => {
+router.get('/api/solicitudes/seguridad/:id', async (req, res) => {
     try {
         const solicitudId = req.params.id;
         console.log(`[RUTAS] Obteniendo detalles de la solicitud con ID: ${solicitudId}`);

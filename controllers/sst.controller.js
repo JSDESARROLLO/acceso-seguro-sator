@@ -11,7 +11,7 @@ const archiver = require('archiver');
 const { format } = require('date-fns');
 require('dotenv').config();
 const axios = require('axios');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
 
@@ -117,20 +117,78 @@ controller.vistaSst = async (req, res) => {
   }
 };
 
+// Función para limpiar archivos temporales
+async function cleanupTempFiles(filePath) {
+  try {
+    if (!filePath) return;
+    
+    // Verificar si el archivo existe
+    try {
+      await fs.promises.access(filePath);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        logInfo('Archivo temporal no encontrado (ya fue eliminado):', { filePath });
+        return;
+      }
+      throw err;
+    }
+
+    // Eliminar el archivo
+    await fs.promises.unlink(filePath);
+    logInfo('Archivo temporal eliminado:', { filePath });
+  } catch (err) {
+    logError(err, 'Limpieza de archivos temporales');
+  }
+}
+
+// Función para limpiar todos los archivos temporales
+async function cleanupAllTempFiles(files) {
+  if (!files || !Array.isArray(files)) return;
+  
+  for (const file of files) {
+    try {
+      if (file && file.path) {
+        await cleanupTempFiles(file.path);
+      }
+    } catch (error) {
+      logError(error, 'Limpieza de archivos temporales en batch');
+    }
+  }
+}
+
+// Función para limpiar directorio temporal
+async function cleanupTempDirectory(dirPath) {
+  try {
+    if (!dirPath) return;
+    
+    // Verificar si el directorio existe
+    try {
+      await fs.promises.access(dirPath);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        logInfo('Directorio temporal no encontrado (ya fue eliminado):', { dirPath });
+        return;
+      }
+      throw err;
+    }
+
+    // Eliminar el directorio y su contenido
+    await fs.promises.rm(dirPath, { recursive: true, force: true });
+    logInfo('Directorio temporal eliminado:', { dirPath });
+  } catch (err) {
+    logError(err, 'Limpieza de directorio temporal');
+  }
+}
+
 // Función para subir archivo a Spaces con reintentos
 async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitudes', retries = 3) {
+    const uuid = uuidv4();
+    const extension = path.extname(originalName);
+    const filename = `${uuid}${extension}`;
+    const spacesPath = `${folder}/${filename}`;
+
     try {
-        console.log('🔄 Iniciando subida de archivo:', { filePath, originalName, folder });
-        
-        const uuid = uuidv4();
-        const extension = path.extname(originalName);
-        const filename = `${uuid}${extension}`;
-        const spacesPath = `${folder}/${filename}`;
-        
-        // Leer el archivo usando fs.promises
         const fileContent = await fs.promises.readFile(filePath);
-        console.log('📄 Archivo leído correctamente:', { size: fileContent.length });
-        
         const command = new PutObjectCommand({
             Bucket: process.env.DO_SPACES_BUCKET,
             Key: spacesPath,
@@ -142,25 +200,26 @@ async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitu
         let attempt = 0;
         while (attempt < retries) {
             try {
-                console.log('📤 Subiendo archivo a Spaces:', { attempt: attempt + 1, spacesPath });
+                logInfo('Subiendo archivo a Spaces:', { filePath, spacesPath, attempt: attempt + 1 });
                 await s3Client.send(command);
-                
-                // Construir la URL completa de DigitalOcean Spaces
+
                 const spacesUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${spacesPath}`;
-                
-                console.log('✅ Archivo subido exitosamente:', { spacesUrl });
+                logInfo('Archivo subido exitosamente:', { spacesUrl });
+
+                await cleanupTempFiles(filePath);
                 return spacesUrl;
             } catch (error) {
                 attempt++;
-                console.error(`❌ Error al subir archivo (intento ${attempt}/${retries}):`, error);
+                logError(error, `uploadToSpacesFromDisk (intento ${attempt}/${retries})`);
                 if (attempt === retries) {
+                    await cleanupTempFiles(filePath);
                     throw new Error(`Fallo al subir archivo tras ${retries} intentos: ${error.message}`);
                 }
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Espera exponencial
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
             }
         }
     } catch (error) {
-        console.error('❌ Error en uploadToSpacesFromDisk:', error);
+        logError(error, 'Error en uploadToSpacesFromDisk');
         throw error;
     }
 }
@@ -393,66 +452,60 @@ async function generateInformePDF({ solicitud, colaboradores, contractorName, in
 // }
 
 async function downloadFromSpaces(fileUrl) {
-  if (!fileUrl) {
-    logInfo('No se proporcionó URL de archivo para descargar');
-    return null;
-  }
-
-  try {
-    // Extraer la clave del archivo de la URL completa
-    const urlParts = fileUrl.split('/');
-    const fileKey = urlParts.slice(3).join('/'); // Obtener la ruta después del bucket y endpoint
-
-    logInfo('Intentando descargar archivo desde Spaces:', { 
-      fileUrl, 
-      fileKey,
-      bucket: process.env.DO_SPACES_BUCKET,
-      endpoint: process.env.DO_SPACES_ENDPOINT
-    });
-
-    const command = new GetObjectCommand({
-      Bucket: process.env.DO_SPACES_BUCKET,
-      Key: fileKey
-    });
-
-    const response = await s3Client.send(command);
-    
-    if (!response.Body) {
-      throw new Error('No se recibió el contenido del archivo');
+    if (!fileUrl) {
+        logInfo('No se proporcionó URL de archivo para descargar');
+        return null;
     }
 
-    // Convertir el stream a buffer
-    const chunks = [];
-    for await (const chunk of response.Body) {
-      chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
+    try {
+        const urlParts = fileUrl.split('/');
+        const fileKey = urlParts.slice(3).join('/');
+        logInfo('Intentando descargar archivo desde Spaces:', {
+            fileUrl,
+            fileKey,
+            bucket: process.env.DO_SPACES_BUCKET,
+            endpoint: process.env.DO_SPACES_ENDPOINT
+        });
 
-    logInfo('Archivo descargado exitosamente:', { 
-      fileUrl,
-      size: buffer.length,
-      contentType: response.ContentType
-    });
+        // Verificar existencia del archivo
+        await s3Client.send(new HeadObjectCommand({
+            Bucket: process.env.DO_SPACES_BUCKET,
+            Key: fileKey
+        }));
 
-    return buffer;
-  } catch (error) {
-    logError(error, `Error al descargar el archivo ${fileUrl} desde ${fileUrl}: ${error.message}`);
-    if (error.$metadata) {
-      logInfo('Metadatos del error:', {
-        requestId: error.$metadata.requestId,
-        cfId: error.$metadata.cfId,
-        httpStatusCode: error.$metadata.httpStatusCode
-      });
+        const command = new GetObjectCommand({
+            Bucket: process.env.DO_SPACES_BUCKET,
+            Key: fileKey
+        });
+
+        const response = await s3Client.send(command);
+        if (!response.Body) {
+            throw new Error('No se recibió el contenido del archivo');
+        }
+
+        const chunks = [];
+        for await (const chunk of response.Body) {
+            chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
+
+        logInfo('Archivo descargado exitosamente:', {
+            fileUrl,
+            size: buffer.length,
+            contentType: response.ContentType
+        });
+
+        return buffer;
+    } catch (error) {
+        logError(error, `Error al descargar el archivo ${fileUrl}`);
+        return null;
     }
-    return null;
-  }
 }
 
 
 // Función para generar el HTML
 async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contractorName, interventorName }) {
     try {
-        // Array para almacenar documentos faltantes
         const documentosFaltantes = [];
         const timestamp = format(new Date(), 'dd/MM/yyyy HH:mm:ss');
         const timestampFile = format(new Date(), 'yyyyMMdd_HHmmss');
@@ -465,9 +518,7 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
         };
 
         // Procesar colaboradores
-        const colaboradoresProcesados = [];
-        for (const colaborador of colaboradores) {
-            // Verificar foto del colaborador
+        const colaboradoresProcesados = await Promise.all(colaboradores.map(async (colaborador) => {
             let fotoBase64 = null;
             if (colaborador.foto) {
                 fotoBase64 = await convertWebPtoJpeg(colaborador.foto);
@@ -478,7 +529,6 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
                 documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de perfil no cargada`);
             }
 
-            // Verificar foto de la cédula
             let cedulaFotoBase64 = null;
             if (colaborador.cedulaFoto) {
                 cedulaFotoBase64 = await convertWebPtoJpeg(colaborador.cedulaFoto);
@@ -489,51 +539,78 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
                 documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de cédula no cargada`);
             }
 
-            // Generar QR para el colaborador
             const qrData = `${process.env.BASE_URL}/vista-seguridad/${colaborador.id}`;
             const qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
 
-            colaboradoresProcesados.push({
+            return {
                 ...colaborador,
                 fotoBase64,
                 cedulaFotoBase64,
                 qrBase64
-            });
-        }
+            };
+        }));
 
         // Procesar vehículos
-        const vehiculosProcesados = [];
-        for (const vehiculo of vehiculos) {
-            // Verificar foto del vehículo
-            if (!vehiculo.foto) {
-                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Foto no cargada`);
+        const vehiculosProcesados = await Promise.all(vehiculos.map(async (vehiculo) => {
+            logInfo('Procesando vehículo:', {
+                id: vehiculo.id,
+                placa: vehiculo.placa,
+                fotos_vehiculo: vehiculo.fotos_vehiculo,
+                soat: vehiculo.soat,
+                tecnomecanica: vehiculo.tecnomecanica,
+                licencia_conduccion: vehiculo.licencia_conduccion,
+                licencia_transito: vehiculo.licencia_transito
+            });
+
+            let fotoBase64 = null;
+            if (vehiculo.fotos_vehiculo) {
+                const fotoBuffer = await downloadFromSpaces(vehiculo.fotos_vehiculo);
+                if (fotoBuffer) {
+                    const extension = path.extname(vehiculo.fotos_vehiculo);
+                    const mimeType = mime.lookup(extension) || 'image/jpeg';
+                    fotoBase64 = `data:${mimeType};base64,${fotoBuffer.toString('base64')}`;
+                } else {
+                    documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Foto no disponible`);
+                }
+            } else {
+                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: No tiene foto cargada`);
             }
 
-            // Verificar documentos del vehículo
-            if (!vehiculo.soat) {
-                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: SOAT no cargado`);
-            }
-            if (!vehiculo.tecnomecanica) {
-                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Tecnomecánica no cargada`);
-            }
-            if (!vehiculo.licencia_conduccion) {
-                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Licencia de conducción no cargada`);
-            }
-            if (!vehiculo.licencia_transito) {
-                documentosFaltantes.push(`Vehículo ${vehiculo.placa}: Licencia de tránsito no cargada`);
-            }
+            const documentos = {
+                soat: { url: vehiculo.soat, nombre: 'SOAT' },
+                tecnomecanica: { url: vehiculo.tecnomecanica, nombre: 'Tecnomecánica' },
+                licencia_conduccion: { url: vehiculo.licencia_conduccion, nombre: 'Licencia de conducción' },
+                licencia_transito: { url: vehiculo.licencia_transito, nombre: 'Licencia de tránsito' }
+            };
 
-            // Generar QR para el vehículo
+            const documentosBase64 = {};
+            await Promise.all(Object.entries(documentos).map(async ([tipo, doc]) => {
+                if (doc.url) {
+                    const docBuffer = await downloadFromSpaces(doc.url);
+                    if (docBuffer) {
+                        const extension = path.extname(doc.url);
+                        const mimeType = mime.lookup(extension) || 'image/jpeg';
+                        documentosBase64[tipo] = `data:${mimeType};base64,${docBuffer.toString('base64')}`;
+                    } else {
+                        documentosFaltantes.push(`Vehículo ${vehiculo.placa}: ${doc.nombre} no disponible`);
+                    }
+                } else {
+                    documentosFaltantes.push(`Vehículo ${vehiculo.placa}: ${doc.nombre} no cargada`);
+                }
+            }));
+
             const qrData = `${process.env.BASE_URL}/vista-seguridad/VH-${vehiculo.id}`;
             const qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
 
-            vehiculosProcesados.push({
+            return {
                 ...vehiculo,
+                foto: fotoBase64,
+                documentosBase64,
                 qrBase64
-            });
-        }
+            };
+        }));
 
-        // Si hay documentos faltantes, generar archivo de texto
+        // Generar archivo de documentos faltantes
         if (documentosFaltantes.length > 0) {
             const contenidoTxt = `REPORTE DE DOCUMENTOS FALTANTES
 Fecha y hora: ${timestamp}
@@ -543,21 +620,20 @@ Empresa: ${solicitud.empresa}
 Lista de documentos faltantes:
 ${documentosFaltantes.map((doc, index) => `${index + 1}. ${doc}`).join('\n')}`;
 
-            const txtPath = path.join(path.dirname(process.mainModule.filename), '..', 'temp', `documentos_faltantes_${solicitud.id}_${timestampFile}.txt`);
+            const txtPath = path.join(__dirname, '..', 'temp', `documentos_faltantes_${solicitud.id}_${timestampFile}.txt`);
             await fs.promises.writeFile(txtPath, contenidoTxt, 'utf8');
             console.log('📄 Archivo de documentos faltantes generado:', txtPath);
-        } else {
-            console.log('✅ No hay documentos faltantes para la solicitud:', solicitud.id);
         }
 
-        // Cargar la plantilla HTML
+        // Cargar plantilla HTML
         const templatePath = path.join(__dirname, '../src/views', 'informe-template.html');
         const templateContent = fs.readFileSync(templatePath, 'utf8');
         const template = handlebars.compile(templateContent);
 
-        // Convertir el logo a Base64
+        // Convertir logo a Base64
         const logoPath = path.join(__dirname, '../public', 'img', 'TSM-Sator-Logo.webp');
-        const logoBase64 = fs.readFileSync(logoPath, 'base64');
+        const logoBuffer = await sharp(fs.readFileSync(logoPath)).toFormat('jpeg').toBuffer();
+        const logoBase64 = logoBuffer.toString('base64');
 
         // Datos para la plantilla
         const data = {
@@ -571,13 +647,14 @@ ${documentosFaltantes.map((doc, index) => `${index + 1}. ${doc}`).join('\n')}`;
             documentosFaltantes: documentosFaltantes.length > 0
         };
 
-        // Generar el HTML
+        // Generar HTML
         return template(data);
     } catch (error) {
-        console.error("❌ Error al generar el informe HTML:", error);
+        console.error('❌ Error al generar el informe HTML:', error);
         throw error;
     }
 }
+
 
 // Descargar documentos de una solicitud
 controller.descargarSolicitud = async (req, res) => {
@@ -603,17 +680,15 @@ controller.descargarSolicitud = async (req, res) => {
 
         try {
             // Crear archivo ZIP
-            const zipFilename = `documentos_solicitud_${solicitudId}_${Date.now()}.zip`;
-            const zipPath = path.join(tempDir, zipFilename);
+            const zipFileName = `documentos_solicitud_${solicitudId}_${Date.now()}.zip`;
+            const zipPath = path.join(tempDir, zipFileName);
             const output = fs.createWriteStream(zipPath);
-            const archive = archiver('zip', {
-                zlib: { level: 9 }
-            });
+            const archive = archiver('zip', { zlib: { level: 9 } });
 
             // Manejar eventos del archivo ZIP
             output.on('close', () => {
                 console.log('ZIP creado exitosamente:', archive.pointer() + ' bytes totales');
-                res.download(zipPath, zipFilename, (err) => {
+                res.download(zipPath, zipFileName, (err) => {
                     if (err) {
                         console.error('Error al enviar el archivo:', err);
                         if (!res.headersSent) {
@@ -807,16 +882,15 @@ controller.getColaboradores = async (req, res) => {
         console.log('Consultando vehículos...');
         const [vehiculos] = await connection.execute(
             `SELECT 
-                v.id, 
-                v.matricula AS placa, 
+                v.id,
+                v.matricula as placa,
                 v.estado,
-                lv_conduccion.estado AS licencia_conduccion,
-                lv_transito.estado AS licencia_transito
+                v.foto as fotos_vehiculo,
+                v.soat,
+                v.tecnomecanica,
+                v.licencia_conduccion,
+                v.licencia_transito
             FROM vehiculos v
-            LEFT JOIN licencias_vehiculo lv_conduccion 
-                ON v.id = lv_conduccion.vehiculo_id AND lv_conduccion.tipo = 'licencia_conduccion'
-            LEFT JOIN licencias_vehiculo lv_transito 
-                ON v.id = lv_transito.vehiculo_id AND lv_transito.tipo = 'licencia_transito'
             WHERE v.solicitud_id = ?`,
             [solicitudId]
         );
@@ -824,45 +898,58 @@ controller.getColaboradores = async (req, res) => {
 
         // Procesar vehículos
         console.log('Procesando datos adicionales de vehículos...');
-        const vehiculosConDatos = await Promise.all(vehiculos.map(async veh => {
-            try {
-                const [soat] = await connection.execute(
-                    'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "soat" ORDER BY created_at DESC LIMIT 1',
-                    [veh.id]
-                );
+        await Promise.all(vehiculos.map(async (vehiculo) => {
+            const vehiculoDir = path.join(tempDir, `vehiculo_${vehiculo.placa}`);
+            await fs.promises.mkdir(vehiculoDir, { recursive: true });
 
-                const [tecnomecanica] = await connection.execute(
-                    'SELECT id, fecha_inicio, fecha_fin, estado FROM plantilla_documentos_vehiculos WHERE vehiculo_id = ? AND tipo_documento = "tecnomecanica" ORDER BY created_at DESC LIMIT 1',
-                    [veh.id]
-                );
-
-                return {
-                    ...veh,
-                    soat: soat.length ? soat[0] : null,
-                    tecnomecanica: tecnomecanica.length ? tecnomecanica[0] : null,
-                    licencia_conduccion: veh.licencia_conduccion || false,
-                    licencia_transito: veh.licencia_transito || false
-                };
-            } catch (error) {
-                console.error(`Error procesando vehículo ${veh.id}:`, error);
-                return {
-                    ...veh,
-                    soat: null,
-                    tecnomecanica: null,
-                    licencia_conduccion: false,
-                    licencia_transito: false,
-                    error: 'Error procesando datos adicionales'
-                };
+            // Procesar foto del vehículo
+            if (vehiculo.fotos_vehiculo) {
+                const fotoBuffer = await downloadFromSpaces(vehiculo.fotos_vehiculo);
+                if (fotoBuffer) {
+                    const fotoPath = path.join(vehiculoDir, 'foto_vehiculo.jpg');
+                    await fs.promises.writeFile(fotoPath, fotoBuffer);
+                    archive.file(fotoPath, { name: `vehiculo_${vehiculo.placa}/foto_vehiculo.jpg` });
+                    logInfo('Foto de vehículo agregada al ZIP:', {
+                        vehiculo: vehiculo.placa,
+                        foto: 'foto_vehiculo.jpg'
+                    });
+                }
             }
-        }));
 
+            // Procesar documentos del vehículo
+            const documentos = {
+                soat: { url: vehiculo.soat, nombre: 'SOAT' },
+                tecnomecanica: { url: vehiculo.tecnomecanica, nombre: 'Tecnomecánica' },
+                licencia_conduccion: { url: vehiculo.licencia_conduccion, nombre: 'Licencia de conducción' },
+                licencia_transito: { url: vehiculo.licencia_transito, nombre: 'Licencia de tránsito' }
+            };
+
+            await Promise.all(Object.entries(documentos).map(async ([tipo, doc]) => {
+                if (doc.url) {
+                    const docBuffer = await downloadFromSpaces(doc.url);
+                    if (docBuffer) {
+                        const extension = path.extname(doc.url);
+                        const docPath = path.join(vehiculoDir, `${tipo}${extension}`);
+                        await fs.promises.writeFile(docPath, docBuffer);
+                        archive.file(docPath, { name: `vehiculo_${vehiculo.placa}/${tipo}${extension}` });
+                        logInfo('Documento de vehículo agregado al ZIP:', {
+                            vehiculo: vehiculo.placa,
+                            documento: tipo,
+                            extension
+                        });
+                    } else {
+                        logInfo(`Documento ${tipo} no disponible para vehículo ${vehiculo.placa}`);
+                    }
+                }
+            }));
+        }));
         console.log('Preparando respuesta final...');
         const respuesta = {
             id: solicitud[0].id,
             empresa: solicitud[0].empresa,
             contratista: solicitud[0].contratista,
             colaboradores: colaboradoresProcesados,
-            vehiculos: vehiculosConDatos
+            vehiculos: vehiculos
         };
 
         console.log('Enviando respuesta exitosa');
@@ -1340,32 +1427,53 @@ controller.generarDocumentos = async (req, res) => {
     const { id } = req.params;
     console.log('🔄 Iniciando generación de documentos para solicitud:', id);
 
+    let tempDir;
     try {
-        // Validar que la solicitud existe
+        // Validar solicitud
         const [solicitudExiste] = await connection.execute(
             'SELECT COUNT(*) as count FROM solicitudes WHERE id = ?',
             [id]
         );
-
         if (!solicitudExiste[0].count) {
-            console.error('❌ Solicitud no encontrada:', id);
             return res.status(404).json({
                 success: false,
                 message: `No se encontró la solicitud con ID ${id}`
             });
         }
 
-        // 1. Crear directorio temporal principal
-        const tempDir = path.join(__dirname, '..', 'temp', `solicitud_${id}_${Date.now()}`);
-        try {
-            await fs.promises.mkdir(tempDir, { recursive: true });
-            console.log('📁 Directorio temporal creado:', tempDir);
-        } catch (mkdirError) {
-            console.error('❌ Error al crear directorio temporal:', mkdirError);
-            throw new Error('Error al crear directorio temporal: ' + mkdirError.message);
-        }
+        // Crear directorio temporal
+        tempDir = path.join(__dirname, '..', 'temp', `solicitud_${id}_${Date.now()}`);
+        await fs.promises.mkdir(tempDir, { recursive: true });
+        console.log('📁 Directorio temporal creado:', tempDir);
 
-        // 2. Obtener datos de la solicitud
+        // Inicializar ZIP
+        const zipFileName = `documentos_solicitud_${id}_${Date.now()}.zip`;
+        const zipPath = path.join(tempDir, zipFileName);
+        const output = fs.createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        // Manejar eventos del ZIP
+        output.on('error', (err) => {
+            throw new Error('Error en el flujo de salida del ZIP: ' + err.message);
+        });
+
+        archive.on('warning', (err) => {
+            if (err.code !== 'ENOENT') {
+                logError(err, 'Advertencia al crear el ZIP');
+            }
+        });
+
+        archive.on('error', (err) => {
+            throw new Error('Error al crear ZIP: ' + err.message);
+        });
+
+        output.on('close', () => {
+            console.log('✅ ZIP creado exitosamente:', { path: zipPath, size: archive.pointer() });
+        });
+
+        archive.pipe(output);
+
+        // Obtener datos de la solicitud
         const [solicitud] = await connection.execute(`
             SELECT 
                 s.*,
@@ -1380,40 +1488,35 @@ controller.generarDocumentos = async (req, res) => {
             WHERE s.id = ?
         `, [id]);
 
-        if (!solicitud || solicitud.length === 0) {
+        if (!solicitud.length) {
             throw new Error(`No se encontraron datos para la solicitud ${id}`);
         }
 
-        // 3. Obtener colaboradores con sus fotos
+        // Obtener colaboradores
         const [colaboradores] = await connection.execute(
             'SELECT id, cedula, nombre, estado, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ?',
             [id]
         );
 
-        // 4. Obtener vehículos con todos sus documentos
+        // Obtener vehículos con documentos
         const [vehiculos] = await connection.execute(
             `SELECT 
                 v.id,
                 v.matricula as placa,
                 v.estado,
+                v.foto as fotos_vehiculo,
+                v.soat,
+                v.tecnomecanica,
                 v.licencia_conduccion,
-                v.licencia_transito,
-                s.id as soat_id, 
-                s.fecha_inicio as soat_inicio, 
-                s.fecha_fin as soat_fin,
-                t.id as tecno_id, 
-                t.fecha_inicio as tecno_inicio, 
-                t.fecha_fin as tecno_fin
+                v.licencia_transito
             FROM vehiculos v
-            LEFT JOIN plantilla_documentos_vehiculos s ON v.id = s.vehiculo_id AND s.tipo_documento = 'soat'
-            LEFT JOIN plantilla_documentos_vehiculos t ON v.id = t.vehiculo_id AND t.tipo_documento = 'tecnomecanica'
             WHERE v.solicitud_id = ?`,
             [id]
         );
 
         console.log(`📊 Datos obtenidos: ${colaboradores.length} colaboradores, ${vehiculos.length} vehículos`);
 
-        // 5. Generar HTML del informe
+        // Generar HTML
         const html = await generateInformeHTML({
             solicitud: solicitud[0],
             colaboradores,
@@ -1421,174 +1524,131 @@ controller.generarDocumentos = async (req, res) => {
             contractorName: solicitud[0].empresa,
             interventorName: solicitud[0].interventor_nombre
         });
-        
-        // 6. Guardar HTML
+
+        // Guardar HTML
         const htmlPath = path.join(tempDir, `Informe_Solicitud_${id}.html`);
         await fs.promises.writeFile(htmlPath, html);
+        archive.file(htmlPath, { name: `Informe_Solicitud_${id}.html` });
         console.log('💾 HTML guardado en:', htmlPath);
 
-        // 7. Verificar y copiar el archivo de documentos faltantes si existe
-        const docsFaltantesPattern = path.join(__dirname, '..', 'temp', `documentos_faltantes_${id}_*.txt`);
-        let tieneDocsFaltantes = false;
-        try {
-            const files = await fs.promises.readdir(path.join(__dirname, '..', 'temp'));
-            const docsFaltantesFiles = files.filter(file => file.startsWith(`documentos_faltantes_${id}_`) && file.endsWith('.txt'));
-            
-            if (docsFaltantesFiles.length > 0) {
-                // Ordenar por fecha (el más reciente primero)
-                docsFaltantesFiles.sort().reverse();
-                const latestFile = docsFaltantesFiles[0];
-                
-                // Verificar si el archivo tiene contenido
-                const fileContent = await fs.promises.readFile(path.join(__dirname, '..', 'temp', latestFile), 'utf8');
-                if (fileContent.trim().length > 0) {
-                    await fs.promises.copyFile(
-                        path.join(__dirname, '..', 'temp', latestFile),
-                        path.join(tempDir, `documentos_faltantes_${id}.txt`)
-                    );
-                    tieneDocsFaltantes = true;
-                    console.log('📄 Archivo de documentos faltantes copiado al directorio temporal:', latestFile);
-                } else {
-                    console.log('ℹ️ Archivo de documentos faltantes vacío, no se incluirá en el ZIP');
-                }
-            } else {
-                console.log('ℹ️ No se encontró archivo de documentos faltantes');
-            }
-        } catch (error) {
-            console.log('ℹ️ Error al buscar archivo de documentos faltantes:', error.message);
+        // Incluir documentos faltantes
+        const files = await fs.promises.readdir(path.join(__dirname, '..', 'temp'));
+        const docsFaltantesFiles = files.filter(file => file.startsWith(`documentos_faltantes_${id}_`) && file.endsWith('.txt'));
+        if (docsFaltantesFiles.length > 0) {
+            docsFaltantesFiles.sort().reverse();
+            const latestFile = docsFaltantesFiles[0];
+            const sourcePath = path.join(__dirname, '..', 'temp', latestFile);
+            const destPath = path.join(tempDir, `documentos_faltantes_${id}.txt`);
+            await fs.promises.copyFile(sourcePath, destPath);
+            archive.file(destPath, { name: `documentos_faltantes_${id}.txt` });
+            console.log('📄 Archivo de documentos faltantes incluido:', latestFile);
         }
 
-        // 8. Generar ARL y Pasocial
+        // Incluir ARL y Pasocial
         if (solicitud[0].arl_documento) {
             const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
             if (arlBuffer) {
-                // Obtener la extensión original del archivo
                 const arlExtension = path.extname(solicitud[0].arl_documento);
-                await fs.promises.writeFile(path.join(tempDir, `ARL_${id}${arlExtension}`), arlBuffer);
+                const arlPath = path.join(tempDir, `ARL_${id}${arlExtension}`);
+                await fs.promises.writeFile(arlPath, arlBuffer);
+                archive.file(arlPath, { name: `ARL_${id}${arlExtension}` });
+                console.log('📄 ARL incluido en el ZIP');
             }
         }
 
         if (solicitud[0].pasocial_documento) {
             const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
             if (pasocialBuffer) {
-                // Obtener la extensión original del archivo
                 const pasocialExtension = path.extname(solicitud[0].pasocial_documento);
-                await fs.promises.writeFile(path.join(tempDir, `Pasocial_${id}${pasocialExtension}`), pasocialBuffer);
+                const pasocialPath = path.join(tempDir, `Pasocial_${id}${pasocialExtension}`);
+                await fs.promises.writeFile(pasocialPath, pasocialBuffer);
+                archive.file(pasocialPath, { name: `Pasocial_${id}${pasocialExtension}` });
+                console.log('📄 Pasocial incluido en el ZIP');
             }
         }
 
-        // 9. Procesar vehículos
-        for (const vehiculo of vehiculos) {
-            const vehiculoDir = path.join(tempDir, vehiculo.placa);
+        // Procesar vehículos
+        await Promise.all(vehiculos.map(async (vehiculo) => {
+            const vehiculoDir = path.join(tempDir, `vehiculo_${vehiculo.placa}`);
             await fs.promises.mkdir(vehiculoDir, { recursive: true });
 
-            // Procesar cada documento del vehículo
+            // Procesar foto del vehículo
+            if (vehiculo.fotos_vehiculo) {
+                const fotoBuffer = await downloadFromSpaces(vehiculo.fotos_vehiculo);
+                if (fotoBuffer) {
+                    const fotoPath = path.join(vehiculoDir, 'foto_vehiculo.jpg');
+                    await fs.promises.writeFile(fotoPath, fotoBuffer);
+                    archive.file(fotoPath, { name: `vehiculo_${vehiculo.placa}/foto_vehiculo.jpg` });
+                    logInfo('Foto de vehículo agregada al ZIP:', {
+                        vehiculo: vehiculo.placa,
+                        foto: 'foto_vehiculo.jpg'
+                    });
+                }
+            }
+
+            // Procesar documentos del vehículo
             const documentos = {
-                foto: { url: vehiculo.foto, nombre: 'foto' },
-                soat: { url: vehiculo.soat, nombre: 'soat' },
-                tecnomecanica: { url: vehiculo.tecnomecanica, nombre: 'tecnomecanica' },
-                licencia_conduccion: { url: vehiculo.licencia_conduccion, nombre: 'licencia_conduccion' },
-                licencia_transito: { url: vehiculo.licencia_transito, nombre: 'licencia_transito' }
+                soat: { url: vehiculo.soat, nombre: 'SOAT' },
+                tecnomecanica: { url: vehiculo.tecnomecanica, nombre: 'Tecnomecánica' },
+                licencia_conduccion: { url: vehiculo.licencia_conduccion, nombre: 'Licencia de conducción' },
+                licencia_transito: { url: vehiculo.licencia_transito, nombre: 'Licencia de tránsito' }
             };
 
-            for (const [tipo, doc] of Object.entries(documentos)) {
+            await Promise.all(Object.entries(documentos).map(async ([tipo, doc]) => {
                 if (doc.url) {
                     const docBuffer = await downloadFromSpaces(doc.url);
                     if (docBuffer) {
-                        await fs.promises.writeFile(
-                            path.join(vehiculoDir, `${vehiculo.placa}_${doc.nombre}${path.extname(doc.url)}`),
-                            docBuffer
-                        );
+                        const extension = path.extname(doc.url);
+                        const docPath = path.join(vehiculoDir, `${tipo}${extension}`);
+                        await fs.promises.writeFile(docPath, docBuffer);
+                        archive.file(docPath, { name: `vehiculo_${vehiculo.placa}/${tipo}${extension}` });
+                        logInfo('Documento de vehículo agregado al ZIP:', {
+                            vehiculo: vehiculo.placa,
+                            documento: tipo,
+                            extension
+                        });
+                    } else {
+                        logInfo(`Documento ${tipo} no disponible para vehículo ${vehiculo.placa}`);
                     }
                 }
-            }
-        }
+            }));
+        }));
 
-        // 10. Crear ZIP
-        const zipFileName = `documentos_solicitud_${id}_${Date.now()}.zip`;
-        const zipPath = path.join(tempDir, zipFileName);
-        const output = fs.createWriteStream(zipPath);
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        // Finalizar ZIP
+        await archive.finalize();
 
-        return new Promise((resolve, reject) => {
-            output.on('close', async () => {
-                try {
-                    console.log('📦 ZIP creado:', archive.pointer() + ' bytes');
-                    
-                    // Subir ZIP a DigitalOcean Spaces
-                    const fileUrl = await uploadToSpacesFromDisk(zipPath, zipFileName);
-                    console.log('☁️ Archivo subido a DigitalOcean:', fileUrl);
+        // Subir ZIP a Spaces
+        const zipUrl = await uploadToSpacesFromDisk(zipPath, zipFileName, 'documentos');
+        console.log('✅ ZIP subido a Spaces:', zipUrl);
 
-                    if (!fileUrl) {
-                        throw new Error('Error al subir el archivo a DigitalOcean');
-                    }
+        // Guardar URL en sst_documentos
+        await connection.execute(
+            'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
+            [id, zipUrl]
+        );
 
-                    // Guardar URL en la base de datos
-                    await connection.execute(
-                        'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
-                        [id, fileUrl]
-                    );
-
-                    // Enviar respuesta exitosa
-                    resolve(res.json({
-                        success: true,
-                        url: fileUrl,
-                        message: 'Documentos generados y subidos correctamente',
-                        tieneDocsFaltantes
-                    }));
-                } catch (error) {
-                    console.error('❌ Error en el proceso de subida:', error);
-                    reject(error);
-                } finally {
-                    // Limpiar archivos temporales
-                    try {
-                        await fs.promises.rm(tempDir, { recursive: true, force: true });
-                        if (tieneDocsFaltantes) {
-                            await fs.promises.unlink(path.join(tempDir, `documentos_faltantes_${id}.txt`));
-                        }
-                        console.log('🧹 Archivos temporales eliminados');
-                    } catch (cleanupError) {
-                        console.error('⚠️ Error al limpiar archivos temporales:', cleanupError);
-                    }
-                }
-            });
-
-            archive.on('error', (err) => {
-                console.error('❌ Error al crear ZIP:', err);
-                reject(new Error('Error al crear el archivo ZIP: ' + err.message));
-            });
-
-            // Agregar archivos al ZIP
-            archive.pipe(output);
-            archive.file(htmlPath, { name: path.basename(htmlPath) });
-            
-            // Agregar documentos faltantes si existe
-            if (tieneDocsFaltantes) {
-                archive.file(path.join(tempDir, `documentos_faltantes_${id}.txt`), 
-                    { name: `documentos_faltantes_${id}.txt` });
-            }
-
-            // Agregar carpetas de vehículos y otros documentos
-            archive.directory(tempDir, false, (data) => {
-                if (!data.name.includes('Informe_Solicitud_') && 
-                    !data.name.includes('documentos_faltantes_') &&
-                    !data.name.endsWith('.zip')) {
-                    return data;
-                }
-                return false;
-            });
-
-            archive.finalize();
+        // Responder
+        res.json({
+            success: true,
+            message: 'Documentos generados exitosamente',
+            url: zipUrl
         });
 
     } catch (error) {
-        console.error('❌ Error general:', error);
-        if (!res.headersSent) {
-            res.status(500).json({
-                success: false,
-                message: 'Error al generar los documentos',
-                error: error.message
-            });
+        console.error('❌ Error al generar documentos:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al generar documentos: ' + error.message
+        });
+    } finally {
+        // Limpiar archivos temporales
+        if (tempDir) {
+            try {
+                await fs.promises.rm(tempDir, { recursive: true, force: true });
+                console.log('🧹 Archivos temporales eliminados');
+            } catch (cleanupError) {
+                logError(cleanupError, 'Error al limpiar archivos temporales');
+            }
         }
     }
 };
@@ -1692,7 +1752,22 @@ async function getVehiculos(req, res) {
   }
 }
 
+// Middleware de limpieza de archivos temporales
+const cleanupMiddleware = async (req, res, next) => {
+  try {
+    if (req.files) {
+      await cleanupAllTempFiles(req.files);
+    }
+    next();
+  } catch (error) {
+    logError(error, 'Middleware de limpieza');
+    next();
+  }
+};
+
+// Exportar el middleware y el controlador
 module.exports = {
   ...controller,
-  getVehiculos
+  getVehiculos,
+  cleanupMiddleware
 };

@@ -148,6 +148,7 @@
   window.contratistaUserId = "<%= userId %>";
   console.log('✅ ID de usuario contratista inicializado:', window.contratistaUserId);
 </script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body class="font-sans bg-ga-light">
   <!-- Barra de navegación -->
@@ -398,6 +399,11 @@
                 Conversar
                 <span class="badge badge-light unread-count hidden" data-solicitud-id="<%= solicitud.id %>" data-type="all">0</span>
               </button>
+              <button type="button" class="ver-qr-button" data-solicitud-id="<%= solicitud.id %>">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                </svg>
+              </button>
             </div>
           </div>
         <% }); %>
@@ -410,7 +416,7 @@
     <div class="bg-white w-11/12 sm:w-96 rounded-lg shadow-lg overflow-hidden">
       <div class="px-6 py-4 flex justify-between items-center border-b border-gray-200">
         <h5 class="text-xl font-semibold text-gray-800">Ver Código QR</h5>
-        <button type="button" class="text-gray-500 hover:text-gray-800" onclick="closeModal()">
+        <button type="button" class="text-gray-500 hover:text-gray-800 modal-close-button">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -509,7 +515,7 @@
     let solicitudActualId = null;
 
     // Datos del servidor
-    const solicitudIds = <%- JSON.stringify(solicitudes?.map(s => s.id) || []) %>;
+    const solicitudIds = JSON.parse('<%- JSON.stringify(solicitudes?.map(s => s.id) || []) %>');
 
     // Plantillas
     const collaboratorTemplate = `
@@ -1214,14 +1220,16 @@ form.addEventListener('submit', async (e) => {
         const colaboradorId = grupo.dataset.colaboradorId;
         const fotoInput = grupo.querySelector(`input[name="foto_${colaboradorId}"]`);
         const cedulaFotoInput = grupo.querySelector(`input[name="cedula_foto_${colaboradorId}"]`);
+        const cedulaInput = grupo.querySelector(`input[name="cedula_${colaboradorId}"]`);
         
         if (colaboradorId) {
-            if (fotoInput?.files.length > 0 || cedulaFotoInput?.files.length > 0) {
+            if (fotoInput?.files.length > 0 || cedulaFotoInput?.files.length > 0 || cedulaInput?.value) {
                 cambios.colaboradores.modificados.push({
                     id: parseInt(colaboradorId),
                     cambios: {
                         foto: fotoInput?.files.length > 0,
-                        cedula: cedulaFotoInput?.files.length > 0
+                        cedulaFoto: cedulaFotoInput?.files.length > 0,
+                        cedula: cedulaInput?.value ? true : false
                     }
                 });
             }
@@ -2668,3 +2676,39 @@ function editarVehiculo(button) {
   if (estado === 'negada') return 'text-red-700 font-semibold';
   return 'text-green-500 font-semibold';
 } %>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Manejador para el botón de cerrar modal
+  const closeButtons = document.querySelectorAll('.modal-close-button');
+  closeButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const modal = this.closest('.modal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    });
+  });
+
+  // Manejador para el botón de ver QR
+  const verQRButtons = document.querySelectorAll('.ver-qr-button');
+  verQRButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const solicitudId = this.dataset.solicitudId;
+      const modal = document.getElementById('qrModal');
+      const qrContainer = document.getElementById('qr-container');
+      
+      if (modal && qrContainer) {
+        // Generar y mostrar el código QR
+        const qr = new QRCode(qrContainer, {
+          text: `${window.location.origin}/solicitudes/${solicitudId}`,
+          width: 256,
+          height: 256
+        });
+        
+        modal.classList.remove('hidden');
+      }
+    });
+  });
+});
+</script>

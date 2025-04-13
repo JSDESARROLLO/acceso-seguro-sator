@@ -106,6 +106,7 @@ const upload = multer({
 // Función para limpiar archivos temporales
 async function cleanupTempFiles(filePath) {
   try {
+    if (!filePath) return;
     await fs.access(filePath);
     await fs.unlink(filePath);
     logInfo('Archivo temporal eliminado:', { filePath });
@@ -122,7 +123,7 @@ async function cleanupAllTempFiles(files) {
   
   for (const file of files) {
     try {
-      if (file.path) {
+      if (file && file.path) {
         await cleanupTempFiles(file.path);
       }
     } catch (error) {
@@ -130,6 +131,22 @@ async function cleanupAllTempFiles(files) {
     }
   }
 }
+
+// Middleware de limpieza de archivos temporales
+const cleanupMiddleware = async (req, res, next) => {
+  try {
+    if (req.files) {
+      await cleanupAllTempFiles(req.files);
+    }
+    next();
+  } catch (error) {
+    logError(error, 'Middleware de limpieza');
+    next();
+  }
+};
+
+// Aplicar middleware de limpieza a todas las rutas que manejan archivos
+router.use(cleanupMiddleware);
 
 // Función para subir archivo a Spaces con reintentos
 async function uploadToSpacesFromDisk(filePath, originalName, folder = 'images/vehiculos', retries = 3) {
@@ -840,9 +857,11 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
                   const colaborador = colaboradorData[0];
                   const cambios = col.cambios || {};
                   const cambiosList = [];
-                  if (cambios.foto) cambiosList.push(`Foto actualizada`);
-                  if (cambios.cedulaFoto) cambiosList.push(`Cédula foto actualizada`);
-
+                  
+                  if (cambios.foto) cambiosList.push('Foto actualizada');
+                  if (cambios.cedulaFoto) cambiosList.push('Foto de cédula actualizada');
+                  if (cambios.cedula) cambiosList.push('Cédula actualizada');
+                  
                   detallesCambiosHtml += `
                     <li>${colaborador.nombre} (Cédula: ${colaborador.cedula}) - ${
                       cambiosList.length > 0 ? cambiosList.join(', ') : 'Detalles no especificados'

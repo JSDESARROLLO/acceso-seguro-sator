@@ -19,9 +19,10 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com", "https:", "'unsafe-eval'"],
+      scriptSrcAttr: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com", "https:"],
       imgSrc: ["'self'", "data:", "https:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com"],
-      connectSrc: ["'self'", "https:"],
+      connectSrc: ["'self'", "https:", "wss:", "ws:"],
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -29,6 +30,7 @@ app.use(helmet({
       formAction: ["'self'"],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
+      workerSrc: ["'self'", "blob:"],
       upgradeInsecureRequests: []
     }
   },
@@ -584,6 +586,12 @@ async function saveMessageToDatabase(message) {
     throw error;
   }
 }
+
+// Agregar ruta para favicon.ico
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/img/favicon.ico'));
+});
+
 const PORT = process.env.PORT || 3900;
 server.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

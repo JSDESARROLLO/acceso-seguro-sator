@@ -1832,22 +1832,16 @@
         messageContent = message.content || 'Mensaje inválido';
       }
   
-      // Formateo de fecha
-      const messageDate = message.created_at ? new Date(message.created_at) : new Date(message.timestamp);
-      const formattedDateTime = messageDate.toLocaleString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      // Formateo de fecha usando el mismo formato que en la vista del contratista
+      const date = new Date(message.created_at || message.timestamp);
+      const time = date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
   
       const statusIcon = isSender ? getStatusIcon(isLocal, message.leido, !isLocal) : '';
   
       messageDiv.innerHTML = `
         <div class="text-sm mb-1">${messageContent}</div>
         <div class="text-xs ${isSender ? 'text-gray-300' : 'text-gray-500'} text-right">
-          ${formattedDateTime} <span class="status">${statusIcon}</span>
+          ${time} <span class="status">${statusIcon}</span>
         </div>
       `;
       chatMessages.appendChild(messageDiv);

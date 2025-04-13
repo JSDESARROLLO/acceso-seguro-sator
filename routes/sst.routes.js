@@ -2,7 +2,10 @@ const express = require('express');
 const controller = require('../controllers/sst.controller');  // Importamos el controlador
 
 const router = express.Router();
-  
+
+// Aplicar middleware de limpieza a todas las rutas que manejan archivos
+router.use(controller.cleanupMiddleware);
+
 router.get('/api/sst/colaboradores/:solicitudId', controller.getColaboradores);
 router.get('/api/sst/solicitudes/:solicitudId', controller.getSolicitudDetails);
 router.get('/api/sst/vehiculos/:solicitudId', controller.getVehiculos);
