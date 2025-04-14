@@ -156,18 +156,6 @@ controller.register = async (req, res) => {
         const userId = result.insertId;
         console.log('[CONTROLADOR] Usuario creado con ID:', userId);
 
-        // Enviar correo de bienvenida a cualquier usuario con email
-        if (email) {
-            try {
-                console.log('[CONTROLADOR] Enviando correo de bienvenida al usuario');
-                await emailService.sendRegistrationEmail(email, username, empresa);
-                console.log('[CONTROLADOR] Correo de bienvenida enviado exitosamente');
-            } catch (emailError) {
-                console.error('[CONTROLADOR] Error al enviar correo de bienvenida:', emailError);
-                // Continuamos aunque falle el envío del correo
-            }
-        }
-
         // Para contratistas que aceptaron políticas
         if (isContratista && aceptaPolitica) {
             try {

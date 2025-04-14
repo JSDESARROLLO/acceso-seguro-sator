@@ -182,11 +182,11 @@ async function cleanupTempDirectory(dirPath) {
 
 // Función para subir archivo a Spaces con reintentos
 async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitudes', retries = 3) {
-    const uuid = uuidv4();
-    const extension = path.extname(originalName);
-    const filename = `${uuid}${extension}`;
-    const spacesPath = `${folder}/${filename}`;
-
+        const uuid = uuidv4();
+        const extension = path.extname(originalName);
+        const filename = `${uuid}${extension}`;
+        const spacesPath = `${folder}/${filename}`;
+        
     try {
         const fileContent = await fs.promises.readFile(filePath);
         const command = new PutObjectCommand({
@@ -202,10 +202,10 @@ async function uploadToSpacesFromDisk(filePath, originalName, folder = 'solicitu
             try {
                 logInfo('Subiendo archivo a Spaces:', { filePath, spacesPath, attempt: attempt + 1 });
                 await s3Client.send(command);
-
+                
                 const spacesUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${spacesPath}`;
                 logInfo('Archivo subido exitosamente:', { spacesUrl });
-
+                
                 await cleanupTempFiles(filePath);
                 return spacesUrl;
             } catch (error) {
@@ -452,20 +452,20 @@ async function generateInformePDF({ solicitud, colaboradores, contractorName, in
 // }
 
 async function downloadFromSpaces(fileUrl) {
-    if (!fileUrl) {
-        logInfo('No se proporcionó URL de archivo para descargar');
-        return null;
-    }
+  if (!fileUrl) {
+    logInfo('No se proporcionó URL de archivo para descargar');
+    return null;
+  }
 
-    try {
-        const urlParts = fileUrl.split('/');
+  try {
+    const urlParts = fileUrl.split('/');
         const fileKey = urlParts.slice(3).join('/');
-        logInfo('Intentando descargar archivo desde Spaces:', {
-            fileUrl,
-            fileKey,
-            bucket: process.env.DO_SPACES_BUCKET,
-            endpoint: process.env.DO_SPACES_ENDPOINT
-        });
+    logInfo('Intentando descargar archivo desde Spaces:', { 
+      fileUrl, 
+      fileKey,
+      bucket: process.env.DO_SPACES_BUCKET,
+      endpoint: process.env.DO_SPACES_ENDPOINT
+    });
 
         // Verificar existencia del archivo
         await s3Client.send(new HeadObjectCommand({
@@ -473,33 +473,33 @@ async function downloadFromSpaces(fileUrl) {
             Key: fileKey
         }));
 
-        const command = new GetObjectCommand({
-            Bucket: process.env.DO_SPACES_BUCKET,
-            Key: fileKey
-        });
+    const command = new GetObjectCommand({
+      Bucket: process.env.DO_SPACES_BUCKET,
+      Key: fileKey
+    });
 
-        const response = await s3Client.send(command);
-        if (!response.Body) {
-            throw new Error('No se recibió el contenido del archivo');
-        }
-
-        const chunks = [];
-        for await (const chunk of response.Body) {
-            chunks.push(chunk);
-        }
-        const buffer = Buffer.concat(chunks);
-
-        logInfo('Archivo descargado exitosamente:', {
-            fileUrl,
-            size: buffer.length,
-            contentType: response.ContentType
-        });
-
-        return buffer;
-    } catch (error) {
-        logError(error, `Error al descargar el archivo ${fileUrl}`);
-        return null;
+    const response = await s3Client.send(command);
+    if (!response.Body) {
+      throw new Error('No se recibió el contenido del archivo');
     }
+
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+
+    logInfo('Archivo descargado exitosamente:', { 
+      fileUrl,
+      size: buffer.length,
+      contentType: response.ContentType
+    });
+
+    return buffer;
+  } catch (error) {
+        logError(error, `Error al descargar el archivo ${fileUrl}`);
+    return null;
+  }
 }
 
 
@@ -687,7 +687,7 @@ controller.descargarSolicitud = async (req, res) => {
 
             // Manejar eventos del archivo ZIP
             output.on('close', () => {
-                console.log('ZIP creado exitosamente:', archive.pointer() + ' bytes totales');
+                console.log('✅ ZIP creado exitosamente:', { path: zipPath, size: archive.pointer() });
                 res.download(zipPath, zipFileName, (err) => {
                     if (err) {
                         console.error('Error al enviar el archivo:', err);
@@ -882,7 +882,7 @@ controller.getColaboradores = async (req, res) => {
         console.log('Consultando vehículos...');
         const [vehiculos] = await connection.execute(
             `SELECT 
-                v.id,
+                v.id, 
                 v.matricula as placa,
                 v.estado,
                 v.foto as fotos_vehiculo,
@@ -1428,6 +1428,7 @@ controller.generarDocumentos = async (req, res) => {
     console.log('🔄 Iniciando generación de documentos para solicitud:', id);
 
     let tempDir;
+    let zipPath;
     try {
         // Validar solicitud
         const [solicitudExiste] = await connection.execute(
@@ -1445,33 +1446,6 @@ controller.generarDocumentos = async (req, res) => {
         tempDir = path.join(__dirname, '..', 'temp', `solicitud_${id}_${Date.now()}`);
         await fs.promises.mkdir(tempDir, { recursive: true });
         console.log('📁 Directorio temporal creado:', tempDir);
-
-        // Inicializar ZIP
-        const zipFileName = `documentos_solicitud_${id}_${Date.now()}.zip`;
-        const zipPath = path.join(tempDir, zipFileName);
-        const output = fs.createWriteStream(zipPath);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-
-        // Manejar eventos del ZIP
-        output.on('error', (err) => {
-            throw new Error('Error en el flujo de salida del ZIP: ' + err.message);
-        });
-
-        archive.on('warning', (err) => {
-            if (err.code !== 'ENOENT') {
-                logError(err, 'Advertencia al crear el ZIP');
-            }
-        });
-
-        archive.on('error', (err) => {
-            throw new Error('Error al crear ZIP: ' + err.message);
-        });
-
-        output.on('close', () => {
-            console.log('✅ ZIP creado exitosamente:', { path: zipPath, size: archive.pointer() });
-        });
-
-        archive.pipe(output);
 
         // Obtener datos de la solicitud
         const [solicitud] = await connection.execute(`
@@ -1528,94 +1502,91 @@ controller.generarDocumentos = async (req, res) => {
         // Guardar HTML
         const htmlPath = path.join(tempDir, `Informe_Solicitud_${id}.html`);
         await fs.promises.writeFile(htmlPath, html);
-        archive.file(htmlPath, { name: `Informe_Solicitud_${id}.html` });
-        console.log('💾 HTML guardado en:', htmlPath);
 
-        // Incluir documentos faltantes
-        const files = await fs.promises.readdir(path.join(__dirname, '..', 'temp'));
-        const docsFaltantesFiles = files.filter(file => file.startsWith(`documentos_faltantes_${id}_`) && file.endsWith('.txt'));
-        if (docsFaltantesFiles.length > 0) {
-            docsFaltantesFiles.sort().reverse();
-            const latestFile = docsFaltantesFiles[0];
-            const sourcePath = path.join(__dirname, '..', 'temp', latestFile);
-            const destPath = path.join(tempDir, `documentos_faltantes_${id}.txt`);
-            await fs.promises.copyFile(sourcePath, destPath);
-            archive.file(destPath, { name: `documentos_faltantes_${id}.txt` });
-            console.log('📄 Archivo de documentos faltantes incluido:', latestFile);
-        }
+        // Crear archivo ZIP
+        const zipFileName = `documentos_solicitud_${id}_${Date.now()}.zip`;
+        zipPath = path.join(tempDir, zipFileName);
 
-        // Incluir ARL y Pasocial
-        if (solicitud[0].arl_documento) {
-            const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
-            if (arlBuffer) {
-                const arlExtension = path.extname(solicitud[0].arl_documento);
-                const arlPath = path.join(tempDir, `ARL_${id}${arlExtension}`);
-                await fs.promises.writeFile(arlPath, arlBuffer);
-                archive.file(arlPath, { name: `ARL_${id}${arlExtension}` });
-                console.log('📄 ARL incluido en el ZIP');
+        // Crear y llenar el ZIP
+        await new Promise(async (resolve, reject) => {
+            const output = fs.createWriteStream(zipPath);
+            const archive = archiver('zip', {
+                zlib: { level: 9 }
+            });
+
+            output.on('close', resolve);
+            output.on('error', reject);
+            archive.on('error', reject);
+
+            archive.pipe(output);
+
+            // Agregar HTML al ZIP
+            archive.file(htmlPath, { name: `Informe_Solicitud_${id}.html` });
+
+            // Incluir documentos faltantes si existen
+            const files = fs.readdirSync(path.join(__dirname, '..', 'temp'));
+            const docsFaltantesFiles = files.filter(file => file.startsWith(`documentos_faltantes_${id}_`) && file.endsWith('.txt'));
+            if (docsFaltantesFiles.length > 0) {
+                const latestFile = docsFaltantesFiles.sort().reverse()[0];
+                const sourcePath = path.join(__dirname, '..', 'temp', latestFile);
+                archive.file(sourcePath, { name: `documentos_faltantes_${id}.txt` });
             }
-        }
 
-        if (solicitud[0].pasocial_documento) {
-            const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
-            if (pasocialBuffer) {
-                const pasocialExtension = path.extname(solicitud[0].pasocial_documento);
-                const pasocialPath = path.join(tempDir, `Pasocial_${id}${pasocialExtension}`);
-                await fs.promises.writeFile(pasocialPath, pasocialBuffer);
-                archive.file(pasocialPath, { name: `Pasocial_${id}${pasocialExtension}` });
-                console.log('📄 Pasocial incluido en el ZIP');
+            // Procesar documentos de la solicitud (ARL y Pasocial)
+            if (solicitud[0].arl_documento) {
+                const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
+                if (arlBuffer) {
+                    archive.append(arlBuffer, {
+                        name: `ARL_${id}${path.extname(solicitud[0].arl_documento)}`
+                    });
+                }
             }
-        }
-
-        // Procesar vehículos
-        await Promise.all(vehiculos.map(async (vehiculo) => {
-            const vehiculoDir = path.join(tempDir, `vehiculo_${vehiculo.placa}`);
-            await fs.promises.mkdir(vehiculoDir, { recursive: true });
-
-            // Procesar foto del vehículo
-            if (vehiculo.fotos_vehiculo) {
-                const fotoBuffer = await downloadFromSpaces(vehiculo.fotos_vehiculo);
-                if (fotoBuffer) {
-                    const fotoPath = path.join(vehiculoDir, 'foto_vehiculo.jpg');
-                    await fs.promises.writeFile(fotoPath, fotoBuffer);
-                    archive.file(fotoPath, { name: `vehiculo_${vehiculo.placa}/foto_vehiculo.jpg` });
-                    logInfo('Foto de vehículo agregada al ZIP:', {
-                        vehiculo: vehiculo.placa,
-                        foto: 'foto_vehiculo.jpg'
+            if (solicitud[0].pasocial_documento) {
+                const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
+                if (pasocialBuffer) {
+                    archive.append(pasocialBuffer, {
+                        name: `Pasocial_${id}${path.extname(solicitud[0].pasocial_documento)}`
                     });
                 }
             }
 
-            // Procesar documentos del vehículo
-            const documentos = {
-                soat: { url: vehiculo.soat, nombre: 'SOAT' },
-                tecnomecanica: { url: vehiculo.tecnomecanica, nombre: 'Tecnomecánica' },
-                licencia_conduccion: { url: vehiculo.licencia_conduccion, nombre: 'Licencia de conducción' },
-                licencia_transito: { url: vehiculo.licencia_transito, nombre: 'Licencia de tránsito' }
-            };
+            // Procesar vehículos
+            for (const vehiculo of vehiculos) {
+                const vehiculoDir = `vehiculo_${vehiculo.placa}`;
 
-            await Promise.all(Object.entries(documentos).map(async ([tipo, doc]) => {
-                if (doc.url) {
-                    const docBuffer = await downloadFromSpaces(doc.url);
-                    if (docBuffer) {
-                        const extension = path.extname(doc.url);
-                        const docPath = path.join(vehiculoDir, `${tipo}${extension}`);
-                        await fs.promises.writeFile(docPath, docBuffer);
-                        archive.file(docPath, { name: `vehiculo_${vehiculo.placa}/${tipo}${extension}` });
-                        logInfo('Documento de vehículo agregado al ZIP:', {
-                            vehiculo: vehiculo.placa,
-                            documento: tipo,
-                            extension
+                // Agregar foto del vehículo
+                if (vehiculo.fotos_vehiculo) {
+                    const fotoBuffer = await downloadFromSpaces(vehiculo.fotos_vehiculo);
+                    if (fotoBuffer) {
+                        archive.append(fotoBuffer, {
+                            name: `${vehiculoDir}/foto_vehiculo${path.extname(vehiculo.fotos_vehiculo)}`
                         });
-                    } else {
-                        logInfo(`Documento ${tipo} no disponible para vehículo ${vehiculo.placa}`);
                     }
                 }
-            }));
-        }));
 
-        // Finalizar ZIP
-        await archive.finalize();
+                // Agregar documentos del vehículo
+                const documentos = {
+                    soat: vehiculo.soat,
+                    tecnomecanica: vehiculo.tecnomecanica,
+                    licencia_conduccion: vehiculo.licencia_conduccion,
+                    licencia_transito: vehiculo.licencia_transito
+                };
+
+                for (const [tipo, url] of Object.entries(documentos)) {
+                    if (url) {
+                        const docBuffer = await downloadFromSpaces(url);
+                        if (docBuffer) {
+                            archive.append(docBuffer, {
+                                name: `${vehiculoDir}/${tipo}${path.extname(url)}`
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Finalizar el archivo
+            await archive.finalize();
+        });
 
         // Subir ZIP a Spaces
         const zipUrl = await uploadToSpacesFromDisk(zipPath, zipFileName, 'documentos');
@@ -1647,7 +1618,7 @@ controller.generarDocumentos = async (req, res) => {
                 await fs.promises.rm(tempDir, { recursive: true, force: true });
                 console.log('🧹 Archivos temporales eliminados');
             } catch (cleanupError) {
-                logError(cleanupError, 'Error al limpiar archivos temporales');
+                console.error('Error al limpiar archivos temporales:', cleanupError);
             }
         }
     }
