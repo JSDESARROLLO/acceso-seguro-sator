@@ -72,6 +72,10 @@ function mostrarVehiculos(solicitudId) {
                         const fechaFin = new Date(vehiculo.tecnomecanica.fecha_fin);
                         tecnoClase = fechaFin > new Date() ? 'vigente' : 'vencido';
                     }
+
+                    // Determinar estado de las licencias
+                    const licenciaConduccion = vehiculo.licencias && vehiculo.licencias.find(l => l.tipo === 'licencia_conduccion');
+                    const licenciaTransito = vehiculo.licencias && vehiculo.licencias.find(l => l.tipo === 'licencia_transito');
                     
                     const row = `
                         <tr>
@@ -97,15 +101,15 @@ function mostrarVehiculos(solicitudId) {
                                 </button>
                             </td>
                             <td>
-                                <button class="btn btn-sm ${vehiculo.licencia_conduccion ? 'btn-danger' : 'btn-success'}" 
-                                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'conduccion', ${!vehiculo.licencia_conduccion})">
-                                    ${vehiculo.licencia_conduccion ? 'Cancelar Aprobación' : 'Aprobar'}
+                                <button class="btn btn-sm ${licenciaConduccion && licenciaConduccion.estado === 1 ? 'btn-danger' : 'btn-success'}" 
+                                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'conduccion', ${!(licenciaConduccion && licenciaConduccion.estado === 1)})">
+                                    ${licenciaConduccion && licenciaConduccion.estado === 1 ? 'Cancelar Aprobación' : 'Aprobar'}
                                 </button>
                             </td>
                             <td>
-                                <button class="btn btn-sm ${vehiculo.licencia_transito ? 'btn-danger' : 'btn-success'}" 
-                                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'transito', ${!vehiculo.licencia_transito})">
-                                    ${vehiculo.licencia_transito ? 'Cancelar Aprobación' : 'Aprobar'}
+                                <button class="btn btn-sm ${licenciaTransito && licenciaTransito.estado === 1 ? 'btn-danger' : 'btn-success'}" 
+                                        onclick="alternarEstadoLicencia(${vehiculo.id}, ${solicitudId}, 'transito', ${!(licenciaTransito && licenciaTransito.estado === 1)})">
+                                    ${licenciaTransito && licenciaTransito.estado === 1 ? 'Cancelar Aprobación' : 'Aprobar'}
                                 </button>
                             </td>
                         </tr>
@@ -166,15 +170,25 @@ async function toggleLicencia(vehiculoId, solicitudId, tipoLicencia, activar) {
 
     const data = await response.json();
     if (data.success) {
+      // Actualizar el botón inmediatamente
+      const boton = document.querySelector(`button[onclick*="alternarEstadoLicencia(${vehiculoId}, ${solicitudId}, '${tipoLicencia.split('_')[1]}', ${!activar})"]`);
+      if (boton) {
+        boton.className = `btn btn-sm ${activar ? 'btn-danger' : 'btn-success'}`;
+        boton.textContent = activar ? 'Cancelar Aprobación' : 'Aprobar';
+        boton.onclick = () => alternarEstadoLicencia(vehiculoId, solicitudId, tipoLicencia.split('_')[1], !activar);
+      }
+
       Swal.fire({
         icon: 'success',
         title: 'Éxito',
         text: data.message,
         timer: 1500
       });
+
+      // Actualizar la tabla completa
       mostrarVehiculos(solicitudId);
     } else {
-      throw new Error(data.message);
+      throw new Error(data.message || 'Error al actualizar la licencia');
     }
   } catch (error) {
     console.error('Error al actualizar licencia:', error);

@@ -15,6 +15,12 @@ const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } = requ
 const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
 
+// Definir el directorio temporal
+const tempDir = path.join(__dirname, '../temp');
+if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+}
+
 // Funciones de logging
 function logError(error, message) {
     console.error(`[${new Date().toISOString()}] ${message}`);
@@ -897,71 +903,23 @@ controller.getColaboradores = async (req, res) => {
         console.log(`Encontrados ${vehiculos.length} vehículos`);
 
         // Procesar vehículos
-        console.log('Procesando datos adicionales de vehículos...');
-        await Promise.all(vehiculos.map(async (vehiculo) => {
-            const vehiculoDir = path.join(tempDir, `vehiculo_${vehiculo.placa}`);
-            await fs.promises.mkdir(vehiculoDir, { recursive: true });
-
-            // Procesar foto del vehículo
-            if (vehiculo.fotos_vehiculo) {
-                const fotoBuffer = await downloadFromSpaces(vehiculo.fotos_vehiculo);
-                if (fotoBuffer) {
-                    const fotoPath = path.join(vehiculoDir, 'foto_vehiculo.jpg');
-                    await fs.promises.writeFile(fotoPath, fotoBuffer);
-                    archive.file(fotoPath, { name: `vehiculo_${vehiculo.placa}/foto_vehiculo.jpg` });
-                    logInfo('Foto de vehículo agregada al ZIP:', {
-                        vehiculo: vehiculo.placa,
-                        foto: 'foto_vehiculo.jpg'
-                    });
-                }
-            }
-
-            // Procesar documentos del vehículo
-            const documentos = {
-                soat: { url: vehiculo.soat, nombre: 'SOAT' },
-                tecnomecanica: { url: vehiculo.tecnomecanica, nombre: 'Tecnomecánica' },
-                licencia_conduccion: { url: vehiculo.licencia_conduccion, nombre: 'Licencia de conducción' },
-                licencia_transito: { url: vehiculo.licencia_transito, nombre: 'Licencia de tránsito' }
-            };
-
-            await Promise.all(Object.entries(documentos).map(async ([tipo, doc]) => {
-                if (doc.url) {
-                    const docBuffer = await downloadFromSpaces(doc.url);
-                    if (docBuffer) {
-                        const extension = path.extname(doc.url);
-                        const docPath = path.join(vehiculoDir, `${tipo}${extension}`);
-                        await fs.promises.writeFile(docPath, docBuffer);
-                        archive.file(docPath, { name: `vehiculo_${vehiculo.placa}/${tipo}${extension}` });
-                        logInfo('Documento de vehículo agregado al ZIP:', {
-                            vehiculo: vehiculo.placa,
-                            documento: tipo,
-                            extension
-                        });
-                    } else {
-                        logInfo(`Documento ${tipo} no disponible para vehículo ${vehiculo.placa}`);
-                    }
-                }
-            }));
+        const vehiculosProcesados = vehiculos.map(v => ({
+            ...v,
+            estado: Boolean(v.estado)
         }));
-        console.log('Preparando respuesta final...');
-        const respuesta = {
-            id: solicitud[0].id,
-            empresa: solicitud[0].empresa,
-            contratista: solicitud[0].contratista,
-            colaboradores: colaboradoresProcesados,
-            vehiculos: vehiculos
-        };
 
-        console.log('Enviando respuesta exitosa');
-        res.json(respuesta);
+        // Devolver los datos procesados
+        return res.json({
+            solicitud: solicitud[0],
+            colaboradores: colaboradoresProcesados,
+            vehiculos: vehiculosProcesados
+        });
 
     } catch (error) {
         console.error('Error en getColaboradores:', error);
-        console.error('Stack trace:', error.stack);
-        res.status(500).json({ 
-            message: 'Error interno del servidor al obtener colaboradores y vehículos',
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        return res.status(500).json({ 
+            message: 'Error al obtener los datos',
+            error: error.message 
         });
     }
 };
@@ -1338,85 +1296,75 @@ controller.saveVehiculoDocumento = async (req, res) => {
   
 // Alternar estado de licencia
 controller.toggleLicencia = async (req, res) => {
-    try {
         const { vehiculoId, solicitudId, tipoLicencia, activar } = req.body;
         
-        console.log('Datos recibidos en toggleLicencia:', { vehiculoId, solicitudId, tipoLicencia, activar });
-        
-        // Validar parámetros requeridos
-        if (!vehiculoId || !solicitudId || !tipoLicencia) {
-            return res.status(400).json({
-                success: false,
-                message: 'Faltan parámetros requeridos: vehiculoId, solicitudId y tipoLicencia son obligatorios'
-            });
-        }
-        
-        // Validar que activar sea un booleano
-        if (typeof activar !== 'boolean') {
-            return res.status(400).json({
-                success: false,
-                message: 'El parámetro activar debe ser un valor booleano'
-            });
-        }
-        
-        // Validar que tipoLicencia sea uno de los valores permitidos
-        if (!['licencia_conduccion', 'licencia_transito'].includes(tipoLicencia)) {
-            return res.status(400).json({
-                success: false,
-                message: `Tipo de licencia no válido: ${tipoLicencia}. Debe ser 'licencia_conduccion' o 'licencia_transito'`
-            });
-        }
-        
-        // Verificar que el vehículo exista
-        const [vehiculo] = await connection.execute(
-            'SELECT id FROM vehiculos WHERE id = ?',
-            [vehiculoId]
-        );
-        
-        if (vehiculo.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: `No se encontró el vehículo con ID ${vehiculoId}`
-            });
-        }
-        
-        // Verificar si ya existe un registro para esta licencia
-        const [existing] = await connection.execute(
-            `SELECT id FROM licencias_vehiculo WHERE vehiculo_id = ? AND tipo = ?`,
+    console.log('Datos recibidos en toggleLicencia:', {
+        vehiculoId,
+        solicitudId,
+        tipoLicencia,
+        activar
+    });
+
+    try {
+        // Primero verificar si existe la licencia
+        const [existingLicense] = await connection.execute(
+            'SELECT id FROM licencias_vehiculo WHERE vehiculo_id = ? AND tipo = ?',
             [vehiculoId, tipoLicencia]
         );
 
-        // Actualizar o insertar el registro
-        let result;
-        if (existing.length > 0) {
-            [result] = await connection.execute(
-                `UPDATE licencias_vehiculo SET estado = ?, fecha_actualizacion = NOW() WHERE vehiculo_id = ? AND tipo = ?`,
+        if (existingLicense.length > 0) {
+            // Actualizar licencia existente
+            const [result] = await connection.execute(
+                'UPDATE licencias_vehiculo SET estado = ? WHERE vehiculo_id = ? AND tipo = ?',
                 [activar, vehiculoId, tipoLicencia]
             );
             console.log('Actualización de licencia completada:', result);
         } else {
-            [result] = await connection.execute(
-                `INSERT INTO licencias_vehiculo (vehiculo_id, solicitud_id, tipo, estado) VALUES (?, ?, ?, ?)`,
+            // Insertar nueva licencia
+            const [result] = await connection.execute(
+                'INSERT INTO licencias_vehiculo (vehiculo_id, solicitud_id, tipo, estado) VALUES (?, ?, ?, ?)',
                 [vehiculoId, solicitudId, tipoLicencia, activar]
             );
             console.log('Inserción de licencia completada:', result);
         }
 
-        // Determinar el nombre legible del tipo de licencia
-        const tipoLegible = tipoLicencia === 'licencia_conduccion' ? 'Licencia de Conducción' : 'Licencia de Tránsito';
+        // Obtener vehículos actualizados con el estado de las licencias
+        const [vehiculos] = await connection.execute(
+            `SELECT 
+                v.id, 
+                v.matricula as placa,
+                v.estado,
+                v.foto as fotos_vehiculo,
+                v.soat,
+                v.tecnomecanica,
+                v.licencia_conduccion,
+                v.licencia_transito,
+                lc.estado as licencia_conduccion_estado,
+                lt.estado as licencia_transito_estado
+            FROM vehiculos v
+            LEFT JOIN licencias_vehiculo lc ON v.id = lc.vehiculo_id AND lc.tipo = 'licencia_conduccion'
+            LEFT JOIN licencias_vehiculo lt ON v.id = lt.vehiculo_id AND lt.tipo = 'licencia_transito'
+            WHERE v.solicitud_id = ?`,
+            [solicitudId]
+        );
 
-        // Responder con éxito
+        // Procesar los resultados para asegurar que los estados sean booleanos
+        const vehiculosProcesados = vehiculos.map(v => ({
+            ...v,
+            licencia_conduccion: v.licencia_conduccion_estado === 1,
+            licencia_transito: v.licencia_transito_estado === 1
+        }));
+
         res.json({
             success: true,
-            message: activar 
-                ? `${tipoLegible} aprobada correctamente` 
-                : `Aprobación de ${tipoLegible} cancelada correctamente`
+            message: activar ? 'Licencia aprobada correctamente' : 'Licencia inhabilitada correctamente',
+            vehiculos: vehiculosProcesados
         });
     } catch (error) {
-        console.error('Error al actualizar licencia:', error);
+        console.error('Error en toggleLicencia:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al actualizar el estado de la licencia',
+            message: 'Error al actualizar la licencia',
             error: error.message
         });
     }
@@ -1444,8 +1392,8 @@ controller.generarDocumentos = async (req, res) => {
 
         // Crear directorio temporal
         tempDir = path.join(__dirname, '..', 'temp', `solicitud_${id}_${Date.now()}`);
-        await fs.promises.mkdir(tempDir, { recursive: true });
-        console.log('📁 Directorio temporal creado:', tempDir);
+            await fs.promises.mkdir(tempDir, { recursive: true });
+            console.log('📁 Directorio temporal creado:', tempDir);
 
         // Obtener datos de la solicitud
         const [solicitud] = await connection.execute(`
@@ -1498,7 +1446,7 @@ controller.generarDocumentos = async (req, res) => {
             contractorName: solicitud[0].empresa,
             interventorName: solicitud[0].interventor_nombre
         });
-
+        
         // Guardar HTML
         const htmlPath = path.join(tempDir, `Informe_Solicitud_${id}.html`);
         await fs.promises.writeFile(htmlPath, html);
@@ -1533,17 +1481,17 @@ controller.generarDocumentos = async (req, res) => {
             }
 
             // Procesar documentos de la solicitud (ARL y Pasocial)
-            if (solicitud[0].arl_documento) {
-                const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
-                if (arlBuffer) {
+        if (solicitud[0].arl_documento) {
+            const arlBuffer = await downloadFromSpaces(solicitud[0].arl_documento);
+            if (arlBuffer) {
                     archive.append(arlBuffer, {
                         name: `ARL_${id}${path.extname(solicitud[0].arl_documento)}`
                     });
                 }
             }
-            if (solicitud[0].pasocial_documento) {
-                const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
-                if (pasocialBuffer) {
+        if (solicitud[0].pasocial_documento) {
+            const pasocialBuffer = await downloadFromSpaces(solicitud[0].pasocial_documento);
+            if (pasocialBuffer) {
                     archive.append(pasocialBuffer, {
                         name: `Pasocial_${id}${path.extname(solicitud[0].pasocial_documento)}`
                     });
@@ -1551,7 +1499,7 @@ controller.generarDocumentos = async (req, res) => {
             }
 
             // Procesar vehículos
-            for (const vehiculo of vehiculos) {
+        for (const vehiculo of vehiculos) {
                 const vehiculoDir = `vehiculo_${vehiculo.placa}`;
 
                 // Agregar foto del vehículo
@@ -1565,7 +1513,7 @@ controller.generarDocumentos = async (req, res) => {
                 }
 
                 // Agregar documentos del vehículo
-                const documentos = {
+            const documentos = {
                     soat: vehiculo.soat,
                     tecnomecanica: vehiculo.tecnomecanica,
                     licencia_conduccion: vehiculo.licencia_conduccion,
@@ -1575,7 +1523,7 @@ controller.generarDocumentos = async (req, res) => {
                 for (const [tipo, url] of Object.entries(documentos)) {
                     if (url) {
                         const docBuffer = await downloadFromSpaces(url);
-                        if (docBuffer) {
+                    if (docBuffer) {
                             archive.append(docBuffer, {
                                 name: `${vehiculoDir}/${tipo}${path.extname(url)}`
                             });
@@ -1593,31 +1541,31 @@ controller.generarDocumentos = async (req, res) => {
         console.log('✅ ZIP subido a Spaces:', zipUrl);
 
         // Guardar URL en sst_documentos
-        await connection.execute(
-            'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
+                    await connection.execute(
+                        'INSERT INTO sst_documentos (solicitud_id, url) VALUES (?, ?)',
             [id, zipUrl]
-        );
+                    );
 
         // Responder
         res.json({
-            success: true,
+                        success: true,
             message: 'Documentos generados exitosamente',
             url: zipUrl
         });
 
-    } catch (error) {
+                } catch (error) {
         console.error('❌ Error al generar documentos:', error);
         res.status(500).json({
             success: false,
             message: 'Error al generar documentos: ' + error.message
         });
-    } finally {
-        // Limpiar archivos temporales
+                } finally {
+                    // Limpiar archivos temporales
         if (tempDir) {
-            try {
-                await fs.promises.rm(tempDir, { recursive: true, force: true });
-                console.log('🧹 Archivos temporales eliminados');
-            } catch (cleanupError) {
+                    try {
+                        await fs.promises.rm(tempDir, { recursive: true, force: true });
+                        console.log('🧹 Archivos temporales eliminados');
+                    } catch (cleanupError) {
                 console.error('Error al limpiar archivos temporales:', cleanupError);
             }
         }
@@ -1671,23 +1619,29 @@ async function getVehiculos(req, res) {
     // Log para depuración
     logInfo('Obteniendo vehículos para la solicitud', { solicitudId });
     
-    // Consulta SQL para obtener los vehículos con sus documentos
+    // Consulta SQL para obtener los vehículos con sus documentos y licencias
     const query = `
       SELECT 
         v.id,
         v.matricula as placa,
         v.estado,
-        v.licencia_conduccion,
-        v.licencia_transito,
         s.id as soat_id, 
         s.fecha_inicio as soat_inicio, 
         s.fecha_fin as soat_fin,
         t.id as tecno_id, 
         t.fecha_inicio as tecno_inicio, 
-        t.fecha_fin as tecno_fin
+        t.fecha_fin as tecno_fin,
+        lc.id as licencia_conduccion_id,
+        lc.estado as licencia_conduccion_estado,
+        lc.fecha_actualizacion as licencia_conduccion_fecha,
+        lt.id as licencia_transito_id,
+        lt.estado as licencia_transito_estado,
+        lt.fecha_actualizacion as licencia_transito_fecha
       FROM vehiculos v
       LEFT JOIN plantilla_documentos_vehiculos s ON v.id = s.vehiculo_id AND s.tipo_documento = 'soat'
       LEFT JOIN plantilla_documentos_vehiculos t ON v.id = t.vehiculo_id AND t.tipo_documento = 'tecnomecanica'
+      LEFT JOIN licencias_vehiculo lc ON v.id = lc.vehiculo_id AND lc.tipo = 'licencia_conduccion'
+      LEFT JOIN licencias_vehiculo lt ON v.id = lt.vehiculo_id AND lt.tipo = 'licencia_transito'
       WHERE v.solicitud_id = ?
     `;
     
@@ -1698,8 +1652,20 @@ async function getVehiculos(req, res) {
       id: v.id,
       placa: v.placa,
       estado: v.estado,
-      licencia_conduccion: v.licencia_conduccion === 1,
-      licencia_transito: v.licencia_transito === 1,
+      licencias: [
+        {
+          tipo: 'licencia_conduccion',
+          id: v.licencia_conduccion_id,
+          estado: v.licencia_conduccion_estado,
+          fecha_actualizacion: v.licencia_conduccion_fecha
+        },
+        {
+          tipo: 'licencia_transito',
+          id: v.licencia_transito_id,
+          estado: v.licencia_transito_estado,
+          fecha_actualizacion: v.licencia_transito_fecha
+        }
+      ],
       soat: v.soat_id ? {
         id: v.soat_id,
         fecha_inicio: v.soat_inicio,
