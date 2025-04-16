@@ -711,12 +711,15 @@ controller.registrarEntrada = async (req, res) => {
             return res.status(400).json({ message: 'Datos incompletos en la solicitud.' });
         }
 
+        // Obtener la fecha y hora actual en la zona horaria de Colombia
+        const fechaRegistro = moment().tz("America/Bogota").format("YYYY-MM-DD HH:mm:ss");
+
         for (const colaborador of colaboradores) {
             if (!colaborador.id) continue;
             
             const [result] = await connection.execute(
                 'INSERT INTO registros (colaborador_id, solicitud_id, usuario_id, tipo, fecha_hora, estado_actual, created_at) VALUES (?, ?, ?, "entrada", ?, ?, ?)',
-                [colaborador.id, solicitudId, userId, fecha, estado_actual, fechaMySQL]
+                [colaborador.id, solicitudId, userId, fecha, estado_actual, fechaRegistro]
             );
             console.log(`[CONTROLLER] Entrada registrada para colaborador_id ${colaborador.id}:`, result);
         }
@@ -743,12 +746,15 @@ controller.registrarSalida = async (req, res) => {
             return res.status(400).json({ message: 'Datos incompletos en la solicitud.' });
         }
 
+        // Obtener la fecha y hora actual en la zona horaria de Colombia
+        const fechaRegistro = moment().tz("America/Bogota").format("YYYY-MM-DD HH:mm:ss");
+
         for (const colaborador of colaboradores) {
             if (!colaborador.id) continue;
             
             const [result] = await connection.execute(
                 'INSERT INTO registros (colaborador_id, solicitud_id, usuario_id, tipo, fecha_hora, estado_actual, created_at) VALUES (?, ?, ?, "salida", ?, ?, ?)',
-                [colaborador.id, solicitudId, userId, fecha, estado_actual, fechaMySQL]
+                [colaborador.id, solicitudId, userId, fecha, estado_actual, fechaRegistro]
             );
             console.log(`[CONTROLLER] Salida registrada para colaborador_id ${colaborador.id}:`, result);
         }
@@ -1058,6 +1064,9 @@ controller.registrarEntradaVehiculo = async (req, res) => {
             return res.status(400).json({ message: 'Datos incompletos en la solicitud.' });
         }
 
+        // Obtener la fecha y hora actual en la zona horaria de Colombia
+        const fechaRegistro = moment().tz("America/Bogota").format("YYYY-MM-DD HH:mm:ss");
+
         for (const vehiculo of vehiculos) {
             if (!vehiculo.id) continue;
             
@@ -1066,7 +1075,7 @@ controller.registrarEntradaVehiculo = async (req, res) => {
             
             const [result] = await connection.execute(
                 'INSERT INTO registros_vehiculos (vehiculo_id, solicitud_id, usuario_id, tipo, fecha_hora, estado_actual, created_at) VALUES (?, ?, ?, "entrada", ?, ?, ?)',
-                [vehiculoId, solicitudId, userId, fecha, estado_actual, fechaMySQL]
+                [vehiculoId, solicitudId, userId, fecha, estado_actual, fechaRegistro]
             );
             console.log(`[CONTROLLER] Entrada registrada para vehiculo_id ${vehiculoId}:`, result);
         }
@@ -1094,6 +1103,9 @@ controller.registrarSalidaVehiculo = async (req, res) => {
             return res.status(400).json({ message: 'Datos incompletos en la solicitud.' });
         }
 
+        // Obtener la fecha y hora actual en la zona horaria de Colombia
+        const fechaRegistro = moment().tz("America/Bogota").format("YYYY-MM-DD HH:mm:ss");
+
         for (const vehiculo of vehiculos) {
             if (!vehiculo.id) continue;
             
@@ -1102,7 +1114,7 @@ controller.registrarSalidaVehiculo = async (req, res) => {
             
             const [result] = await connection.execute(
                 'INSERT INTO registros_vehiculos (vehiculo_id, solicitud_id, usuario_id, tipo, fecha_hora, estado_actual, created_at) VALUES (?, ?, ?, "salida", ?, ?, ?)',
-                [vehiculoId, solicitudId, userId, fecha, estado_actual, fechaMySQL]
+                [vehiculoId, solicitudId, userId, fecha, estado_actual, fechaRegistro]
             );
             console.log(`[CONTROLLER] Salida registrada para vehiculo_id ${vehiculoId}:`, result);
         }
