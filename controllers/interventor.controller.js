@@ -68,7 +68,7 @@ controller.vistaInterventor = async (req, res) => {
         DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
         s.estado AS solicitud_estado,
         a.accion AS solicitud_estado_interventor,
-        s.lugar,
+        l.nombre_lugar AS lugar,
         s.labor,
         s.empresa,
         s.nit,
@@ -93,6 +93,7 @@ controller.vistaInterventor = async (req, res) => {
       FROM acciones a
       JOIN solicitudes s ON a.solicitud_id = s.id
       LEFT JOIN users us ON us.id = s.interventor_id
+      LEFT JOIN lugares l ON s.lugar = l.id
       WHERE 
         (a.accion IN ('aprobada', 'pendiente') OR s.estado IN ('en labor', 'labor detenida'))
     `;
@@ -315,7 +316,11 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const [solicitud] = await connection.execute('SELECT * FROM solicitudes WHERE id = ?', [id]);
+    const [solicitud] = await connection.execute(`
+      SELECT s.*, l.nombre_lugar as lugar 
+      FROM solicitudes s
+      JOIN lugares l ON s.lugar = l.id 
+      WHERE s.id = ?`, [id]);
     if (!solicitud || solicitud.length === 0) {
       return res.status(404).send('Solicitud no encontrada');
     }
@@ -326,9 +331,6 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
     );
     const [contratista] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].usuario_id]);
     const [interventor] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].interventor_id]);
-
-    // No Base64 conversion; use URLs directly
-    // (Removed the for loop with getImageBase64)
 
     // Formatear fechas
     solicitud.forEach((solici) => {
@@ -586,14 +588,15 @@ controller.obtenerHistorialRegistros = async (req, res) => {
       r.tipo,
       DATE_FORMAT(r.fecha_hora, '%Y-%m-%d %H:%i:%s') AS fecha_hora,
       r.estado_actual,
-      s.lugar,
+      l.nombre_lugar AS lugar,
       DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i:%s') AS registro_hecho,
-      us.username AS usuario_registro  -- Nombre del usuario que realizó el registro
+      us.username AS usuario_registro
     FROM registros r
     JOIN colaboradores c ON r.colaborador_id = c.id
     JOIN solicitudes s ON r.solicitud_id = s.id
-    JOIN users u ON s.usuario_id = u.id  -- Usuario que creó la solicitud
-    JOIN users us ON r.usuario_id = us.id  -- Usuario que realizó el registro
+    JOIN users u ON s.usuario_id = u.id
+    JOIN users us ON r.usuario_id = us.id
+    JOIN lugares l ON s.lugar = l.id
     WHERE r.solicitud_id = ?
     ORDER BY r.fecha_hora DESC;
   `;
@@ -645,7 +648,7 @@ controller.filtrarSolicitudes = async (req, res) => {
         DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
         s.estado AS solicitud_estado,
         a.accion AS solicitud_estado_interventor,
-        s.lugar,
+        l.nombre_lugar AS lugar,
         s.labor,
         s.empresa,
         s.nit,
@@ -667,6 +670,7 @@ controller.filtrarSolicitudes = async (req, res) => {
       JOIN solicitudes s ON a.solicitud_id = s.id
       LEFT JOIN users us ON us.id = s.interventor_id
       LEFT JOIN colaboradores c ON c.solicitud_id = s.id
+      LEFT JOIN lugares l ON s.lugar = l.id
       WHERE 
         (a.accion IN ('aprobada', 'pendiente') OR s.estado IN ('en labor', 'labor detenida'))
     `;
@@ -728,7 +732,7 @@ controller.filtrarSolicitudes = async (req, res) => {
       console.log('[DEBUG] Añadido filtro empresa:', empresa);
     }
     if (lugar) {
-      query += ' AND s.lugar = ?';
+      query += ' AND l.nombre_lugar = ?';
       params.push(lugar);
       console.log('[DEBUG] Añadido filtro lugar:', lugar);
     }
@@ -858,7 +862,6 @@ controller.descargarExcelGlobal = async (req, res) => {
   }
 };
 // Función auxiliar para historial único
-
 const obtenerHistorialRegistros = async (solicitudId) => {
   const query = `
     SELECT 
@@ -868,7 +871,7 @@ const obtenerHistorialRegistros = async (solicitudId) => {
       r.tipo,
       r.fecha_hora,
       r.estado_actual,
-      s.lugar,
+      l.nombre_lugar AS lugar,
       r.created_at AS registro_hecho,
       us.username AS usuario_registro 
     FROM registros r
@@ -876,6 +879,7 @@ const obtenerHistorialRegistros = async (solicitudId) => {
     JOIN solicitudes s ON r.solicitud_id = s.id
     JOIN users u ON s.usuario_id = u.id
     JOIN users us ON r.usuario_id = us.id
+    JOIN lugares l ON s.lugar = l.id
     WHERE r.solicitud_id = ?
     ORDER BY r.created_at DESC
   `;
@@ -884,7 +888,6 @@ const obtenerHistorialRegistros = async (solicitudId) => {
 };
 
 // Función auxiliar para historial global
-
 const obtenerHistorialGlobal = async () => {
   const query = `
     SELECT 
@@ -894,7 +897,7 @@ const obtenerHistorialGlobal = async () => {
       r.tipo,
       r.fecha_hora,
       r.estado_actual,
-      s.lugar,
+      l.nombre_lugar AS lugar,
       r.created_at AS registro_hecho,
       us.username AS usuario_registro   
     FROM registros r
@@ -902,6 +905,7 @@ const obtenerHistorialGlobal = async () => {
     JOIN solicitudes s ON r.solicitud_id = s.id
     JOIN users u ON s.usuario_id = u.id
     JOIN users us ON r.usuario_id = us.id
+    JOIN lugares l ON s.lugar = l.id
     ORDER BY r.fecha_hora DESC
   `;
   const [rows] = await connection.execute(query);
@@ -930,11 +934,12 @@ controller.obtenerDatosTablas = async (req, res) => {
 
     // 1. Solicitudes por Puesto (Lugar)
     let querySolicitudesPorPuesto = `
-      SELECT s.lugar, COUNT(*) AS cantidad
+      SELECT l.nombre_lugar AS lugar, COUNT(*) AS cantidad
       FROM solicitudes s
+      JOIN lugares l ON s.lugar = l.id
       ${yearSolicitudes ? 'WHERE YEAR(s.created_at) = ?' : ''}
       ${monthSolicitudes ? `${yearSolicitudes ? 'AND' : 'WHERE'} MONTH(s.created_at) = ?` : ''}
-      GROUP BY s.lugar
+      GROUP BY l.nombre_lugar
     `;
     const solicitudesParams = [];
     if (yearSolicitudes) solicitudesParams.push(yearSolicitudes);
