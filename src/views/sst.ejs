@@ -499,7 +499,7 @@
                   <td><%= solicitud.inicio_obra %></td>
                   <td><%= solicitud.fin_obra %></td>
                   <td><%= solicitud.dias_trabajo %></td>
-                  <td><%= solicitud.lugar %></td>
+                  <td><%= solicitud.nombre_lugar %></td>
                   <td><%= solicitud.labor %></td>
                   <td><%= solicitud.interventor %></td>
                   <td>
@@ -580,7 +580,6 @@
       <div class="modal-body">
         <p><strong>ID de la Solicitud:</strong> <span id="colaboradoresId"></span></p>
         <p><strong>Empresa:</strong> <span id="colaboradoresEmpresa"></span></p>
-        <p><strong>Contratista:</strong> <span id="colaboradoresContratista"></span></p>
         
         <!-- Filtro de tipo (Colaboradores/Vehículos) -->
         <div class="mb-3">
@@ -920,7 +919,6 @@
       $('#tablaVehiculos').empty();
       $('#colaboradoresId').text('');
       $('#colaboradoresEmpresa').text('');
-      $('#colaboradoresContratista').text('');
       
       // Resetear filtros
       $('#filtroTipo').val('colaboradores');

@@ -22,7 +22,6 @@ function verColaboradores(solicitudId) {
   $('#tablaVehiculos').empty();
   $('#colaboradoresId').text('');
   $('#colaboradoresEmpresa').text('');
-  $('#colaboradoresContratista').text('');
   
   // Resetear filtros
   $('#filtroTipo').val('colaboradores');
@@ -57,7 +56,6 @@ function verColaboradores(solicitudId) {
       .then(data => {
           $('#colaboradoresId').text(data.id);
           $('#colaboradoresEmpresa').text(data.empresa);
-          $('#colaboradoresContratista').text(data.contratista);
 
           // Cargar colaboradores
           return fetch(`/api/sst/colaboradores/${solicitudId}`);
@@ -467,7 +465,6 @@ $(document).ready(function() {
     $('#tablaVehiculos').empty();
     $('#colaboradoresId').text('');
     $('#colaboradoresEmpresa').text('');
-    $('#colaboradoresContratista').text('');
     
     // Resetear el filtro de tipo
     $('#filtroTipo').val('colaboradores');
