@@ -128,6 +128,9 @@ router.get('/responder/:id', verifySurveyToken, async (req, res) => {
 // Ruta para enviar respuestas (pública)
 router.post('/responder', capacitacionController.responderCapacitacion);
 
+// Ruta para el listado de capacitaciones
+router.get('/listado', capacitacionController.listadoCapacitaciones);
+
 // =========== RUTAS PRIVADAS (requieren autenticación) ===========
 
 // Vistas administrativas

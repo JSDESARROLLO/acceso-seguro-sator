@@ -102,21 +102,24 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Rutas
+// Rutas públicas
 app.use(require('../routes/index.routes'));
 app.use(require('../routes/register.routes'));
+app.use('/capacitacion', require('../routes/capacitacion.routes'));
+
+// Middleware de autenticación
+app.use(require('../middleware/auth.middleware'));
+
+// Rutas protegidas
 app.use(require('../routes/contratista.routes'));
 app.use(require('../routes/interventor.routes'));
 app.use(require('../routes/sst.routes'));
 app.use(require('../routes/seguridad.routes'));
-app.use('/capacitaciones', require('../routes/capacitacion.routes'));
 
-const capacitacionRoutes = require('../routes/capacitacion.routes');
 const uploadRoutes = require('../routes/upload.routes');
 const chatRoutes = require('../routes/chat.routes');
 const solicitudRoutes = require('../routes/solicitud.routes');
 
-app.use('/capacitacion', capacitacionRoutes);
 app.use('/', uploadRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api', solicitudRoutes);
