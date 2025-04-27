@@ -1208,13 +1208,13 @@ controller.getSolicitudesActivas = async (req, res) => {
                 us.username AS interventor, 
                 s.lugar,
                 l.nombre_lugar,
-                DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
-                DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
+                COALESCE(DATE_FORMAT(s.inicio_obra, '%d/%m/%Y'), 'N/A') AS inicio_obra,
+                COALESCE(DATE_FORMAT(s.fin_obra, '%d/%m/%Y'), 'N/A') AS fin_obra,
                 s.labor,
                 CASE
-                    WHEN s.estado = 'aprobada' AND CURDATE() > s.fin_obra THEN 'pendiente ingreso - vencido'
+                    WHEN s.estado = 'aprobada' AND s.fin_obra IS NOT NULL AND CURDATE() > s.fin_obra THEN 'pendiente ingreso - vencido'
                     WHEN s.estado = 'aprobada' THEN 'pendiente ingreso'
-                    WHEN s.estado = 'en labor' AND CURDATE() > s.fin_obra THEN 'en labor - vencida'
+                    WHEN s.estado = 'en labor' AND s.fin_obra IS NOT NULL AND CURDATE() > s.fin_obra THEN 'en labor - vencida'
                     WHEN s.estado = 'en labor' THEN 'en labor'
                     WHEN s.estado = 'labor detenida' THEN 'labor detenida'
                     ELSE s.estado
@@ -1242,7 +1242,9 @@ controller.getSolicitudesActivas = async (req, res) => {
             empresa: s.empresa,
             lugar: s.nombre_lugar,
             labor: s.labor,
-            estado: s.estado_actual
+            estado: s.estado_actual,
+            inicio_obra: s.inicio_obra,
+            fin_obra: s.fin_obra
         })));
 
         // Procesar cada solicitud
@@ -1265,10 +1267,10 @@ controller.getSolicitudesActivas = async (req, res) => {
                     c.cedula,
                     c.foto,
                     c.estado,
-                    MAX(rc.estado) AS curso_siso_estado, -- Usamos MAX para evitar conflictos con GROUP BY
-                    MAX(rc.fecha_vencimiento) AS curso_siso_vencimiento,
-                    MAX(pss.fecha_inicio) AS plantilla_ss_inicio,
-                    MAX(pss.fecha_fin) AS plantilla_ss_fin,
+                    MAX(rc.estado) AS curso_siso_estado,
+                    COALESCE(DATE_FORMAT(MAX(rc.fecha_vencimiento), '%d/%m/%Y'), 'N/A') AS curso_siso_vencimiento,
+                    COALESCE(DATE_FORMAT(MAX(pss.fecha_inicio), '%d/%m/%Y'), 'N/A') AS plantilla_ss_inicio,
+                    COALESCE(DATE_FORMAT(MAX(pss.fecha_fin), '%d/%m/%Y'), 'N/A') AS plantilla_ss_fin,
                     CASE
                         WHEN MAX(rc.estado) IS NULL THEN 'No'
                         WHEN MAX(rc.estado) = 'APROBADO' AND MAX(rc.fecha_vencimiento) < CURDATE() THEN 'Vencido'
@@ -1294,7 +1296,10 @@ controller.getSolicitudesActivas = async (req, res) => {
                 nombre: c.nombre,
                 cedula: c.cedula,
                 cursoSiso: c.cursoSiso,
-                plantillaSS: c.plantillaSS
+                plantillaSS: c.plantillaSS,
+                curso_siso_vencimiento: c.curso_siso_vencimiento,
+                plantilla_ss_inicio: c.plantilla_ss_inicio,
+                plantilla_ss_fin: c.plantilla_ss_fin
             })));
 
             // Verificar vehículos
@@ -1312,10 +1317,10 @@ controller.getSolicitudesActivas = async (req, res) => {
                     v.matricula,
                     v.foto,
                     v.estado,
-                    MAX(pdv_soat.fecha_inicio) AS soat_inicio,
-                    MAX(pdv_soat.fecha_fin) AS soat_fin,
-                    MAX(pdv_tecno.fecha_inicio) AS tecnomecanica_inicio,
-                    MAX(pdv_tecno.fecha_fin) AS tecnomecanica_fin,
+                    COALESCE(DATE_FORMAT(MAX(pdv_soat.fecha_inicio), '%d/%m/%Y'), 'N/A') AS soat_inicio,
+                    COALESCE(DATE_FORMAT(MAX(pdv_soat.fecha_fin), '%d/%m/%Y'), 'N/A') AS soat_fin,
+                    COALESCE(DATE_FORMAT(MAX(pdv_tecno.fecha_inicio), '%d/%m/%Y'), 'N/A') AS tecnomecanica_inicio,
+                    COALESCE(DATE_FORMAT(MAX(pdv_tecno.fecha_fin), '%d/%m/%Y'), 'N/A') AS tecnomecanica_fin,
                     MAX(lv_conduccion.estado) AS licencia_conduccion,
                     MAX(lv_transito.estado) AS licencia_transito,
                     CASE
@@ -1343,6 +1348,10 @@ controller.getSolicitudesActivas = async (req, res) => {
             console.log(`Vehículos para solicitud ${solicitud.id}:`, vehiculos.length, vehiculos.map(v => ({
                 id: v.id,
                 matricula: v.matricula,
+                soat_inicio: v.soat_inicio,
+                soat_fin: v.soat_fin,
+                tecnomecanica_inicio: v.tecnomecanica_inicio,
+                tecnomecanica_fin: v.tecnomecanica_fin,
                 estado_soat: v.estado_soat,
                 estado_tecnomecanica: v.estado_tecnomecanica,
                 licencia_conduccion: v.licencia_conduccion,

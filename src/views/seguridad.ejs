@@ -17,9 +17,53 @@
             color: #ff0000;
             font-style: italic;
         }
+        /* Loading Overlay Styles */
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+        }
+        #loadingOverlay.hidden {
+            display: none;
+        }
+        #progressBar {
+            width: 50%;
+            height: 20px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #progressFill {
+            height: 100%;
+            background: #28a745;
+            width: 0;
+            transition: width 0.3s ease;
+        }
+        #loadingMessage {
+            margin-top: 10px;
+            font-size: 1.2rem;
+        }
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <h2>Cargando datos...</h2>
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        <p id="loadingMessage">Iniciando carga...</p>
+    </div>
+
     <!-- Barra de navegación -->
     <nav class="flex justify-between items-center bg-gray-800 text-white p-4">
         <a class="text-lg font-semibold" href="#">Vista Seguridad GA - <%= username %></a>
@@ -368,8 +412,19 @@
         }
 
         function formatFecha(fecha) {
-            if (!fecha) return 'N/A';
+            if (!fecha || fecha === 'N/A' || fecha === 'null') return 'N/A';
+            // Try parsing as DD/MM/YYYY (from backend DATE_FORMAT)
+            const match = fecha.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (match) {
+                const [, day, month, year] = match;
+                const date = new Date(`${year}-${month}-${day}`);
+                if (!isNaN(date.getTime())) {
+                    return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+                }
+            }
+            // Fallback for other formats or invalid dates
             const date = new Date(fecha);
+            if (isNaN(date.getTime())) return 'N/A';
             return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
         }
 
@@ -1130,489 +1185,523 @@
 
         // Función para cargar todos los registros
         async function cargarTodosLosRegistros() {
-    if (!navigator.onLine) {
-        console.log('Sin conexión. No se pueden cargar los registros.');
-        return;
-    }
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const progressFill = document.getElementById('progressFill');
+            const loadingMessage = document.getElementById('loadingMessage');
 
-    try {
-        console.log('Cargando todos los registros...');
-        const response = await fetch('/api/solicitudes/seguridad_activas');
-        if (!response.ok) {
-            throw new Error(`Error al cargar los registros: ${response.statusText}`);
-        }
-
-        const solicitudes = await response.json();
-        console.log('Registros cargados:', solicitudes.length);
-        console.log('IDs de solicitudes encontradas:', solicitudes.map(s => s.id));
-
-        // Guardar en IndexedDB
-        const transaction = db.transaction(['pendingActions'], 'readwrite');
-        const store = transaction.objectStore('pendingActions');
-
-        for (const solicitud of solicitudes) {
-            try {
-                console.log(`\nProcesando solicitud ID: ${solicitud.id}`);
-                console.log(`Detalles de solicitud ${solicitud.id}:`, {
-                    empresa: solicitud.empresa,
-                    lugar: solicitud.nombre_lugar,
-                    labor: solicitud.labor,
-                    estado: solicitud.estado_actual
-                });
-
-                // Guardar detalles de la solicitud
-                await store.put({
-                    id: `detalles-${solicitud.id}`,
-                    type: 'cachedDetails',
-                    data: solicitud,
-                    timestamp: new Date().toISOString()
-                });
-                console.log(`Detalles de solicitud ${solicitud.id} guardados`);
-
-                // Guardar colaboradores
-                if (solicitud.colaboradores && solicitud.colaboradores.length > 0) {
-                    console.log(`Colaboradores para solicitud ${solicitud.id}:`, solicitud.colaboradores.map(col => ({
-                        id: col.id,
-                        nombre: col.nombre,
-                        cedula: col.cedula,
-                        cursoSiso: col.cursoSiso,
-                        plantillaSS: col.plantillaSS
-                    })));
-                    for (const colaborador of solicitud.colaboradores) {
-                        await store.put({
-                            id: `colaborador-${colaborador.id}`,
-                            type: 'cachedColaborador',
-                            data: {
-                                id: colaborador.id,
-                                nombre: colaborador.nombre,
-                                cedula: colaborador.cedula,
-                                foto: colaborador.foto,
-                                estado: colaborador.estado,
-                                cursoSiso: colaborador.cursoSiso,
-                                plantillaSS: colaborador.plantillaSS,
-                                curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
-                                plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
-                                plantilla_ss_fin: colaborador.plantilla_ss_fin,
-                                solicitudId: solicitud.id
-                            },
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-                    console.log(`Colaboradores guardados: ${solicitud.colaboradores.length}`);
-                } else {
-                    console.log(`No se encontraron colaboradores para solicitud ${solicitud.id}`);
-                }
-
-                // Guardar vehículos
-                if (solicitud.vehiculos && solicitud.vehiculos.length > 0) {
-                    console.log(`Vehículos para solicitud ${solicitud.id}:`, solicitud.vehiculos.map(veh => ({
-                        id: veh.id,
-                        matricula: veh.matricula,
-                        estado_soat: veh.estado_soat,
-                        estado_tecnomecanica: veh.estado_tecnomecanica,
-                        licencia_conduccion: veh.licencia_conduccion,
-                        licencia_transito: veh.licencia_transito
-                    })));
-                    for (const vehiculo of solicitud.vehiculos) {
-                        await store.put({
-                            id: `vehiculo-${vehiculo.id}`,
-                            type: 'cachedVehiculo',
-                            data: {
-                                id: vehiculo.id,
-                                matricula: vehiculo.matricula,
-                                foto: vehiculo.foto,
-                                estado: vehiculo.estado,
-                                soat_inicio: vehiculo.soat_inicio,
-                                soat_fin: vehiculo.soat_fin,
-                                tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
-                                tecnomecanica_fin: vehiculo.tecnomecanica_fin,
-                                licencia_conduccion: vehiculo.licencia_conduccion,
-                                licencia_transito: vehiculo.licencia_transito,
-                                estado_soat: vehiculo.estado_soat,
-                                estado_tecnomecanica: vehiculo.estado_tecnomecanica,
-                                mensajesAdvertencia: vehiculo.mensajesAdvertencia,
-                                solicitudId: solicitud.id
-                            },
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-                    console.log(`Vehículos guardados: ${solicitud.vehiculos.length}`);
-                } else {
-                    console.log(`No se encontraron vehículos para solicitud ${solicitud.id}`);
-                }
-            } catch (error) {
-                console.error(`Error al cachear solicitud ${solicitud.id}:`, error);
-            }
-        }
-
-        // Verificar contenido de IndexedDB
-        const allItemsRequest = store.getAll();
-        allItemsRequest.onsuccess = () => {
-            const allItems = allItemsRequest.result;
-            console.log('\nResumen de carga:');
-            console.log('Total de solicitudes:', solicitudes.length);
-            console.log('Total de items en IndexedDB:', allItems.length);
-            console.log('Desglose:', {
-                detalles: allItems.filter(item => item.type === 'cachedDetails').length,
-                colaboradores: allItems.filter(item => item.type === 'cachedColaborador').length,
-                vehiculos: allItems.filter(item => item.type === 'cachedVehiculo').length,
-                pendientes: allItems.filter(item => item.type.startsWith('pending')).length
-            });
-        };
-
-    } catch (error) {
-        console.error('Error al cargar registros:', error);
-    }
-}
-
-async function verDetalles(id) {
-    try {
-        console.log('Iniciando verDetalles con ID:', id);
-        const cleanId = id.trim().toUpperCase();
-
-        if (navigator.onLine) {
-            console.log('Conexión en línea, realizando búsqueda en servidor');
-            const url = `/api/solicitudes/seguridad/${cleanId}`;
-            const response = await fetch(url);
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Error en la respuesta del servidor:', errorData);
-                Swal.fire({ 
-                    icon: 'error', 
-                    title: 'No encontrado', 
-                    text: errorData.message || 'No se ha encontrado registro.' 
-                });
+            if (!navigator.onLine) {
+                console.log('Sin conexión. Usando datos en caché.');
+                loadingMessage.textContent = 'Sin conexión. Usando datos en caché.';
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                }, 1000);
                 return;
             }
 
-            const data = await response.json();
-            console.log('Datos recibidos del servidor:', data);
+            try {
+                console.log('Cargando todos los registros...');
+                loadingMessage.textContent = 'Obteniendo solicitudes...';
+                const response = await fetch('/api/solicitudes/seguridad_activas');
+                if (!response.ok) {
+                    throw new Error(`Error al cargar los registros: ${response.statusText}`);
+                }
 
-            // Cachear datos en IndexedDB
-            const transaction = db.transaction(['pendingActions'], 'readwrite');
-            const store = transaction.objectStore('pendingActions');
-            await store.put({
-                id: `detalles-${data.id}`,
-                type: 'cachedDetails',
-                data,
-                timestamp: new Date().toISOString()
-            });
+                const solicitudes = await response.json();
+                console.log('Registros cargados:', solicitudes.length);
+                console.log('IDs de solicitudes encontradas:', solicitudes.map(s => s.id));
 
-            // Cachear colaboradores
-            if (data.colaboradores && data.colaboradores.length > 0) {
-                for (const colaborador of data.colaboradores) {
+                // Calcular el total de elementos a procesar
+                let totalItems = solicitudes.length;
+                solicitudes.forEach(solicitud => {
+                    totalItems += (solicitud.colaboradores ? solicitud.colaboradores.length : 0);
+                    totalItems += (solicitud.vehiculos ? solicitud.vehiculos.length : 0);
+                });
+                let processedItems = 0;
+
+                // Función para actualizar el progreso
+                function updateProgress() {
+                    processedItems++;
+                    const progress = (processedItems / totalItems) * 100;
+                    progressFill.style.width = `${progress}%`;
+                    loadingMessage.textContent = `Procesando ${processedItems} de ${totalItems} elementos...`;
+                }
+
+                // Guardar en IndexedDB
+                const transaction = db.transaction(['pendingActions'], 'readwrite');
+                const store = transaction.objectStore('pendingActions');
+
+                for (const solicitud of solicitudes) {
+                    try {
+                        console.log(`\nProcesando solicitud ID: ${solicitud.id}`);
+                        console.log(`Detalles de solicitud ${solicitud.id}:`, {
+                            empresa: solicitud.empresa,
+                            lugar: solicitud.nombre_lugar,
+                            labor: solicitud.labor,
+                            estado: solicitud.estado_actual
+                        });
+
+                        // Guardar detalles de la solicitud
+                        await store.put({
+                            id: `detalles-${solicitud.id}`,
+                            type: 'cachedDetails',
+                            data: solicitud,
+                            timestamp: new Date().toISOString()
+                        });
+                        console.log(`Detalles de solicitud ${solicitud.id} guardados`);
+                        updateProgress();
+
+                        // Guardar colaboradores
+                        if (solicitud.colaboradores && solicitud.colaboradores.length > 0) {
+                            console.log(`Colaboradores para solicitud ${solicitud.id}:`, solicitud.colaboradores.map(col => ({
+                                id: col.id,
+                                nombre: col.nombre,
+                                cedula: col.cedula,
+                                cursoSiso: col.cursoSiso,
+                                plantillaSS: col.plantillaSS
+                            })));
+                            for (const colaborador of solicitud.colaboradores) {
+                                await store.put({
+                                    id: `colaborador-${colaborador.id}`,
+                                    type: 'cachedColaborador',
+                                    data: {
+                                        id: colaborador.id,
+                                        nombre: colaborador.nombre,
+                                        cedula: colaborador.cedula,
+                                        foto: colaborador.foto,
+                                        estado: colaborador.estado,
+                                        cursoSiso: colaborador.cursoSiso,
+                                        plantillaSS: colaborador.plantillaSS,
+                                        curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
+                                        plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
+                                        plantilla_ss_fin: colaborador.plantilla_ss_fin,
+                                        solicitudId: solicitud.id
+                                    },
+                                    timestamp: new Date().toISOString()
+                                });
+                                updateProgress();
+                            }
+                            console.log(`Colaboradores guardados: ${solicitud.colaboradores.length}`);
+                        } else {
+                            console.log(`No se encontraron colaboradores para solicitud ${solicitud.id}`);
+                        }
+
+                        // Guardar vehículos
+                        if (solicitud.vehiculos && solicitud.vehiculos.length > 0) {
+                            console.log(`Vehículos para solicitud ${solicitud.id}:`, solicitud.vehiculos.map(veh => ({
+                                id: veh.id,
+                                matricula: veh.matricula,
+                                estado_soat: veh.estado_soat,
+                                estado_tecnomecanica: veh.estado_tecnomecanica,
+                                licencia_conduccion: veh.licencia_conduccion,
+                                licencia_transito: veh.licencia_transito
+                            })));
+                            for (const vehiculo of solicitud.vehiculos) {
+                                await store.put({
+                                    id: `vehiculo-${vehiculo.id}`,
+                                    type: 'cachedVehiculo',
+                                    data: {
+                                        id: vehiculo.id,
+                                        matricula: vehiculo.matricula,
+                                        foto: vehiculo.foto,
+                                        estado: vehiculo.estado,
+                                        soat_inicio: vehiculo.soat_inicio,
+                                        soat_fin: vehiculo.soat_fin,
+                                        tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
+                                        tecnomecanica_fin: vehiculo.tecnomecanica_fin,
+                                        licencia_conduccion: vehiculo.licencia_conduccion,
+                                        licencia_transito: vehiculo.licencia_transito,
+                                        estado_soat: vehiculo.estado_soat,
+                                        estado_tecnomecanica: vehiculo.estado_tecnomecanica,
+                                        mensajesAdvertencia: vehiculo.mensajesAdvertencia,
+                                        solicitudId: solicitud.id
+                                    },
+                                    timestamp: new Date().toISOString()
+                                });
+                                updateProgress();
+                            }
+                            console.log(`Vehículos guardados: ${solicitud.vehiculos.length}`);
+                        } else {
+                            console.log(`No se encontraron vehículos para solicitud ${solicitud.id}`);
+                        }
+                    } catch (error) {
+                        console.error(`Error al cachear solicitud ${solicitud.id}:`, error);
+                    }
+                }
+
+                // Verificar contenido de IndexedDB
+                const allItemsRequest = store.getAll();
+                allItemsRequest.onsuccess = () => {
+                    const allItems = allItemsRequest.result;
+                    console.log('\nResumen de carga:');
+                    console.log('Total de solicitudes:', solicitudes.length);
+                    console.log('Total de items en IndexedDB:', allItems.length);
+                    console.log('Desglose:', {
+                        detalles: allItems.filter(item => item.type === 'cachedDetails').length,
+                        colaboradores: allItems.filter(item => item.type === 'cachedColaborador').length,
+                        vehiculos: allItems.filter(item => item.type === 'cachedVehiculo').length,
+                        pendientes: allItems.filter(item => item.type.startsWith('pending')).length
+                    });
+                    loadingMessage.textContent = 'Carga completa!';
+                    progressFill.style.width = '100%';
+                    setTimeout(() => {
+                        loadingOverlay.classList.add('hidden');
+                    }, 500);
+                };
+
+            } catch (error) {
+                console.error('Error al cargar registros:', error);
+                loadingMessage.textContent = 'Error al cargar datos. Usando caché.';
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                }, 1000);
+            }
+        }
+
+        async function verDetalles(id) {
+            try {
+                console.log('Iniciando verDetalles con ID:', id);
+                const cleanId = id.trim().toUpperCase();
+
+                if (navigator.onLine) {
+                    console.log('Conexión en línea, realizando búsqueda en servidor');
+                    const url = `/api/solicitudes/seguridad/${cleanId}`;
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('Error en la respuesta del servidor:', errorData);
+                        Swal.fire({ 
+                            icon: 'error', 
+                            title: 'No encontrado', 
+                            text: errorData.message || 'No se ha encontrado registro.' 
+                        });
+                        return;
+                    }
+
+                    const data = await response.json();
+                    console.log('Datos recibidos del servidor:', data);
+
+                    // Cachear datos en IndexedDB
+                    const transaction = db.transaction(['pendingActions'], 'readwrite');
+                    const store = transaction.objectStore('pendingActions');
                     await store.put({
-                        id: `colaborador-${colaborador.id}`,
-                        type: 'cachedColaborador',
-                        data: {
-                            ...colaborador,
-                            solicitudId: data.id
-                        },
+                        id: `detalles-${data.id}`,
+                        type: 'cachedDetails',
+                        data,
                         timestamp: new Date().toISOString()
                     });
+
+                    // Cachear colaboradores
+                    if (data.colaboradores && data.colaboradores.length > 0) {
+                        for (const colaborador of data.colaboradores) {
+                            await store.put({
+                                id: `colaborador-${colaborador.id}`,
+                                type: 'cachedColaborador',
+                                data: {
+                                    ...colaborador,
+                                    solicitudId: data.id
+                                },
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+
+                    // Cachear vehículos
+                    if (data.vehiculos && data.vehiculos.length > 0) {
+                        for (const vehiculo of data.vehiculos) {
+                            await store.put({
+                                id: `vehiculo-${vehiculo.id}`,
+                                type: 'cachedVehiculo',
+                                data: {
+                                    ...vehiculo,
+                                    solicitudId: data.id
+                                },
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+
+                    console.log('Datos guardados en IndexedDB');
+                    llenarModal(data);
+                } else {
+                    console.log('Sin conexión, buscando en caché local');
+                    const transaction = db.transaction(['pendingActions'], 'readonly');
+                    const store = transaction.objectStore('pendingActions');
+
+                    // Determinar si es colaborador, vehículo o solicitud
+                    const isVehiculo = cleanId.startsWith('VH-');
+                    const entityId = isVehiculo ? cleanId.replace('VH-', '') : cleanId;
+                    const cacheId = isVehiculo ? `vehiculo-${entityId}` : `colaborador-${entityId}`;
+
+                    // Buscar como colaborador o vehículo
+                    const entityRequest = store.get(cacheId);
+                    entityRequest.onsuccess = async () => {
+                        const entity = entityRequest.result;
+                        if (entity) {
+                            console.log(`Encontrado ${isVehiculo ? 'vehículo' : 'colaborador'} en caché:`, entity.data);
+                            const solicitudId = entity.data.solicitudId;
+
+                            // Buscar solicitud asociada
+                            const solicitudRequest = store.get(`detalles-${solicitudId}`);
+                            solicitudRequest.onsuccess = () => {
+                                const solicitud = solicitudRequest.result;
+                                if (!solicitud) {
+                                    console.log(`No se encontró solicitud ${solicitudId} en caché`);
+                                    Swal.fire({
+                                        icon: 'warning',
+                                        title: 'Sin Conexión',
+                                        text: 'No se encontró la solicitud asociada.'
+                                    });
+                                    return;
+                                }
+
+                                // Preparar datos para el modal
+                                const modalData = {
+                                    id: solicitud.data.id,
+                                    empresa: solicitud.data.empresa,
+                                    nombre_lugar: solicitud.data.nombre_lugar,
+                                    labor: solicitud.data.labor,
+                                    inicio_obra: solicitud.data.inicio_obra,
+                                    fin_obra: solicitud.data.fin_obra,
+                                    estado_actual: solicitud.data.estado_actual,
+                                    interventor: solicitud.data.interventor,
+                                    mensajeCursoSiso: solicitud.data.mensajeCursoSiso,
+                                    mensajePlantillaSS: solicitud.data.mensajePlantillaSS,
+                                    mensajeVehiculos: solicitud.data.mensajeVehiculos,
+                                    colaboradores: isVehiculo ? [] : [entity.data],
+                                    vehiculos: isVehiculo ? [entity.data] : []
+                                };
+
+                                console.log('Datos para el modal:', modalData);
+                                llenarModal(modalData);
+                            };
+                        } else {
+                            console.log('No se encontró colaborador/vehículo, buscando como solicitud');
+                            // Buscar como solicitud
+                            const solicitudRequest = store.get(`detalles-${cleanId}`);
+                            solicitudRequest.onsuccess = () => {
+                                if (solicitudRequest.result) {
+                                    const detalles = solicitudRequest.result.data;
+                                    console.log('Detalles de solicitud encontrados:', detalles);
+
+                                    // Obtener colaboradores y vehículos
+                                    const allItemsRequest = store.getAll();
+                                    allItemsRequest.onsuccess = () => {
+                                        const colaboradores = allItemsRequest.result
+                                            .filter(item => item.type === 'cachedColaborador' && item.data.solicitudId === detalles.id)
+                                            .map(item => item.data);
+                                        const vehiculos = allItemsRequest.result
+                                            .filter(item => item.type === 'cachedVehiculo' && item.data.solicitudId === detalles.id)
+                                            .map(item => item.data);
+
+                                        detalles.colaboradores = colaboradores;
+                                        detalles.vehiculos = vehiculos;
+
+                                        console.log('Detalles completos:', {
+                                            solicitudId: detalles.id,
+                                            colaboradores: colaboradores.length,
+                                            vehiculos: vehiculos.length
+                                        });
+                                        llenarModal(detalles);
+                                    };
+                                } else {
+                                    console.log('No se encontraron datos en caché');
+                                    Swal.fire({
+                                        icon: 'warning',
+                                        title: 'Sin Conexión',
+                                        text: 'No se encontraron datos en caché.'
+                                    });
+                                }
+                            };
+                        }
+                    };
                 }
+            } catch (error) {
+                console.error('Error al obtener detalles:', error);
+                Swal.fire({ 
+                    icon: 'error', 
+                    title: 'Error', 
+                    text: 'Ocurrió un error al obtener los detalles.' 
+                });
             }
+        }
 
-            // Cachear vehículos
-            if (data.vehiculos && data.vehiculos.length > 0) {
-                for (const vehiculo of data.vehiculos) {
-                    await store.put({
-                        id: `vehiculo-${vehiculo.id}`,
-                        type: 'cachedVehiculo',
-                        data: {
-                            ...vehiculo,
-                            solicitudId: data.id
-                        },
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            }
+        async function buscarPorIdSinConexion(id) {
+            try {
+                const transaction = db.transaction(['pendingActions'], 'readonly');
+                const store = transaction.objectStore('pendingActions');
 
-            console.log('Datos guardados en IndexedDB');
-            llenarModal(data);
-        } else {
-            console.log('Sin conexión, buscando en caché local');
-            const transaction = db.transaction(['pendingActions'], 'readonly');
-            const store = transaction.objectStore('pendingActions');
+                // Determinar si es colaborador o vehículo
+                const isVehiculo = id.startsWith('VH-');
+                const entityId = isVehiculo ? id.replace('VH-', '') : id;
+                const type = isVehiculo ? 'cachedVehiculo' : 'cachedColaborador';
+                const cacheId = isVehiculo ? `vehiculo-${entityId}` : `colaborador-${entityId}`;
 
-            // Determinar si es colaborador, vehículo o solicitud
-            const isVehiculo = cleanId.startsWith('VH-');
-            const entityId = isVehiculo ? cleanId.replace('VH-', '') : cleanId;
-            const cacheId = isVehiculo ? `vehiculo-${entityId}` : `colaborador-${entityId}`;
+                // Buscar el colaborador o vehículo
+                const entityRequest = store.get(cacheId);
+                entityRequest.onsuccess = async () => {
+                    const entity = entityRequest.result;
+                    if (!entity) {
+                        console.log(`No se encontró ${isVehiculo ? 'vehículo' : 'colaborador'} con ID ${id} en caché`);
+                        alert(`No se encontró ${isVehiculo ? 'vehículo' : 'colaborador'} con ID ${id}`);
+                        return;
+                    }
 
-            // Buscar como colaborador o vehículo
-            const entityRequest = store.get(cacheId);
-            entityRequest.onsuccess = async () => {
-                const entity = entityRequest.result;
-                if (entity) {
-                    console.log(`Encontrado ${isVehiculo ? 'vehículo' : 'colaborador'} en caché:`, entity.data);
                     const solicitudId = entity.data.solicitudId;
+                    console.log(`Encontrado ${type} con ID ${id}, asociado a solicitud ${solicitudId}`);
 
-                    // Buscar solicitud asociada
+                    // Buscar detalles de la solicitud
                     const solicitudRequest = store.get(`detalles-${solicitudId}`);
                     solicitudRequest.onsuccess = () => {
                         const solicitud = solicitudRequest.result;
                         if (!solicitud) {
                             console.log(`No se encontró solicitud ${solicitudId} en caché`);
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Sin Conexión',
-                                text: 'No se encontró la solicitud asociada.'
-                            });
+                            alert('No se encontró la solicitud asociada');
                             return;
                         }
 
-                        // Preparar datos para el modal
+                        // Mostrar datos en el modal
                         const modalData = {
                             id: solicitud.data.id,
                             empresa: solicitud.data.empresa,
-                            nombre_lugar: solicitud.data.nombre_lugar,
+                            lugar: solicitud.data.nombre_lugar,
                             labor: solicitud.data.labor,
                             inicio_obra: solicitud.data.inicio_obra,
                             fin_obra: solicitud.data.fin_obra,
-                            estado_actual: solicitud.data.estado_actual,
+                            estado: solicitud.data.estado_actual,
                             interventor: solicitud.data.interventor,
-                            mensajeCursoSiso: solicitud.data.mensajeCursoSiso,
-                            mensajePlantillaSS: solicitud.data.mensajePlantillaSS,
-                            mensajeVehiculos: solicitud.data.mensajeVehiculos,
-                            colaboradores: isVehiculo ? [] : [entity.data],
-                            vehiculos: isVehiculo ? [entity.data] : []
+                            [isVehiculo ? 'vehiculos' : 'colaboradores']: [entity.data]
                         };
 
                         console.log('Datos para el modal:', modalData);
                         llenarModal(modalData);
+
+                        // Habilitar acciones
+                        habilitarAcciones(solicitudId, entity.data, isVehiculo);
                     };
-                } else {
-                    console.log('No se encontró colaborador/vehículo, buscando como solicitud');
-                    // Buscar como solicitud
-                    const solicitudRequest = store.get(`detalles-${cleanId}`);
-                    solicitudRequest.onsuccess = () => {
-                        if (solicitudRequest.result) {
-                            const detalles = solicitudRequest.result.data;
-                            console.log('Detalles de solicitud encontrados:', detalles);
-
-                            // Obtener colaboradores y vehículos
-                            const allItemsRequest = store.getAll();
-                            allItemsRequest.onsuccess = () => {
-                                const colaboradores = allItemsRequest.result
-                                    .filter(item => item.type === 'cachedColaborador' && item.data.solicitudId === detalles.id)
-                                    .map(item => item.data);
-                                const vehiculos = allItemsRequest.result
-                                    .filter(item => item.type === 'cachedVehiculo' && item.data.solicitudId === detalles.id)
-                                    .map(item => item.data);
-
-                                detalles.colaboradores = colaboradores;
-                                detalles.vehiculos = vehiculos;
-
-                                console.log('Detalles completos:', {
-                                    solicitudId: detalles.id,
-                                    colaboradores: colaboradores.length,
-                                    vehiculos: vehiculos.length
-                                });
-                                llenarModal(detalles);
-                            };
-                        } else {
-                            console.log('No se encontraron datos en caché');
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Sin Conexión',
-                                text: 'No se encontraron datos en caché.'
-                            });
-                        }
-                    };
-                }
-            };
-        }
-    } catch (error) {
-        console.error('Error al obtener detalles:', error);
-        Swal.fire({ 
-            icon: 'error', 
-            title: 'Error', 
-            text: 'Ocurrió un error al obtener los detalles.' 
-        });
-    }
-}
-
-
-
-async function buscarPorIdSinConexion(id) {
-    try {
-        const transaction = db.transaction(['pendingActions'], 'readonly');
-        const store = transaction.objectStore('pendingActions');
-
-        // Determinar si es colaborador o vehículo
-        const isVehiculo = id.startsWith('VH-');
-        const entityId = isVehiculo ? id.replace('VH-', '') : id;
-        const type = isVehiculo ? 'cachedVehiculo' : 'cachedColaborador';
-        const cacheId = isVehiculo ? `vehiculo-${entityId}` : `colaborador-${entityId}`;
-
-        // Buscar el colaborador o vehículo
-        const entityRequest = store.get(cacheId);
-        entityRequest.onsuccess = async () => {
-            const entity = entityRequest.result;
-            if (!entity) {
-                console.log(`No se encontró ${isVehiculo ? 'vehículo' : 'colaborador'} con ID ${id} en caché`);
-                alert(`No se encontró ${isVehiculo ? 'vehículo' : 'colaborador'} con ID ${id}`);
-                return;
-            }
-
-            const solicitudId = entity.data.solicitudId;
-            console.log(`Encontrado ${type} con ID ${id}, asociado a solicitud ${solicitudId}`);
-
-            // Buscar detalles de la solicitud
-            const solicitudRequest = store.get(`detalles-${solicitudId}`);
-            solicitudRequest.onsuccess = () => {
-                const solicitud = solicitudRequest.result;
-                if (!solicitud) {
-                    console.log(`No se encontró solicitud ${solicitudId} en caché`);
-                    alert('No se encontró la solicitud asociada');
-                    return;
-                }
-
-                // Mostrar datos en el modal
-                const modalData = {
-                    id: solicitud.data.id,
-                    empresa: solicitud.data.empresa,
-                    lugar: solicitud.data.nombre_lugar,
-                    labor: solicitud.data.labor,
-                    inicio_obra: solicitud.data.inicio_obra,
-                    fin_obra: solicitud.data.fin_obra,
-                    estado: solicitud.data.estado_actual,
-                    interventor: solicitud.data.interventor,
-                    [isVehiculo ? 'vehiculos' : 'colaboradores']: [entity.data]
                 };
+            } catch (error) {
+                console.error('Error al buscar sin conexión:', error);
+                alert('Error al buscar el ID');
+            }
+        }
 
-                console.log('Datos para el modal:', modalData);
-                llenarModal(modalData);
+        function habilitarAcciones(solicitudId, entity, isVehiculo) {
+            const entradaBtn = document.getElementById('registrarEntradaBtn');
+            const salidaBtn = document.getElementById('registrarSalidaBtn');
+            const ingresoSolicitudBtn = document.getElementById('registrarIngresoBtn');
 
-                // Habilitar acciones
-                habilitarAcciones(solicitudId, entity.data, isVehiculo);
+            // Acción para registrar ingreso de la solicitud
+            ingresoSolicitudBtn.onclick = async () => {
+                if (navigator.onLine) {
+                    try {
+                        const response = await fetch(`/api/solicitudes/seguridad/ingreso/${solicitudId}`, { method: 'POST' });
+                        if (response.ok) {
+                            Swal.fire({ icon: 'success', title: 'Éxito', text: 'Solicitud registrada como "en labor".' });
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'Error al registrar ingreso de solicitud.' });
+                        }
+                    } catch (error) {
+                        console.error('Error al registrar ingreso:', error);
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error al registrar ingreso.' });
+                    }
+                } else {
+                    // Guardar acción en caché para sincronizar después
+                    const transaction = db.transaction(['pendingActions'], 'readwrite');
+                    const store = transaction.objectStore('pendingActions');
+                    store.add({
+                        id: `ingreso-solicitud-${solicitudId}-${Date.now()}`,
+                        type: 'pendingIngresoSolicitud',
+                        data: { solicitudId },
+                        timestamp: new Date().toISOString()
+                    });
+                    Swal.fire({ icon: 'info', title: 'Sin conexión', text: 'Ingreso de solicitud guardado para sincronizar.' });
+                }
             };
-        };
-    } catch (error) {
-        console.error('Error al buscar sin conexión:', error);
-        alert('Error al buscar el ID');
-    }
-}
 
-function habilitarAcciones(solicitudId, entity, isVehiculo) {
-    const entradaBtn = document.getElementById('entrada-btn');
-    const salidaBtn = document.getElementById('salida-btn');
-    const ingresoSolicitudBtn = document.getElementById('ingreso-solicitud-btn');
-
-    // Acción para registrar ingreso de la solicitud
-    ingresoSolicitudBtn.onclick = async () => {
-        if (navigator.onLine) {
-            try {
-                const response = await fetch(`/api/solicitudes/seguridad/ingreso/${solicitudId}`, { method: 'POST' });
-                if (response.ok) {
-                    alert('Solicitud registrada como "en labor"');
+            // Acción para entrada
+            entradaBtn.onclick = async () => {
+                if (navigator.onLine) {
+                    try {
+                        const response = await fetch(`/api/solicitudes/seguridad/${isVehiculo ? 'entrada-vehiculo' : 'entrada'}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                solicitudId,
+                                [isVehiculo ? 'vehiculos' : 'colaboradores']: [{ id: entity.id }],
+                                fecha: new Date().toISOString(),
+                                estado_actual: 'pendiente ingreso'
+                            })
+                        });
+                        if (response.ok) {
+                            Swal.fire({ icon: 'success', title: 'Éxito', text: `${isVehiculo ? 'Vehículo' : 'Colaborador'} registrado como entrado.` });
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'Error al registrar entrada.' });
+                        }
+                    } catch (error) {
+                        console.error('Error al registrar entrada:', error);
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error al registrar entrada.' });
+                    }
                 } else {
-                    alert('Error al registrar ingreso de solicitud');
+                    // Guardar acción en caché
+                    const transaction = db.transaction(['pendingActions'], 'readwrite');
+                    const store = transaction.objectStore('pendingActions');
+                    store.add({
+                        id: `entrada-${isVehiculo ? 'vehiculo' : 'colaborador'}-${entity.id}-${Date.now()}`,
+                        type: isVehiculo ? 'pendingEntradaVehiculo' : 'pendingEntradaColaborador',
+                        data: {
+                            solicitudId,
+                            entityId: entity.id,
+                            fecha: new Date().toISOString(),
+                            estado_actual: 'pendiente ingreso'
+                        },
+                        timestamp: new Date().toISOString()
+                    });
+                    Swal.fire({ icon: 'info', title: 'Sin conexión', text: `Entrada de ${isVehiculo ? 'vehículo' : 'colaborador'} guardada para sincronizar.` });
                 }
-            } catch (error) {
-                console.error('Error al registrar ingreso:', error);
-                alert('Error al registrar ingreso');
-            }
-        } else {
-            // Guardar acción en caché para sincronizar después
-            const transaction = db.transaction(['pendingActions'], 'readwrite');
-            const store = transaction.objectStore('pendingActions');
-            store.add({
-                id: `ingreso-solicitud-${solicitudId}-${Date.now()}`,
-                type: 'pendingIngresoSolicitud',
-                data: { solicitudId },
-                timestamp: new Date().toISOString()
-            });
-            alert('Ingreso de solicitud guardado para sincronizar');
-        }
-    };
+            };
 
-    // Acción para entrada
-    entradaBtn.onclick = async () => {
-        if (navigator.onLine) {
-            try {
-                const response = await fetch(`/api/solicitudes/seguridad/${isVehiculo ? 'entrada-vehiculo' : 'entrada'}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        solicitudId,
-                        [isVehiculo ? 'vehiculos' : 'colaboradores']: [{ id: entity.id }],
-                        fecha: new Date().toISOString(),
-                        estado_actual: 'pendiente ingreso'
-                    })
-                });
-                if (response.ok) {
-                    alert(`${isVehiculo ? 'Vehículo' : 'Colaborador'} registrado como entrado`);
+            // Acción para salida
+            salidaBtn.onclick = async () => {
+                if (navigator.onLine) {
+                    try {
+                        const response = await fetch(`/api/solicitudes/seguridad/${isVehiculo ? 'salida-vehiculo' : 'salida'}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                solicitudId,
+                                [isVehiculo ? 'vehiculos' : 'colaboradores']: [{ id: entity.id }],
+                                fecha: new Date().toISOString(),
+                                estado_actual: 'pendiente ingreso'
+                            })
+                        });
+                        if (response.ok) {
+                            Swal.fire({ icon: 'success', title: 'Éxito', text: `${isVehiculo ? 'Vehículo' : 'Colaborador'} registrado como salido.` });
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'Error al registrar salida.' });
+                        }
+                    } catch (error) {
+                        console.error('Error al registrar salida:', error);
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error al registrar salida.' });
+                    }
                 } else {
-                    alert('Error al registrar entrada');
+                    // Guardar acción en caché
+                    const transaction = db.transaction(['pendingActions'], 'readwrite');
+                    const store = transaction.objectStore('pendingActions');
+                    store.add({
+                        id: `salida-${isVehiculo ? 'vehiculo' : 'colaborador'}-${entity.id}-${Date.now()}`,
+                        type: isVehiculo ? 'pendingSalidaVehiculo' : 'pendingSalidaColaborador',
+                        data: {
+                            solicitudId,
+                            entityId: entity.id,
+                            fecha: new Date().toISOString(),
+                            estado_actual: 'pendiente ingreso'
+                        },
+                        timestamp: new Date().toISOString()
+                    });
+                    Swal.fire({ icon: 'info', title: 'Sin conexión', text: `Salida de ${isVehiculo ? 'vehículo' : 'colaborador'} guardada para sincronizar.` });
                 }
-            } catch (error) {
-                console.error('Error al registrar entrada:', error);
-                alert('Error al registrar entrada');
-            }
-        } else {
-            // Guardar acción en caché
-            const transaction = db.transaction(['pendingActions'], 'readwrite');
-            const store = transaction.objectStore('pendingActions');
-            store.add({
-                id: `entrada-${isVehiculo ? 'vehiculo' : 'colaborador'}-${entity.id}-${Date.now()}`,
-                type: isVehiculo ? 'pendingEntradaVehiculo' : 'pendingEntradaColaborador',
-                data: {
-                    solicitudId,
-                    entityId: entity.id,
-                    fecha: new Date().toISOString(),
-                    estado_actual: 'pendiente ingreso'
-                },
-                timestamp: new Date().toISOString()
-            });
-            alert(`Entrada de ${isVehiculo ? 'vehículo' : 'colaborador'} guardada para sincronizar`);
+            };
         }
-    };
-
-    // Acción para salida
-    salidaBtn.onclick = async () => {
-        if (navigator.onLine) {
-            try {
-                const response = await fetch(`/api/solicitudes/seguridad/${isVehiculo ? 'salida-vehiculo' : 'salida'}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        solicitudId,
-                        [isVehiculo ? 'vehiculos' : 'colaboradores']: [{ id: entity.id }],
-                        fecha: new Date().toISOString(),
-                        estado_actual: 'pendiente ingreso'
-                    })
-                });
-                if (response.ok) {
-                    alert(`${isVehiculo ? 'Vehículo' : 'Colaborador'} registrado como salido`);
-                } else {
-                    alert('Error al registrar salida');
-                }
-            } catch (error) {
-                console.error('Error al registrar salida:', error);
-                alert('Error al registrar salida');
-            }
-        } else {
-            // Guardar acción en caché
-            const transaction = db.transaction(['pendingActions'], 'readwrite');
-            const store = transaction.objectStore('pendingActions');
-            store.add({
-                id: `salida-${isVehiculo ? 'vehiculo' : 'colaborador'}-${entity.id}-${Date.now()}`,
-                type: isVehiculo ? 'pendingSalidaVehiculo' : 'pendingSalidaColaborador',
-                data: {
-                    solicitudId,
-                    entityId: entity.id,
-                    fecha: new Date().toISOString(),
-                    estado_actual: 'pendiente ingreso'
-                },
-                timestamp: new Date().toISOString()
-            });
-            alert(`Salida de ${isVehiculo ? 'vehículo' : 'colaborador'} guardada para sincronizar`);
-        }
-    };
-}
-    
     </script>
 </body>
 </html>
