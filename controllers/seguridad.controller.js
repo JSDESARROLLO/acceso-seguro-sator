@@ -461,41 +461,50 @@ controller.qrAccesosModal = async (req, res) => {
                     ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
                     : null);
 
-            // Obtener todas las solicitudes para la tabla principal
-            const [solicitudes] = await connection.execute(`
+            // Obtener vehículos
+            const [vehiculos] = await connection.execute(`
                 SELECT 
-                    s.id, 
-                    s.empresa, 
-                    s.nit, 
-                    s.estado, 
-                    us.username AS interventor, 
-                    s.lugar,
-                    l.nombre_lugar,
-                    DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
-                    DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
+                    v.id,
+                    v.matricula,
+                    v.foto,
+                    v.estado,
+                    pdv_soat.fecha_inicio AS soat_inicio,
+                    pdv_soat.fecha_fin AS soat_fin,
+                    pdv_tecno.fecha_inicio AS tecnomecanica_inicio,
+                    pdv_tecno.fecha_fin AS tecnomecanica_fin,
+                    lv_conduccion.estado AS licencia_conduccion,
+                    lv_transito.estado AS licencia_transito,
                     CASE
-                        WHEN s.estado = 'aprobada' AND CURDATE() > DATE(s.fin_obra) THEN 'pendiente ingreso - vencido'
-                        WHEN s.estado = 'aprobada' THEN 'pendiente ingreso'
-                        WHEN s.estado = 'en labor' AND CURDATE() > DATE(s.fin_obra) THEN 'en labor - vencida'
-                        WHEN s.estado = 'en labor' THEN 'en labor'
-                        WHEN s.estado = 'labor detenida' THEN 'labor detenida'
-                        ELSE s.estado
-                    END AS estado_actual
-                FROM solicitudes s
-                JOIN acciones a ON s.id = a.solicitud_id
-                JOIN users us ON us.id = s.interventor_id
-                JOIN lugares l ON s.lugar = l.id
-                JOIN users seguridad ON l.id = (SELECT id FROM lugares WHERE nombre_lugar = seguridad.username)
-                WHERE s.estado IN ('aprobada', 'en labor', 'labor detenida')
-                AND a.accion = 'aprobada'
-                AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
-                AND seguridad.id = ?
-                ORDER BY s.id DESC
-            `, [userId]);
+                        WHEN pdv_soat.fecha_fin IS NULL OR pdv_soat.fecha_fin < CURDATE() THEN 'Vencido'
+                        ELSE 'Vigente'
+                    END AS estado_soat,
+                    CASE
+                        WHEN pdv_tecno.fecha_fin IS NULL OR pdv_tecno.fecha_fin < CURDATE() THEN 'Vencida'
+                        ELSE 'Vigente'
+                    END AS estado_tecnomecanica
+                FROM 
+                    vehiculos v
+                LEFT JOIN (
+                    SELECT vehiculo_id, fecha_inicio, fecha_fin
+                    FROM plantilla_documentos_vehiculos
+                    WHERE tipo_documento = 'soat'
+                    ORDER BY created_at DESC LIMIT 1
+                ) pdv_soat ON v.id = pdv_soat.vehiculo_id
+                LEFT JOIN (
+                    SELECT vehiculo_id, fecha_inicio, fecha_fin
+                    FROM plantilla_documentos_vehiculos
+                    WHERE tipo_documento = 'tecnomecanica'
+                    ORDER BY created_at DESC LIMIT 1
+                ) pdv_tecno ON v.id = pdv_tecno.vehiculo_id
+                LEFT JOIN licencias_vehiculo lv_conduccion ON v.id = lv_conduccion.vehiculo_id AND lv_conduccion.tipo = 'licencia_conduccion'
+                LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id AND lv_transito.tipo = 'licencia_transito'
+                WHERE 
+                    v.solicitud_id = ?
+            `, [solicitudId]);
 
             // Renderizar la vista con los datos del vehículo
             res.render('seguridad', {
-                solicitud: solicitudes,
+                solicitud: vehiculos,
                 modalData: {
                     ...solicitudDetails[0],
                     vehiculos: [{
@@ -631,41 +640,50 @@ controller.qrAccesosModal = async (req, res) => {
                     ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
                     : null);
 
-            // Obtener todas las solicitudes para la tabla principal
-            const [solicitudes] = await connection.execute(`
+            // Obtener vehículos
+            const [vehiculos] = await connection.execute(`
                 SELECT 
-                    s.id, 
-                    s.empresa, 
-                    s.nit, 
-                    s.estado, 
-                    us.username AS interventor, 
-                    s.lugar,
-                    l.nombre_lugar,
-                    DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
-                    DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
+                    v.id,
+                    v.matricula,
+                    v.foto,
+                    v.estado,
+                    pdv_soat.fecha_inicio AS soat_inicio,
+                    pdv_soat.fecha_fin AS soat_fin,
+                    pdv_tecno.fecha_inicio AS tecnomecanica_inicio,
+                    pdv_tecno.fecha_fin AS tecnomecanica_fin,
+                    lv_conduccion.estado AS licencia_conduccion,
+                    lv_transito.estado AS licencia_transito,
                     CASE
-                        WHEN s.estado = 'aprobada' AND CURDATE() > DATE(s.fin_obra) THEN 'pendiente ingreso - vencido'
-                        WHEN s.estado = 'aprobada' THEN 'pendiente ingreso'
-                        WHEN s.estado = 'en labor' AND CURDATE() > DATE(s.fin_obra) THEN 'en labor - vencida'
-                        WHEN s.estado = 'en labor' THEN 'en labor'
-                        WHEN s.estado = 'labor detenida' THEN 'labor detenida'
-                        ELSE s.estado
-                    END AS estado_actual
-                FROM solicitudes s
-                JOIN acciones a ON s.id = a.solicitud_id
-                JOIN users us ON us.id = s.interventor_id
-                JOIN lugares l ON s.lugar = l.id
-                JOIN users seguridad ON l.id = (SELECT id FROM lugares WHERE nombre_lugar = seguridad.username)
-                WHERE s.estado IN ('aprobada', 'en labor', 'labor detenida')
-                AND a.accion = 'aprobada'
-                AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
-                AND seguridad.id = ?
-                ORDER BY s.id DESC
-            `, [userId]);
+                        WHEN pdv_soat.fecha_fin IS NULL OR pdv_soat.fecha_fin < CURDATE() THEN 'Vencido'
+                        ELSE 'Vigente'
+                    END AS estado_soat,
+                    CASE
+                        WHEN pdv_tecno.fecha_fin IS NULL OR pdv_tecno.fecha_fin < CURDATE() THEN 'Vencida'
+                        ELSE 'Vigente'
+                    END AS estado_tecnomecanica
+                FROM 
+                    vehiculos v
+                LEFT JOIN (
+                    SELECT vehiculo_id, fecha_inicio, fecha_fin
+                    FROM plantilla_documentos_vehiculos
+                    WHERE tipo_documento = 'soat'
+                    ORDER BY created_at DESC LIMIT 1
+                ) pdv_soat ON v.id = pdv_soat.vehiculo_id
+                LEFT JOIN (
+                    SELECT vehiculo_id, fecha_inicio, fecha_fin
+                    FROM plantilla_documentos_vehiculos
+                    WHERE tipo_documento = 'tecnomecanica'
+                    ORDER BY created_at DESC LIMIT 1
+                ) pdv_tecno ON v.id = pdv_tecno.vehiculo_id
+                LEFT JOIN licencias_vehiculo lv_conduccion ON v.id = lv_conduccion.vehiculo_id AND lv_conduccion.tipo = 'licencia_conduccion'
+                LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id AND lv_transito.tipo = 'licencia_transito'
+                WHERE 
+                    v.solicitud_id = ?
+            `, [solicitudId]);
 
             // Renderizar la vista con los datos
             res.render('seguridad', {
-                solicitud: solicitudes,
+                solicitud: vehiculos,
                 modalData: {
                     ...solicitudDetails[0],
                     colaboradores: [{
@@ -695,17 +713,20 @@ controller.qrAccesosModal = async (req, res) => {
 };
 
 const fechaMySQL = moment().tz("America/Bogota").format("YYYY-MM-DD HH:mm:ss");
-
 controller.registrarEntrada = async (req, res) => {
     try {
+        console.log('Token recibido:', req.cookies.token);
         const token = req.cookies.token;
         if (!token) return res.redirect('/login');
 
         const decoded = jwt.verify(token, SECRET_KEY);
+        console.log('Token decodificado:', decoded);
         if (decoded.role !== 'seguridad') return res.redirect('/login');
 
         const { id: userId } = decoded;
+        console.log('ID de usuario:', userId);
         const { solicitudId, colaboradores, fecha, estado_actual } = req.body;
+        console.log('Datos del cuerpo de la solicitud:', { solicitudId, colaboradores, fecha, estado_actual });
 
         if (!solicitudId || !colaboradores || colaboradores.length === 0 || !fecha || !estado_actual) {
             return res.status(400).json({ message: 'Datos incompletos en la solicitud.' });
@@ -713,6 +734,7 @@ controller.registrarEntrada = async (req, res) => {
 
         // Obtener la fecha y hora actual en la zona horaria de Colombia
         const fechaRegistro = moment().tz("America/Bogota").format("YYYY-MM-DD HH:mm:ss");
+        console.log('Fecha de registro:', fechaRegistro);
 
         for (const colaborador of colaboradores) {
             if (!colaborador.id) continue;
@@ -1155,6 +1177,226 @@ controller.registrarIngreso = async (req, res) => {
         });
     } finally {
         conn.release();
+    }
+};
+
+controller.getSolicitudesActivas = async (req, res) => {
+    try {
+        const token = req.cookies.token;
+        if (!token) {
+            console.log('No se encontró token en las cookies');
+            return res.status(401).json({ message: 'No autorizado' });
+        }
+
+        const decoded = jwt.verify(token, SECRET_KEY);
+        console.log('Token decodificado:', { id: decoded.id, role: decoded.role });
+        if (decoded.role !== 'seguridad') {
+            console.log('Usuario no tiene rol de seguridad:', decoded.role);
+            return res.status(403).json({ message: 'No autorizado' });
+        }
+
+        const { id } = decoded;
+
+        // Consulta para solicitudes activas
+        console.log('Ejecutando consulta de solicitudes activas para usuario ID:', id);
+        const [solicitudes] = await connection.execute(`
+            SELECT 
+                s.id, 
+                s.empresa, 
+                s.nit, 
+                s.estado, 
+                us.username AS interventor, 
+                s.lugar,
+                l.nombre_lugar,
+                DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
+                DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
+                s.labor,
+                CASE
+                    WHEN s.estado = 'aprobada' AND CURDATE() > s.fin_obra THEN 'pendiente ingreso - vencido'
+                    WHEN s.estado = 'aprobada' THEN 'pendiente ingreso'
+                    WHEN s.estado = 'en labor' AND CURDATE() > s.fin_obra THEN 'en labor - vencida'
+                    WHEN s.estado = 'en labor' THEN 'en labor'
+                    WHEN s.estado = 'labor detenida' THEN 'labor detenida'
+                    ELSE s.estado
+                END AS estado_actual
+            FROM 
+                solicitudes s
+            JOIN 
+                acciones a ON s.id = a.solicitud_id
+            JOIN 
+                users us ON us.id = s.interventor_id
+            JOIN 
+                lugares l ON s.lugar = l.id
+            JOIN 
+                users seguridad ON seguridad.username = l.nombre_lugar
+            WHERE 
+                s.estado IN ('aprobada', 'en labor', 'labor detenida')
+                AND a.accion = 'aprobada'
+                AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
+                AND seguridad.id = ?
+            ORDER BY 
+                s.id DESC;
+        `, [id]);
+        console.log('Solicitudes obtenidas:', solicitudes.length, solicitudes.map(s => ({
+            id: s.id,
+            empresa: s.empresa,
+            lugar: s.nombre_lugar,
+            labor: s.labor,
+            estado: s.estado_actual
+        })));
+
+        // Procesar cada solicitud
+        for (let solicitud of solicitudes) {
+            console.log(`Procesando solicitud ID: ${solicitud.id}`);
+
+            // Verificar colaboradores
+            const [colaboradoresCheck] = await connection.execute(`
+                SELECT COUNT(*) AS count
+                FROM colaboradores
+                WHERE solicitud_id = ?
+            `, [solicitud.id]);
+            console.log(`Verificación de colaboradores para solicitud ${solicitud.id}: ${colaboradoresCheck[0].count} colaboradores encontrados`);
+
+            // Obtener colaboradores
+            const [colaboradores] = await connection.execute(`
+                SELECT 
+                    c.id,
+                    c.nombre,
+                    c.cedula,
+                    c.foto,
+                    c.estado,
+                    MAX(rc.estado) AS curso_siso_estado, -- Usamos MAX para evitar conflictos con GROUP BY
+                    MAX(rc.fecha_vencimiento) AS curso_siso_vencimiento,
+                    MAX(pss.fecha_inicio) AS plantilla_ss_inicio,
+                    MAX(pss.fecha_fin) AS plantilla_ss_fin,
+                    CASE
+                        WHEN MAX(rc.estado) IS NULL THEN 'No'
+                        WHEN MAX(rc.estado) = 'APROBADO' AND MAX(rc.fecha_vencimiento) < CURDATE() THEN 'Vencido'
+                        WHEN MAX(rc.estado) = 'APROBADO' THEN 'Vigente'
+                        ELSE 'Perdido'
+                    END AS cursoSiso,
+                    CASE
+                        WHEN MAX(pss.fecha_fin) IS NULL THEN 'No definida'
+                        WHEN MAX(pss.fecha_fin) < CURDATE() THEN 'Vencida'
+                        ELSE 'Vigente'
+                    END AS plantillaSS
+                FROM 
+                    colaboradores c
+                LEFT JOIN resultados_capacitaciones rc ON c.id = rc.colaborador_id
+                LEFT JOIN capacitaciones cap ON rc.capacitacion_id = cap.id AND cap.nombre = 'Curso SISO'
+                LEFT JOIN plantilla_seguridad_social pss ON c.id = pss.colaborador_id
+                WHERE 
+                    c.solicitud_id = ?
+                GROUP BY c.id, c.nombre, c.cedula, c.foto, c.estado
+            `, [solicitud.id]);
+            console.log(`Colaboradores para solicitud ${solicitud.id}:`, colaboradores.length, colaboradores.map(c => ({
+                id: c.id,
+                nombre: c.nombre,
+                cedula: c.cedula,
+                cursoSiso: c.cursoSiso,
+                plantillaSS: c.plantillaSS
+            })));
+
+            // Verificar vehículos
+            const [vehiculosCheck] = await connection.execute(`
+                SELECT COUNT(*) AS count
+                FROM vehiculos
+                WHERE solicitud_id = ?
+            `, [solicitud.id]);
+            console.log(`Verificación de vehículos para solicitud ${solicitud.id}: ${vehiculosCheck[0].count} vehículos encontrados`);
+
+            // Obtener vehículos
+            const [vehiculos] = await connection.execute(`
+                SELECT 
+                    v.id,
+                    v.matricula,
+                    v.foto,
+                    v.estado,
+                    MAX(pdv_soat.fecha_inicio) AS soat_inicio,
+                    MAX(pdv_soat.fecha_fin) AS soat_fin,
+                    MAX(pdv_tecno.fecha_inicio) AS tecnomecanica_inicio,
+                    MAX(pdv_tecno.fecha_fin) AS tecnomecanica_fin,
+                    MAX(lv_conduccion.estado) AS licencia_conduccion,
+                    MAX(lv_transito.estado) AS licencia_transito,
+                    CASE
+                        WHEN MAX(pdv_soat.fecha_fin) IS NULL OR MAX(pdv_soat.fecha_fin) < CURDATE() THEN 'Vencido'
+                        ELSE 'Vigente'
+                    END AS estado_soat,
+                    CASE
+                        WHEN MAX(pdv_tecno.fecha_fin) IS NULL OR MAX(pdv_tecno.fecha_fin) < CURDATE() THEN 'Vencida'
+                        ELSE 'Vigente'
+                    END AS estado_tecnomecanica
+                FROM 
+                    vehiculos v
+                LEFT JOIN plantilla_documentos_vehiculos pdv_soat ON v.id = pdv_soat.vehiculo_id 
+                    AND pdv_soat.tipo_documento = 'soat'
+                LEFT JOIN plantilla_documentos_vehiculos pdv_tecno ON v.id = pdv_tecno.vehiculo_id 
+                    AND pdv_tecno.tipo_documento = 'tecnomecanica'
+                LEFT JOIN licencias_vehiculo lv_conduccion ON v.id = lv_conduccion.vehiculo_id 
+                    AND lv_conduccion.tipo = 'licencia_conduccion'
+                LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id 
+                    AND lv_transito.tipo = 'licencia_transito'
+                WHERE 
+                    v.solicitud_id = ?
+                GROUP BY v.id, v.matricula, v.foto, v.estado
+            `, [solicitud.id]);
+            console.log(`Vehículos para solicitud ${solicitud.id}:`, vehiculos.length, vehiculos.map(v => ({
+                id: v.id,
+                matricula: v.matricula,
+                estado_soat: v.estado_soat,
+                estado_tecnomecanica: v.estado_tecnomecanica,
+                licencia_conduccion: v.licencia_conduccion,
+                licencia_transito: v.licencia_transito
+            })));
+
+            // Agregar mensajes de advertencia para vehículos
+            vehiculos.forEach(vehiculo => {
+                vehiculo.mensajesAdvertencia = [];
+                if (vehiculo.estado_soat === 'Vencido') {
+                    vehiculo.mensajesAdvertencia.push('SOAT vencido');
+                }
+                if (vehiculo.estado_tecnomecanica === 'Vencida') {
+                    vehiculo.mensajesAdvertencia.push('Tecnomecánica vencida');
+                }
+                if (!vehiculo.licencia_conduccion || vehiculo.licencia_conduccion !== '1') {
+                    vehiculo.mensajesAdvertencia.push('Licencia de conducción no aprobada');
+                }
+                if (!vehiculo.licencia_transito || vehiculo.licencia_transito !== '1') {
+                    vehiculo.mensajesAdvertencia.push('Licencia de tránsito no aprobada');
+                }
+                if (vehiculo.mensajesAdvertencia.length > 0) {
+                    console.log(`Advertencias para vehículo ${vehiculo.matricula}:`, vehiculo.mensajesAdvertencia);
+                }
+            });
+
+            // Agregar colaboradores y vehículos a la solicitud
+            solicitud.colaboradores = colaboradores;
+            solicitud.vehiculos = vehiculos;
+
+            // Agregar mensajes de advertencia generales
+            const cursoSisoProblema = colaboradores.some(col => col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No');
+            const plantillaSSProblema = colaboradores.some(col => col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida');
+            const vehiculosProblema = vehiculos.some(veh => veh.mensajesAdvertencia.length > 0);
+
+            if (cursoSisoProblema) {
+                solicitud.mensajeCursoSiso = 'Hay colaboradores con curso SISO vencido o no aprobado';
+                console.log(`Solicitud ${solicitud.id}: Curso SISO problema detectado`);
+            }
+            if (plantillaSSProblema) {
+                solicitud.mensajePlantillaSS = 'Hay colaboradores con plantilla SS vencida o no definida';
+                console.log(`Solicitud ${solicitud.id}: Plantilla SS problema detectado`);
+            }
+            if (vehiculosProblema) {
+                solicitud.mensajeVehiculos = 'Hay vehículos con documentos vencidos o no aprobados';
+                console.log(`Solicitud ${solicitud.id}: Vehículos con problemas detectados`);
+            }
+        }
+
+        console.log('Respuesta final enviada:', solicitudes.length, 'solicitudes');
+        res.json(solicitudes);
+    } catch (err) {
+        console.error('Error al obtener solicitudes activas:', err.message);
+        res.status(500).json({ error: 'Error al obtener las solicitudes activas' });
     }
 };
 
