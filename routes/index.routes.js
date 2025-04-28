@@ -28,6 +28,14 @@ if (typeof controllers.login !== 'function') {
   router.post('/login', controllers.login);  // Si es una función válida, definir la ruta
 }
 
+// Ruta de login para la aplicación móvil
+console.log('Verificando controllers.appLogin...');
+if (typeof controllers.appLogin !== 'function') {
+  console.error('controllers.appLogin no es una función o está undefined');
+} else {
+  router.post('/appLogin', controllers.appLogin);  // Si es una función válida, definir la ruta
+}
+
 console.log('Verificando controllers.loginRoute...');
 if (typeof controllers.loginRoute !== 'function') {
   console.error('controllers.loginRoute no es una función o está undefined');
