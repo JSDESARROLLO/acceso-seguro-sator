@@ -152,7 +152,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api', solicitudRoutes);
 
 // Importar rutas de seguridad móvil
-const seguridadAppMovilRoutes = require('../routes/seguridad-app-movil.routes');
+const seguridadAppMovilRoutes = require('../routes/seguridadAppMovil.routes');
 
 // Usar rutas de seguridad móvil
 app.use('/seguridad-app', seguridadAppMovilRoutes); 
