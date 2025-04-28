@@ -1179,9 +1179,8 @@ controller.registrarIngreso = async (req, res) => {
         conn.release();
     }
 };
-
-
-controller.getSolicitudesActivas = async (req, res) => {
+ 
+controller.obtenerSolicitudesActivasConColaboradoresYVehiculos = async (req, res) => {
     try {
         const token = req.cookies.token;
         if (!token) {
@@ -1190,16 +1189,14 @@ controller.getSolicitudesActivas = async (req, res) => {
         }
 
         const decoded = jwt.verify(token, SECRET_KEY);
-        console.log('Token decodificado:', { id: decoded.id, role: decoded.role });
         if (decoded.role !== 'seguridad') {
             console.log('Usuario no tiene rol de seguridad:', decoded.role);
             return res.status(403).json({ message: 'No autorizado' });
         }
 
-        const { id } = decoded;
+        const { id, username } = decoded;
 
-        // Consulta corregida
-        console.log('Ejecutando consulta de solicitudes activas para usuario ID:', id);
+        // Consulta de solicitudes activas
         const [solicitudes] = await connection.execute(`
             SELECT 
                 s.id, 
@@ -1209,8 +1206,8 @@ controller.getSolicitudesActivas = async (req, res) => {
                 us.username AS interventor, 
                 s.lugar,
                 l.nombre_lugar,
-                DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
-                DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
+                DATE_FORMAT(s.inicio_obra, '%Y-%m-%d') AS inicio_obra,
+                DATE_FORMAT(s.fin_obra, '%Y-%m-%d') AS fin_obra,
                 s.labor,
                 CASE
                     WHEN s.estado = 'aprobada' AND CURDATE() > s.fin_obra THEN 'pendiente ingreso - vencido'
@@ -1240,69 +1237,116 @@ controller.getSolicitudesActivas = async (req, res) => {
             ORDER BY 
                 s.id DESC;
         `, [id]);
-        console.log('Solicitudes obtenidas:', solicitudes.length, solicitudes.map(s => ({
-            id: s.id,
-            empresa: s.empresa,
-            lugar: s.lugar,
-            nombre_lugar: s.nombre_lugar,
-            inicio_obra: s.inicio_obra,
-            fin_obra: s.fin_obra,
-            labor: s.labor,
-            estado: s.estado_actual
-        })));
+
+        console.log('Solicitudes obtenidas:', solicitudes.map(s => ({ id: s.id, estado: s.estado })));
 
         // Procesar cada solicitud
         for (let solicitud of solicitudes) {
-            console.log(`Procesando solicitud ID: ${solicitud.id}`);
+            // Verificación del lugar
+            const lugarSolicitud = solicitud.nombre_lugar;
+            solicitud.advertencia = lugarSolicitud === 'Supervisor'
+                ? null
+                : (lugarSolicitud !== username
+                    ? 'ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación. Notifica a la central la novedad.'
+                    : null);
 
-            // Verificar colaboradores
-            const [colaboradoresCheck] = await connection.execute(`
-                SELECT COUNT(*) AS count
-                FROM colaboradores
-                WHERE solicitud_id = ?
-            `, [solicitud.id]);
-            console.log(`Verificación de colaboradores para solicitud ${solicitud.id}: ${colaboradoresCheck[0].count} colaboradores encontrados`);
-
-            // Obtener colaboradores
+            // Obtener todos los colaboradores, activos o no
             const [colaboradores] = await connection.execute(`
                 SELECT 
                     c.id,
                     c.nombre,
                     c.cedula,
                     c.foto,
+                    c.cedulaFoto,
                     c.estado,
-                    MAX(rc.estado) AS curso_siso_estado,
-                    MAX(rc.fecha_vencimiento) AS curso_siso_vencimiento,
-                    MAX(pss.fecha_inicio) AS plantilla_ss_inicio,
-                    MAX(pss.fecha_fin) AS plantilla_ss_fin,
-                    CASE
-                        WHEN MAX(rc.estado) IS NULL THEN 'No'
-                        WHEN MAX(rc.estado) = 'APROBADO' AND MAX(rc.fecha_vencimiento) < CURDATE() THEN 'Vencido'
-                        WHEN MAX(rc.estado) = 'APROBADO' THEN 'Vigente'
-                        ELSE 'Perdido'
-                    END AS cursoSiso,
-                    CASE
-                        WHEN MAX(pss.fecha_fin) IS NULL THEN 'No definida'
-                        WHEN MAX(pss.fecha_fin) < CURDATE() THEN 'Vencida'
-                        ELSE 'Vigente'
-                    END AS plantillaSS
+                    rc.estado AS curso_siso_estado,
+                    rc.fecha_vencimiento AS curso_siso_vencimiento,
+                    pss.fecha_inicio AS plantilla_ss_inicio,
+                    pss.fecha_fin AS plantilla_ss_fin,
+                    CASE WHEN pss.id IS NOT NULL THEN 1 ELSE 0 END AS has_plantilla_ss
                 FROM 
                     colaboradores c
-                LEFT JOIN resultados_capacitaciones rc ON c.id = rc.colaborador_id
-                LEFT JOIN capacitaciones cap ON rc.capacitacion_id = cap.id AND cap.nombre = 'Curso SISO'
-                LEFT JOIN plantilla_seguridad_social pss ON c.id = pss.colaborador_id
+                LEFT JOIN (
+                    SELECT rc.colaborador_id, rc.estado, rc.fecha_vencimiento
+                    FROM resultados_capacitaciones rc
+                    JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
+                    WHERE cap.nombre = 'Curso SISO'
+                        AND (rc.colaborador_id, rc.created_at) IN (
+                            SELECT colaborador_id, MAX(created_at)
+                            FROM resultados_capacitaciones
+                            WHERE capacitacion_id = cap.id
+                            GROUP BY colaborador_id
+                        )
+                ) rc ON c.id = rc.colaborador_id
+                LEFT JOIN (
+                    SELECT id, colaborador_id, fecha_inicio, fecha_fin
+                    FROM plantilla_seguridad_social pss
+                    WHERE (colaborador_id, created_at) IN (
+                        SELECT colaborador_id, MAX(created_at)
+                        FROM plantilla_seguridad_social
+                        GROUP BY colaborador_id
+                    )
+                ) pss ON c.id = pss.colaborador_id
                 WHERE c.solicitud_id = ?
-                GROUP BY c.id, c.nombre, c.cedula, c.foto, c.estado
             `, [solicitud.id]);
-            console.log(`Colaboradores para solicitud ${solicitud.id}:`, colaboradores.length);
 
-            // Verificar vehículos
-            const [vehiculosCheck] = await connection.execute(`
-                SELECT COUNT(*) AS count
-                FROM vehiculos
-                WHERE solicitud_id = ?
-            `, [solicitud.id]);
-            console.log(`Verificación de vehículos para solicitud ${solicitud.id}: ${vehiculosCheck[0].count} vehículos encontrados`);
+            console.log(`Colaboradores para solicitud ${solicitud.id}:`, colaboradores.map(c => ({
+                id: c.id,
+                nombre: c.nombre,
+                estado: c.estado,
+                curso_siso_estado: c.curso_siso_estado,
+                curso_siso_vencimiento: c.curso_siso_vencimiento
+            })));
+
+            // Procesar estado de colaboradores
+            colaboradores.forEach(col => {
+                // Curso SISO
+                let cursoSisoEstado = 'No';
+                let mensajeCursoSiso = null;
+                if (col.curso_siso_estado) {
+                    if (col.curso_siso_estado === 'APROBADO') {
+                        const fechaVencimiento = new Date(col.curso_siso_vencimiento);
+                        const hoy = new Date();
+                        cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
+                        mensajeCursoSiso = cursoSisoEstado === 'Vencido' ? 'Curso SISO vencido.' : null;
+                    } else {
+                        cursoSisoEstado = 'Perdido';
+                        mensajeCursoSiso = 'Curso SISO perdido.';
+                    }
+                } else {
+                    console.log(`Colaborador ${col.id} (${col.nombre}) no tiene Curso SISO:`, {
+                        curso_siso_estado: col.curso_siso_estado,
+                        curso_siso_vencimiento: col.curso_siso_vencimiento
+                    });
+                    mensajeCursoSiso = 'No ha realizado el Curso SISO.';
+                }
+
+                // Plantilla SS
+                let plantillaSSEstado = 'No definida';
+                let mensajePlantillaSS = null;
+                if (col.has_plantilla_ss && col.plantilla_ss_fin) {
+                    const fechaFin = new Date(col.plantilla_ss_fin);
+                    const hoy = new Date();
+                    plantillaSSEstado = fechaFin > hoy ? 'Vigente' : 'Vencida';
+                    mensajePlantillaSS = plantillaSSEstado === 'Vencida' ? 'Plantilla de Seguridad Social vencida.' : null;
+                } else {
+                    console.log(`Colaborador ${col.id} (${col.nombre}) no tiene plantilla SS:`, {
+                        has_plantilla_ss: col.has_plantilla_ss,
+                        plantilla_ss_inicio: col.plantilla_ss_inicio,
+                        plantilla_ss_fin: col.plantilla_ss_fin
+                    });
+                    mensajePlantillaSS = 'No se ha definido la Plantilla de Seguridad Social.';
+                }
+
+                // Indicador de permiso de ingreso
+                col.permisoIngreso = col.estado === 1 ? 'Permitido' : 'No permitido';
+
+                col.cursoSiso = cursoSisoEstado;
+                col.plantillaSS = plantillaSSEstado;
+                col.mensajeCursoSiso = mensajeCursoSiso;
+                col.mensajePlantillaSS = mensajePlantillaSS;
+                delete col.has_plantilla_ss; // Eliminar campo auxiliar
+            });
 
             // Obtener vehículos
             const [vehiculos] = await connection.execute(`
@@ -1311,51 +1355,69 @@ controller.getSolicitudesActivas = async (req, res) => {
                     v.matricula,
                     v.foto,
                     v.estado,
-                    MAX(pdv_soat.fecha_inicio) AS soat_inicio,
-                    MAX(pdv_soat.fecha_fin) AS soat_fin,
-                    MAX(pdv_tecno.fecha_inicio) AS tecnomecanica_inicio,
-                    MAX(pdv_tecno.fecha_fin) AS tecnomecanica_fin,
-                    MAX(lv_conduccion.estado) AS licencia_conduccion,
-                    MAX(lv_transito.estado) AS licencia_transito,
-                    CASE
-                        WHEN MAX(pdv_soat.fecha_fin) IS NULL OR MAX(pdv_soat.fecha_fin) < CURDATE() THEN 'Vencido'
-                        ELSE 'Vigente'
-                    END AS estado_soat,
-                    CASE
-                        WHEN MAX(pdv_tecno.fecha_fin) IS NULL OR MAX(pdv_tecno.fecha_fin) < CURDATE() THEN 'Vencida'
-                        ELSE 'Vigente'
-                    END AS estado_tecnomecanica
+                    pdv_soat.fecha_inicio AS soat_inicio,
+                    pdv_soat.fecha_fin AS soat_fin,
+                    pdv_tecno.fecha_inicio AS tecnomecanica_inicio,
+                    pdv_tecno.fecha_fin AS tecnomecanica_fin,
+                    lv_conduccion.estado AS licencia_conduccion,
+                    lv_transito.estado AS licencia_transito
                 FROM 
                     vehiculos v
-                LEFT JOIN plantilla_documentos_vehiculos pdv_soat ON v.id = pdv_soat.vehiculo_id 
-                    AND pdv_soat.tipo_documento = 'soat'
-                LEFT JOIN plantilla_documentos_vehiculos pdv_tecno ON v.id = pdv_tecno.vehiculo_id 
-                    AND pdv_tecno.tipo_documento = 'tecnomecanica'
+                LEFT JOIN (
+                    SELECT vehiculo_id, fecha_inicio, fecha_fin
+                    FROM plantilla_documentos_vehiculos
+                    WHERE tipo_documento = 'soat'
+                    ORDER BY created_at DESC LIMIT 1
+                ) pdv_soat ON v.id = pdv_soat.vehiculo_id
+                LEFT JOIN (
+                    SELECT vehiculo_id, fecha_inicio, fecha_fin
+                    FROM plantilla_documentos_vehiculos
+                    WHERE tipo_documento = 'tecnomecanica'
+                    ORDER BY created_at DESC LIMIT 1
+                ) pdv_tecno ON v.id = pdv_tecno.vehiculo_id
                 LEFT JOIN licencias_vehiculo lv_conduccion ON v.id = lv_conduccion.vehiculo_id 
                     AND lv_conduccion.tipo = 'licencia_conduccion'
                 LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id 
                     AND lv_transito.tipo = 'licencia_transito'
                 WHERE 
                     v.solicitud_id = ?
-                GROUP BY v.id, v.matricula, v.foto, v.estado
             `, [solicitud.id]);
-            console.log(`Vehículos para solicitud ${solicitud.id}:`, vehiculos.length);
 
-            // Agregar mensajes de advertencia para vehículos
-            vehiculos.forEach(vehiculo => {
-                vehiculo.mensajesAdvertencia = [];
-                if (vehiculo.estado_soat === 'Vencido') {
-                    vehiculo.mensajesAdvertencia.push('SOAT vencido');
+            console.log(`Vehículos para solicitud ${solicitud.id}:`, vehiculos.map(v => ({
+                id: v.id,
+                matricula: v.matricula
+            })));
+
+            // Procesar estado de vehículos
+            vehiculos.forEach(veh => {
+                const hoy = new Date();
+                let mensajesAdvertencia = [];
+
+                // SOAT
+                if (!veh.soat_inicio || !veh.soat_fin) {
+                    mensajesAdvertencia.push('SOAT no definido.');
+                } else if (new Date(veh.soat_fin) < hoy) {
+                    mensajesAdvertencia.push('SOAT vencido.');
                 }
-                if (vehiculo.estado_tecnomecanica === 'Vencida') {
-                    vehiculo.mensajesAdvertencia.push('Tecnomecánica vencida');
+                veh.estado_soat = (!veh.soat_inicio || new Date(veh.soat_fin) < hoy) ? 'Vencido' : 'Vigente';
+
+                // Tecnomecánica
+                if (!veh.tecnomecanica_inicio || !veh.tecnomecanica_fin) {
+                    mensajesAdvertencia.push('Tecnomecánica no definida.');
+                } else if (new Date(veh.tecnomecanica_fin) < hoy) {
+                    mensajesAdvertencia.push('Tecnomecánica vencida.');
                 }
-                if (!vehiculo.licencia_conduccion || vehiculo.licencia_conduccion !== '1') {
-                    vehiculo.mensajesAdvertencia.push('Licencia de conducción no aprobada');
+                veh.estado_tecnomecanica = (!veh.tecnomecanica_inicio || new Date(veh.tecnomecanica_fin) < hoy) ? 'Vencida' : 'Vigente';
+
+                // Licencias
+                if (!veh.licencia_conduccion) {
+                    mensajesAdvertencia.push('Licencia de conducción no aprobada.');
                 }
-                if (!vehiculo.licencia_transito || vehiculo.licencia_transito !== '1') {
-                    vehiculo.mensajesAdvertencia.push('Licencia de tránsito no aprobada');
+                if (!veh.licencia_transito) {
+                    mensajesAdvertencia.push('Licencia de tránsito no aprobada.');
                 }
+
+                veh.mensajesAdvertencia = mensajesAdvertencia.length > 0 ? mensajesAdvertencia : null;
             });
 
             // Agregar colaboradores y vehículos a la solicitud
@@ -1363,22 +1425,17 @@ controller.getSolicitudesActivas = async (req, res) => {
             solicitud.vehiculos = vehiculos;
 
             // Agregar mensajes de advertencia generales
-            const cursoSisoProblema = colaboradores.some(col => col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No');
-            const plantillaSSProblema = colaboradores.some(col => col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida');
-            const vehiculosProblema = vehiculos.some(veh => veh.mensajesAdvertencia.length > 0);
-
-            if (cursoSisoProblema) {
-                solicitud.mensajeCursoSiso = 'Hay colaboradores con curso SISO vencido o no aprobado';
-            }
-            if (plantillaSSProblema) {
-                solicitud.mensajePlantillaSS = 'Hay colaboradores con plantilla SS vencida o no definida';
-            }
-            if (vehiculosProblema) {
-                solicitud.mensajeVehiculos = 'Hay vehículos con documentos vencidos o no aprobados';
-            }
+            solicitud.mensajeCursoSiso = colaboradores.some(col => col.mensajeCursoSiso) 
+                ? 'Hay colaboradores con curso SISO vencido o no aprobado' 
+                : null;
+            solicitud.mensajePlantillaSS = colaboradores.some(col => col.mensajePlantillaSS) 
+                ? 'Hay colaboradores con plantilla SS vencida o no definida' 
+                : null;
+            solicitud.mensajeVehiculos = vehiculos.some(veh => veh.mensajesAdvertencia) 
+                ? 'Hay vehículos con documentos vencidos o no aprobados' 
+                : null;
         }
 
-        console.log('Respuesta final enviada:', solicitudes.length, 'solicitudes');
         res.json(solicitudes);
     } catch (err) {
         console.error('Error al obtener solicitudes activas:', err.message);

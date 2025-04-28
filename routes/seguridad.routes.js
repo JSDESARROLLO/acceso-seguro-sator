@@ -104,10 +104,10 @@ router.get('/vista-seguridad/:id', async (req, res) => {
 router.get('/mostrar-tablas', controller.mostrarTablas);
 
 // Ruta para obtener solicitudes activas
-router.get('/api/solicitudes/seguridad_activas', async (req, res) => {
+router.get('/api/solicitudes/obtenerSolicitudesActivasConColaboradoresYVehiculos', async (req, res) => {
     try {
         console.log('[RUTAS] Obteniendo solicitudes activas');
-        await controller.getSolicitudesActivas(req, res);
+        await controller.obtenerSolicitudesActivasConColaboradoresYVehiculos(req, res);
     } catch (err) {
         console.error('[RUTAS] Error al obtener solicitudes activas:', err);
         res.status(500).json({ error: 'Error al obtener las solicitudes activas' });

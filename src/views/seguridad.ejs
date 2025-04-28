@@ -502,221 +502,218 @@
 
         // Function to fill the modal
         async function llenarModal(data, selectedId, isVehicle = false) {
-            modalData = data;
-            document.getElementById('detalleId').textContent = data.id || 'N/A';
-            document.getElementById('detalleEmpresa').textContent = data.empresa || 'N/A';
-            document.getElementById('detalleLugar').textContent = data.nombre_lugar || 'N/A';
-            document.getElementById('detalleLabor').textContent = data.labor || 'N/A';
-            document.getElementById('detalleInterventor').textContent = data.interventor || 'N/A';
-            document.getElementById('detalleInicio').textContent = formatFecha(data.inicio_obra);
-            document.getElementById('detalleFin').textContent = formatFecha(data.fin_obra);
-            document.getElementById('detalleEstado').textContent = data.estado_actual || 'Desconocido';
-            document.getElementById('detalleEstado').className = 'badge ' + getEstadoClass(data.estado_actual);
+    modalData = data;
+    document.getElementById('detalleId').textContent = data.id || 'N/A';
+    document.getElementById('detalleEmpresa').textContent = data.empresa || 'N/A';
+    document.getElementById('detalleLugar').textContent = data.nombre_lugar || 'N/A';
+    document.getElementById('detalleLabor').textContent = data.labor || 'N/A';
+    document.getElementById('detalleInterventor').textContent = data.interventor || 'N/A';
+    document.getElementById('detalleInicio').textContent = formatFecha(data.inicio_obra);
+    document.getElementById('detalleFin').textContent = formatFecha(data.fin_obra);
+    document.getElementById('detalleEstado').textContent = data.estado_actual || 'Desconocido';
+    document.getElementById('detalleEstado').className = 'badge ' + getEstadoClass(data.estado_actual);
 
-            // Mostrar advertencias
-            let advertencia = '';
-            if (data.advertencia) advertencia += data.advertencia + ' ';
-            if (data.mensajeCursoSiso) advertencia += data.mensajeCursoSiso + ' ';
-            if (data.mensajePlantillaSS) advertencia += data.mensajePlantillaSS + ' ';
-            if (data.mensajeVehiculos) advertencia += data.mensajeVehiculos + ' ';
-            document.getElementById('advertencia').textContent = advertencia.trim();
-            document.getElementById('mensajeEstado').textContent = data.mensajeEstado || '';
+    // Mostrar advertencias específicas
+    let advertencia = '';
+    if (data.advertencia) advertencia += data.advertencia + ' ';
+    if (data.mensajeCursoSiso && !isVehicle) advertencia += data.mensajeCursoSiso + ' ';
+    if (data.mensajePlantillaSS && !isVehicle) advertencia += data.mensajePlantillaSS + ' ';
+    if (data.mensajeVehiculos && isVehicle) advertencia += data.mensajeVehiculos + ' ';
+    document.getElementById('advertencia').textContent = advertencia.trim() || 'Sin advertencias';
 
-            const colaboradoresContainer = document.getElementById('detalleColaboradores');
-            const vehiculosContainer = document.getElementById('detalleVehiculos');
-            const colaboradoresTitle = document.querySelector('h5.mt-4:first-of-type');
-            const vehiculosTitle = document.querySelector('h5.mt-4:last-of-type');
-            
-            colaboradoresContainer.style.display = 'none';
-            vehiculosContainer.style.display = 'none';
-            colaboradoresTitle.style.display = 'none';
-            vehiculosTitle.style.display = 'none';
+    const colaboradoresContainer = document.getElementById('detalleColaboradores');
+    const vehiculosContainer = document.getElementById('detalleVehiculos');
+    const colaboradoresTitle = document.querySelector('h5.mt-4:first-of-type');
+    const vehiculosTitle = document.querySelector('h5.mt-4:last-of-type');
+    
+    colaboradoresContainer.style.display = 'none';
+    vehiculosContainer.style.display = 'none';
+    colaboradoresTitle.style.display = 'none';
+    vehiculosTitle.style.display = 'none';
 
-            if (isVehicle) {
-                // Mostrar solo el vehículo específico
-            if (data.vehiculos && data.vehiculos.length > 0) {
-                    const vehiculo = data.vehiculos.find(v => v.id.toString() === selectedId.replace('VH-', ''));
-                    if (vehiculo) {
+    if (isVehicle) {
+        // Mostrar solo el vehículo específico
+        if (data.vehiculos && data.vehiculos.length > 0) {
+            const vehiculo = data.vehiculos.find(v => v.id.toString() === selectedId.replace('VH-', ''));
+            if (vehiculo) {
                 vehiculosContainer.style.display = 'block';
                 vehiculosTitle.style.display = 'block';
                 vehiculosContainer.innerHTML = '';
-                    const vehDiv = document.createElement('div');
-                        vehDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
-                    vehDiv.innerHTML = `
-                        <div class="card">
-                            <img src="${vehiculo.foto || '/default.jpg'}" class="card-img-top" alt="Foto del vehículo ${vehiculo.matricula}">
-                            <div class="card-body">
-                                <h6 class="card-title">Vehículo: ${vehiculo.matricula}</h6>
-                                <p class="card-text">ID Vehículo: VH-${vehiculo.id}</p>
-                                <p class="card-text">SOAT: ${vehiculo.soat_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.soat_fin) : 'No definido'}</p>
-                                <p class="card-text">Tecnomecánica: ${vehiculo.tecnomecanica_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.tecnomecanica_fin) : 'No definida'}</p>
-                                <p class="card-text">Licencia Conducción: ${vehiculo.licencia_conduccion ? 'Aprobada' : 'No aprobada'}</p>
-                                <p class="card-text">Licencia Tránsito: ${vehiculo.licencia_transito ? 'Aprobada' : 'No aprobada'}</p>
-                                    ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '" checked>'}
-                            </div>
+                const vehDiv = document.createElement('div');
+                vehDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
+                vehDiv.innerHTML = `
+                    <div class="card">
+                        <img src="${vehiculo.foto || '/default.jpg'}" class="card-img-top" alt="Foto del vehículo ${vehiculo.matricula}">
+                        <div class="card-body">
+                            <h6 class="card-title">Vehículo: ${vehiculo.matricula}</h6>
+                            <p class="card-text">ID Vehículo: VH-${vehiculo.id}</p>
+                            <p class="card-text">SOAT: ${vehiculo.soat_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.soat_fin) : 'No definido'}</p>
+                            <p class="card-text">Tecnomecánica: ${vehiculo.tecnomecanica_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.tecnomecanica_fin) : 'No definida'}</p>
+                            <p class="card-text">Licencia Conducción: ${vehiculo.licencia_conduccion ? 'Aprobada' : 'No aprobada'}</p>
+                            <p class="card-text">Licencia Tránsito: ${vehiculo.licencia_transito ? 'Aprobada' : 'No aprobada'}</p>
+                            ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '" checked>'}
                         </div>
-                    `;
-                    vehiculosContainer.appendChild(vehDiv);
-                    }
-                }
-            } else {
-                // Mostrar solo el colaborador específico
-                if (data.colaboradores && data.colaboradores.length > 0) {
-                    const colaborador = data.colaboradores.find(c => c.id.toString() === selectedId);
-                    if (colaborador) {
-                        colaboradoresContainer.style.display = 'block';
-                        colaboradoresTitle.style.display = 'block';
-                        colaboradoresContainer.innerHTML = '';
-                        const colDiv = document.createElement('div');
-                        colDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
-                        colDiv.innerHTML = `
-                            <div class="card">
-                                <img src="${colaborador.foto || '/default.jpg'}" class="card-img-top" alt="Foto del colaborador ${colaborador.nombre}">
-                                <div class="card-body">
-                                    <h6 class="card-title">${colaborador.nombre}</h6>
-                                    <p class="card-text">Cédula: ${colaborador.cedula}</p>
-                                    <p class="card-text">Curso SISO: ${colaborador.cursoSiso || 'No definido'}</p>
-                                    <p class="card-text">Plantilla SS: ${colaborador.plantillaSS || 'No definida'}</p>
-                                    ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '" checked>'}
-                                </div>
-                            </div>
-                        `;
-                        colaboradoresContainer.appendChild(colDiv);
-                    }
-                }
+                    </div>
+                `;
+                vehiculosContainer.appendChild(vehDiv);
             }
-
-            configurarBotones(data);
-            const modal = new bootstrap.Modal(document.getElementById('detallesModal'));
-            modal.show();
         }
+    } else {
+        // Mostrar solo el colaborador específico
+        if (data.colaboradores && data.colaboradores.length > 0) {
+            const colaborador = data.colaboradores.find(c => c.id.toString() === selectedId);
+            if (colaborador) {
+                colaboradoresContainer.style.display = 'block';
+                colaboradoresTitle.style.display = 'block';
+                colaboradoresContainer.innerHTML = '';
+                const colDiv = document.createElement('div');
+                colDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
+                colDiv.innerHTML = `
+                    <div class="card">
+                        <img src="${colaborador.foto || '/default.jpg'}" class="card-img-top" alt="Foto del colaborador ${colaborador.nombre}">
+                        <div class="card-body">
+                            <h6 class="card-title">${colaborador.nombre}</h6>
+                            <p class="card-text">Cédula: ${colaborador.cedula}</p>
+                            <p class="card-text">Curso SISO: ${colaborador.cursoSiso || 'No definido'}</p>
+                            <p class="card-text">Plantilla SS: ${colaborador.plantillaSS || 'No definida'}</p>
+                            ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '" checked>'}
+                        </div>
+                    </div>
+                `;
+                colaboradoresContainer.appendChild(colDiv);
+            }
+        }
+    }
 
+    configurarBotones(data, isVehicle);
+    const modal = new bootstrap.Modal(document.getElementById('detallesModal'));
+    modal.show();
+}
         // Function to configure buttons
-        function configurarBotones(data) {
-            const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
-            const registrarEntradaBtn = document.getElementById('registrarEntradaBtn');
-            const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
-            const mensajeEstado = document.getElementById('mensajeEstado');
+        function configurarBotones(data, isVehicle = false) {
+    const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
+    const registrarEntradaBtn = document.getElementById('registrarEntradaBtn');
+    const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
+    const mensajeEstado = document.getElementById('mensajeEstado');
 
-            // Verificar si hay colaboradores inactivos
-            const hayColaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
+    // Verificar si hay colaboradores inactivos
+    const hayColaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
+    
+    // Verificar si hay vehículos inactivos (solo para vehículos)
+    const hayVehiculosInactivos = isVehicle && data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
+    
+    // Verificar problemas con documentos basado en el estado real de los colaboradores
+    const hayProblemasCursoSiso = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
+        col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
+    );
+    
+    const hayProblemasPlantillaSS = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
+        col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
+    );
+    
+    // Verificar problemas con vehículos (solo para vehículos)
+    const problemasVehiculos = [];
+    if (isVehicle && data.vehiculos) {
+        data.vehiculos.forEach(veh => {
+            const hoy = new Date();
+            const soatFin = new Date(veh.soat_fin);
+            const tecnomecanicaFin = new Date(veh.tecnomecanica_fin);
             
-            // Verificar si hay vehículos inactivos
-            const hayVehiculosInactivos = data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
+            const formatDate = (date) => {
+                if (!date || isNaN(date.getTime())) return 'N/A';
+                return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+            };
             
-            // Verificar problemas con documentos basado en el estado real de los colaboradores
-            const hayProblemasCursoSiso = data.colaboradores && data.colaboradores.some(col => 
-                col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
-            );
-            
-            const hayProblemasPlantillaSS = data.colaboradores && data.colaboradores.some(col => 
-                col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
-            );
-            
-            // Verificar problemas con vehículos
-            const problemasVehiculos = [];
-            if (data.vehiculos) {
-                data.vehiculos.forEach(veh => {
-                    const hoy = new Date();
-                    const soatFin = new Date(veh.soat_fin);
-                    const tecnomecanicaFin = new Date(veh.tecnomecanica_fin);
-                    
-                    // Formatear fechas en formato DD/MM/YYYY
-                    const formatDate = (date) => {
-                        if (!date || isNaN(date.getTime())) return 'N/A';
-                        return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-                    };
-                    
-                    if (soatFin < hoy) {
-                        problemasVehiculos.push(`SOAT del vehículo ${veh.matricula} vencido desde ${formatDate(soatFin)}`);
-                    }
-                    if (tecnomecanicaFin < hoy) {
-                        problemasVehiculos.push(`Tecnomecánica del vehículo ${veh.matricula} vencida desde ${formatDate(tecnomecanicaFin)}`);
-                    }
-                    if (!veh.licencia_conduccion) {
-                        problemasVehiculos.push(`Licencia de conducción del vehículo ${veh.matricula} no aprobada`);
-                    }
-                    if (!veh.licencia_transito) {
-                        problemasVehiculos.push(`Licencia de tránsito del vehículo ${veh.matricula} no aprobada`);
-                    }
-                });
+            if (soatFin < hoy) {
+                problemasVehiculos.push(`SOAT del vehículo ${veh.matricula} vencido desde ${formatDate(soatFin)}`);
             }
-            const hayProblemasVehiculos = problemasVehiculos.length > 0;
-            
-            // Verificar estado vencido
-            const estadoVencido = data.estado_actual ? data.estado_actual.includes('vencido') : false;
-            
-            // Verificar advertencia de ubicación
-            const hayAdvertenciaUbicacion = data.advertencia ? data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación') : false;
-
-            // Determinar si hay alguna restricción que deshabilite los botones
-            const hayRestricciones = hayColaboradoresInactivos || 
-                                   hayVehiculosInactivos || 
-                                   hayProblemasCursoSiso || 
-                                   hayProblemasPlantillaSS || 
-                                   hayProblemasVehiculos || 
-                                   estadoVencido || 
-                                   hayAdvertenciaUbicacion;
-
-            // Construir mensaje de estado detallado
-            let mensajeDetallado = '';
-            if (hayRestricciones) {
-                mensajeDetallado = 'No se pueden realizar acciones debido a:';
-                if (hayColaboradoresInactivos) mensajeDetallado += '\n- Hay colaboradores inactivos';
-                if (hayVehiculosInactivos) mensajeDetallado += '\n- Hay vehículos inactivos';
-                if (hayProblemasCursoSiso) mensajeDetallado += '\n- Hay problemas con cursos SISO';
-                if (hayProblemasPlantillaSS) mensajeDetallado += '\n- Hay problemas con plantillas SS';
-                if (problemasVehiculos.length > 0) {
-                    mensajeDetallado += '\n- Problemas con vehículos:';
-                    problemasVehiculos.forEach(problema => {
-                        mensajeDetallado += `\n  * ${problema}`;
-                    });
-                }
-                if (estadoVencido) mensajeDetallado += '\n- El estado de la solicitud está vencido';
-                if (hayAdvertenciaUbicacion) mensajeDetallado += '\n- El lugar de la solicitud no coincide con tu ubicación';
-            } else {
-                mensajeDetallado = 'Todos los requisitos están en orden. Puedes realizar las acciones.';
+            if (tecnomecanicaFin < hoy) {
+                problemasVehiculos.push(`Tecnomecánica del vehículo ${veh.matricula} vencida desde ${formatDate(tecnomecanicaFin)}`);
             }
-
-            // Actualizar el mensaje de estado
-            if (mensajeEstado) {
-                mensajeEstado.textContent = mensajeDetallado;
-                mensajeEstado.style.color = hayRestricciones ? '#dc3545' : '#28a745';
+            if (!veh.licencia_conduccion) {
+                problemasVehiculos.push(`Licencia de conducción del vehículo ${veh.matricula} no aprobada`);
             }
-
-            // Configurar botón de Registrar Ingreso
-            if (registrarIngresoBtn) {
-                const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !hayRestricciones;
-                registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
-                registrarIngresoBtn.title = puedeRegistrarIngreso ? 
-                    'Registrar ingreso de colaboradores' : 
-                    mensajeDetallado;
+            if (!veh.licencia_transito) {
+                problemasVehiculos.push(`Licencia de tránsito del vehículo ${veh.matricula} no aprobada`);
             }
+        });
+    }
+    const hayProblemasVehiculos = problemasVehiculos.length > 0;
+    
+    // Verificar estado vencido
+    const estadoVencido = data.estado_actual ? data.estado_actual.includes('vencido') : false;
+    
+    // Verificar advertencia de ubicación
+    const hayAdvertenciaUbicacion = data.advertencia ? data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación') : false;
 
-            // Configurar botones de Entrada y Salida
-            if (registrarEntradaBtn && registrarSalidaBtn) {
-                const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
-                
-                registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
-                registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
-                
-                registrarEntradaBtn.title = mensajeDetallado;
-                registrarSalidaBtn.title = mensajeDetallado;
+    // Determinar si hay alguna restricción que deshabilite los botones
+    const hayRestricciones = hayColaboradoresInactivos || 
+                            hayVehiculosInactivos || 
+                            hayProblemasCursoSiso || 
+                            hayProblemasPlantillaSS || 
+                            hayProblemasVehiculos || 
+                            estadoVencido || 
+                            hayAdvertenciaUbicacion;
 
-                // Mostrar mensaje de depuración en consola
-                console.log('Estado actual:', data.estado_actual);
-                console.log('Restricciones:', {
-                    hayColaboradoresInactivos,
-                    hayVehiculosInactivos,
-                    hayProblemasCursoSiso,
-                    hayProblemasPlantillaSS,
-                    hayProblemasVehiculos,
-                    estadoVencido,
-                    hayAdvertenciaUbicacion
-                });
-                console.log('Puede registrar entrada/salida:', puedeRegistrarEntradaSalida);
-            }
+    // Construir mensaje de estado detallado
+    let mensajeDetallado = '';
+    if (hayRestricciones) {
+        mensajeDetallado = 'No se pueden realizar acciones debido a:';
+        if (hayColaboradoresInactivos) mensajeDetallado += '\n- Hay colaboradores inactivos';
+        if (hayVehiculosInactivos) mensajeDetallado += '\n- Hay vehículos inactivos';
+        if (hayProblemasCursoSiso) mensajeDetallado += '\n- Hay problemas con cursos SISO';
+        if (hayProblemasPlantillaSS) mensajeDetallado += '\n- Hay problemas con plantillas SS';
+        if (hayProblemasVehiculos) {
+            mensajeDetallado += '\n- Problemas con vehículos:';
+            problemasVehiculos.forEach(problema => {
+                mensajeDetallado += `\n  * ${problema}`;
+            });
         }
+        if (estadoVencido) mensajeDetallado += '\n- El estado de la solicitud está vencido';
+        if (hayAdvertenciaUbicacion) mensajeDetallado += '\n- El lugar de la solicitud no coincide con tu ubicación';
+    } else {
+        mensajeDetallado = 'Todos los requisitos están en orden. Puedes realizar las acciones.';
+    }
+
+    // Actualizar el mensaje de estado
+    if (mensajeEstado) {
+        mensajeEstado.textContent = mensajeDetallado;
+        mensajeEstado.style.color = hayRestricciones ? '#dc3545' : '#28a745';
+    }
+
+    // Configurar botón de Registrar Ingreso
+    if (registrarIngresoBtn) {
+        const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !hayRestricciones;
+        registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
+        registrarIngresoBtn.title = puedeRegistrarIngreso ? 
+            'Registrar ingreso de colaboradores' : 
+            mensajeDetallado;
+    }
+
+    // Configurar botones de Entrada y Salida
+    if (registrarEntradaBtn && registrarSalidaBtn) {
+        const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
+        
+        registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
+        registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
+        
+        registrarEntradaBtn.title = mensajeDetallado;
+        registrarSalidaBtn.title = mensajeDetallado;
+
+        // Mostrar mensaje de depuración en consola
+        console.log('Estado actual:', data.estado_actual);
+        console.log('Restricciones:', {
+            hayColaboradoresInactivos,
+            hayVehiculosInactivos,
+            hayProblemasCursoSiso,
+            hayProblemasPlantillaSS,
+            hayProblemasVehiculos,
+            estadoVencido,
+            hayAdvertenciaUbicacion
+        });
+        console.log('Puede registrar entrada/salida:', puedeRegistrarEntradaSalida);
+    }
+}
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
@@ -1142,368 +1139,326 @@
         }
 
         // Function to load all records
+
         async function cargarTodosLosRegistros() {
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const progressFill = document.getElementById('progressFill');
-            const loadingMessage = document.getElementById('loadingMessage');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const progressFill = document.getElementById('progressFill');
+    const loadingMessage = document.getElementById('loadingMessage');
 
-            loadingOverlay.classList.remove('hidden');
-            loadingMessage.textContent = 'Obteniendo solicitudes...';
-            progressFill.style.width = '0%';
+    loadingOverlay.classList.remove('hidden');
+    loadingMessage.textContent = 'Obteniendo solicitudes...';
+    progressFill.style.width = '0%';
 
-            try {
-                console.log('Cargando todos los registros...');
-                const response = await fetch('/api/solicitudes/seguridad_activas')
-                    .catch(error => {
-                        console.error('Error de red:', error);
-                        throw new Error('No se pudo conectar al servidor. Usando datos en caché.');
-                    });
+    try {
+        const response = await fetch('/api/solicitudes/obtenerSolicitudesActivasConColaboradoresYVehiculos');
+        if (!response.ok) {
+            throw new Error(`Error al cargar los registros: ${response.statusText}`);
+        }
 
-                if (!response.ok) {
-                    throw new Error(`Error al cargar los registros: ${response.statusText}`);
-                }
+        const solicitudes = await response.json();
+        let totalItems = solicitudes.length;
+        solicitudes.forEach(solicitud => {
+            totalItems += (solicitud.colaboradores ? solicitud.colaboradores.length : 0);
+            totalItems += (solicitud.vehiculos ? solicitud.vehiculos.length : 0);
+        });
+        let processedItems = 0;
 
-                const solicitudes = await response.json();
-                console.log('Registros cargados:', solicitudes.length);
-                console.log('IDs de solicitudes encontradas:', solicitudes.map(s => ({
-                    id: s.id,
-                    nombre_lugar: s.nombre_lugar,
-                    inicio_obra: s.inicio_obra,
-                    fin_obra: s.fin_obra
-                })));
+        function updateProgress() {
+            processedItems++;
+            const progress = (processedItems / totalItems) * 100;
+            progressFill.style.width = `${progress}%`;
+            loadingMessage.textContent = `Procesando ${processedItems} de ${totalItems} elementos...`;
+        }
 
-                let totalItems = solicitudes.length;
-                solicitudes.forEach(solicitud => {
-                    totalItems += (solicitud.colaboradores ? solicitud.colaboradores.length : 0);
-                    totalItems += (solicitud.vehiculos ? solicitud.vehiculos.length : 0);
-                });
-                let processedItems = 0;
+        const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
+        const solicitudesStore = transaction.objectStore('solicitudes');
+        const colaboradoresStore = transaction.objectStore('colaboradores');
+        const vehiculosStore = transaction.objectStore('vehiculos');
 
-                function updateProgress() {
-                    processedItems++;
-                    const progress = (processedItems / totalItems) * 100;
-                    progressFill.style.width = `${progress}%`;
-                    loadingMessage.textContent = `Procesando ${processedItems} de ${totalItems} elementos...`;
-                }
+        for (const solicitud of solicitudes) {
+            const solicitudData = {
+                id: solicitud.id,
+                empresa: solicitud.empresa,
+                nit: solicitud.nit,
+                estado: solicitud.estado,
+                interventor: solicitud.interventor,
+                lugar: solicitud.lugar,
+                nombre_lugar: solicitud.nombre_lugar,
+                inicio_obra: solicitud.inicio_obra,
+                fin_obra: solicitud.fin_obra,
+                labor: solicitud.labor,
+                estado_actual: solicitud.estado_actual,
+                advertencia: solicitud.advertencia,
+                mensajeCursoSiso: solicitud.mensajeCursoSiso,
+                mensajePlantillaSS: solicitud.mensajePlantillaSS,
+                mensajeVehiculos: solicitud.mensajeVehiculos,
+                timestamp: new Date().toISOString()
+            };
+            await solicitudesStore.put(solicitudData);
+            updateProgress();
 
-                const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
-                const solicitudesStore = transaction.objectStore('solicitudes');
-                const colaboradoresStore = transaction.objectStore('colaboradores');
-                const vehiculosStore = transaction.objectStore('vehiculos');
-
-                for (const solicitud of solicitudes) {
-                    console.log(`Procesando solicitud ID: ${solicitud.id}`);
-                    const solicitudData = {
-                        id: solicitud.id,
-                        empresa: solicitud.empresa,
-                        nit: solicitud.nit,
-                        estado: solicitud.estado,
-                        interventor: solicitud.interventor,
-                        lugar: solicitud.lugar,
-                        nombre_lugar: solicitud.nombre_lugar,
-                        inicio_obra: solicitud.inicio_obra,
-                        fin_obra: solicitud.fin_obra,
-                        labor: solicitud.labor,
-                        estado_actual: solicitud.estado_actual,
-                        mensajeCursoSiso: solicitud.mensajeCursoSiso,
-                        mensajePlantillaSS: solicitud.mensajePlantillaSS,
-                        mensajeVehiculos: solicitud.mensajeVehiculos,
+            if (solicitud.colaboradores && solicitud.colaboradores.length > 0) {
+                for (const colaborador of solicitud.colaboradores) {
+                    const colaboradorData = {
+                        id: colaborador.id,
+                        nombre: colaborador.nombre,
+                        cedula: colaborador.cedula,
+                        foto: colaborador.foto,
+                        cedulaFoto: colaborador.cedulaFoto,
+                        estado: colaborador.estado,
+                        cursoSiso: colaborador.cursoSiso,
+                        curso_siso_estado: colaborador.curso_siso_estado,
+                        curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
+                        plantillaSS: colaborador.plantillaSS,
+                        plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
+                        plantilla_ss_fin: colaborador.plantilla_ss_fin,
+                        mensajeCursoSiso: colaborador.mensajeCursoSiso,
+                        mensajePlantillaSS: colaborador.mensajePlantillaSS,
+                        solicitudId: solicitud.id,
                         timestamp: new Date().toISOString()
                     };
-                    await solicitudesStore.put(solicitudData);
-                    console.log(`Solicitud ${solicitud.id} guardada`);
+                    await colaboradoresStore.put(colaboradorData);
                     updateProgress();
-
-                    if (solicitud.colaboradores && solicitud.colaboradores.length > 0) {
-                        console.log(`Colaboradores para solicitud ${solicitud.id}:`, solicitud.colaboradores.length);
-                        for (const colaborador of solicitud.colaboradores) {
-                            const colaboradorData = {
-                                id: colaborador.id,
-                                nombre: colaborador.nombre,
-                                cedula: colaborador.cedula,
-                                foto: colaborador.foto,
-                                estado: colaborador.estado,
-                                cursoSiso: colaborador.cursoSiso,
-                                curso_siso_estado: colaborador.curso_siso_estado,
-                                curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
-                                plantillaSS: colaborador.plantillaSS,
-                                plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
-                                plantilla_ss_fin: colaborador.plantilla_ss_fin,
-                                solicitudId: solicitud.id,
-                                timestamp: new Date().toISOString()
-                            };
-                            await colaboradoresStore.put(colaboradorData);
-                            updateProgress();
-                        }
-                    }
-
-                    if (solicitud.vehiculos && solicitud.vehiculos.length > 0) {
-                        console.log(`Vehículos para solicitud ${solicitud.id}:`, solicitud.vehiculos.length);
-                        for (const vehiculo of solicitud.vehiculos) {
-                            const vehiculoData = {
-                                id: vehiculo.id,
-                                matricula: vehiculo.matricula,
-                                foto: vehiculo.foto,
-                                estado: vehiculo.estado,
-                                soat_inicio: vehiculo.soat_inicio,
-                                soat_fin: vehiculo.soat_fin,
-                                tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
-                                tecnomecanica_fin: vehiculo.tecnomecanica_fin,
-                                licencia_conduccion: vehiculo.licencia_conduccion,
-                                licencia_transito: vehiculo.licencia_transito,
-                                estado_soat: vehiculo.estado_soat,
-                                estado_tecnomecanica: vehiculo.estado_tecnomecanica,
-                                mensajesAdvertencia: vehiculo.mensajesAdvertencia,
-                                solicitudId: solicitud.id,
-                                timestamp: new Date().toISOString()
-                            };
-                            await vehiculosStore.put(vehiculoData);
-                            updateProgress();
-                        }
-                    }
                 }
+            }
 
-                const solicitudesCount = await new Promise(resolve => {
-                    solicitudesStore.count().onsuccess = e => resolve(e.target.result);
-                });
-                const colaboradoresCount = await new Promise(resolve => {
-                    colaboradoresStore.count().onsuccess = e => resolve(e.target.result);
-                });
-                const vehiculosCount = await new Promise(resolve => {
-                    vehiculosStore.count().onsuccess = e => resolve(e.target.result);
-                });
-
-                console.log('\nResumen de carga:');
-                console.log('Total de solicitudes:', solicitudesCount);
-                console.log('Total de colaboradores:', colaboradoresCount);
-                console.log('Total de vehículos:', vehiculosCount);
-
-                loadingMessage.textContent = 'Carga completa!';
-                progressFill.style.width = '100%';
-                setTimeout(() => {
-                    loadingOverlay.classList.add('hidden');
-                }, 500);
-            } catch (error) {
-                console.error('Error al cargar registros:', error);
-                loadingMessage.textContent = 'Error al cargar datos. Usando caché.';
-                setTimeout(() => {
-                    loadingOverlay.classList.add('hidden');
-                }, 1000);
+            if (solicitud.vehiculos && solicitud.vehiculos.length > 0) {
+                for (const vehiculo of solicitud.vehiculos) {
+                    const vehiculoData = {
+                        id: vehiculo.id,
+                        matricula: vehiculo.matricula,
+                        foto: vehiculo.foto,
+                        estado: vehiculo.estado,
+                        soat_inicio: vehiculo.soat_inicio,
+                        soat_fin: vehiculo.soat_fin,
+                        tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
+                        tecnomecanica_fin: vehiculo.tecnomecanica_fin,
+                        licencia_conduccion: vehiculo.licencia_conduccion,
+                        licencia_transito: vehiculo.licencia_transito,
+                        estado_soat: vehiculo.estado_soat,
+                        estado_tecnomecanica: vehiculo.estado_tecnomecanica,
+                        mensajesAdvertencia: vehiculo.mensajesAdvertencia,
+                        solicitudId: solicitud.id,
+                        timestamp: new Date().toISOString()
+                    };
+                    await vehiculosStore.put(vehiculoData);
+                    updateProgress();
+                }
             }
         }
+
+        loadingMessage.textContent = 'Carga completa!';
+        progressFill.style.width = '100%';
+        setTimeout(() => {
+            loadingOverlay.classList.add('hidden');
+        }, 500);
+    } catch (error) {
+        console.error('Error al cargar registros:', error);
+        loadingMessage.textContent = 'Error al cargar datos. Usando caché.';
+        setTimeout(() => {
+            loadingOverlay.classList.add('hidden');
+        }, 1000);
+    }
+}
+
 
         // Function to view details
         async function verDetalles(id) {
-            try {
-                console.log('Iniciando verDetalles con ID:', id);
-                const cleanId = id.trim().toUpperCase();
-                const isVehicle = cleanId.startsWith('VH-');
-                const searchId = isVehicle ? cleanId.replace('VH-', '') : cleanId;
-                const url = `/api/solicitudes/seguridad/${cleanId}`;
+    try {
+        console.log('Iniciando verDetalles con ID:', id);
+        const cleanId = id.trim().toUpperCase();
+        const isVehicle = cleanId.startsWith('VH-');
+        const searchId = isVehicle ? cleanId.replace('VH-', '') : cleanId;
+        const url = `/api/solicitudes/seguridad/${cleanId}`;
 
-                if (navigator.onLine) {
-                    console.log('Conexión en línea, realizando búsqueda en servidor');
-                    const response = await fetch(url)
-                        .catch(error => {
-                            console.error('Error de red:', error);
-                            throw new Error('No se pudo conectar al servidor. Usando datos en caché.');
-                        });
+        if (navigator.onLine) {
+            const response = await fetch(url).catch(error => {
+                console.error('Error de red:', error);
+                throw new Error('No se pudo conectar al servidor. Usando datos en caché.');
+            });
 
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error('Error en la respuesta del servidor:', errorData);
-                        Swal.fire({ 
-                            icon: 'error', 
-                            title: 'No encontrado', 
-                            text: errorData.message || 'No se ha encontrado registro de este colaborador o vehículo.' 
-                        });
-                        return;
-                    }
+            if (!response.ok) {
+                const errorData = await response.json();
+                Swal.fire({ 
+                    icon: 'error', 
+                    title: 'No encontrado', 
+                    text: errorData.message || 'No se ha encontrado registro de este colaborador o vehículo.' 
+                });
+                return;
+            }
 
-                    const data = await response.json();
-                    console.log('Datos recibidos del servidor:', {
-                        id: data.id,
-                        nombre_lugar: data.nombre_lugar,
-                        inicio_obra: data.inicio_obra,
-                        fin_obra: data.fin_obra,
-                        colaboradores: data.colaboradores?.length,
-                        vehiculos: data.vehiculos?.length
-                    });
-
-                    if (!data) {
-                        console.error('No se recibieron datos válidos del servidor');
-                        Swal.fire({ 
-                            icon: 'error', 
-                            title: 'Error', 
-                            text: 'No se recibieron datos válidos del servidor.' 
-                        });
-                        return;
-                    }
-
-                    // Guardar en IndexedDB
-                    const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
-                    const solicitudesStore = transaction.objectStore('solicitudes');
-                    const colaboradoresStore = transaction.objectStore('colaboradores');
-                    const vehiculosStore = transaction.objectStore('vehiculos');
-
-                    const solicitudData = {
-                        id: data.id,
-                        empresa: data.empresa,
-                        nit: data.nit,
-                        estado: data.estado,
-                        interventor: data.interventor,
-                        lugar: data.lugar,
-                        nombre_lugar: data.nombre_lugar,
-                        inicio_obra: data.inicio_obra,
-                        fin_obra: data.fin_obra,
-                        labor: data.labor,
-                        estado_actual: data.estado_actual,
-                        mensajeCursoSiso: data.mensajeCursoSiso,
-                        mensajePlantillaSS: data.mensajePlantillaSS,
-                        mensajeVehiculos: data.mensajeVehiculos,
-                        timestamp: new Date().toISOString()
-                    };
-                    await solicitudesStore.put(solicitudData);
-
-                    if (data.colaboradores) {
-                        for (const colaborador of data.colaboradores) {
-                            await colaboradoresStore.put({
-                                id: colaborador.id,
-                                nombre: colaborador.nombre,
-                                cedula: colaborador.cedula,
-                                foto: colaborador.foto,
-                                estado: colaborador.estado,
-                                cursoSiso: colaborador.cursoSiso,
-                                curso_siso_estado: colaborador.curso_siso_estado,
-                                curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
-                                plantillaSS: colaborador.plantillaSS,
-                                plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
-                                plantilla_ss_fin: colaborador.plantilla_ss_fin,
-                                solicitudId: data.id,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }
-
-                    if (data.vehiculos) {
-                        for (const vehiculo of data.vehiculos) {
-                            await vehiculosStore.put({
-                                id: vehiculo.id,
-                                matricula: vehiculo.matricula,
-                                foto: vehiculo.foto,
-                                estado: vehiculo.estado,
-                                soat_inicio: vehiculo.soat_inicio,
-                                soat_fin: vehiculo.soat_fin,
-                                tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
-                                tecnomecanica_fin: vehiculo.tecnomecanica_fin,
-                                licencia_conduccion: vehiculo.licencia_conduccion,
-                                licencia_transito: vehiculo.licencia_transito,
-                                estado_soat: vehiculo.estado_soat,
-                                estado_tecnomecanica: vehiculo.estado_tecnomecanica,
-                                mensajesAdvertencia: vehiculo.mensajesAdvertencia,
-                                solicitudId: data.id,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }
-
-                    llenarModal(data, cleanId, isVehicle);
-                } else {
-                    console.log('Sin conexión, buscando en caché');
-                    const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readonly');
-                    const colaboradoresStore = transaction.objectStore('colaboradores');
-                    const vehiculosStore = transaction.objectStore('vehiculos');
-                    const solicitudesStore = transaction.objectStore('solicitudes');
-
-                    let item, solicitudId;
-                    if (isVehicle) {
-                        const vehiculoRequest = vehiculosStore.get(Number(searchId));
-                        item = await new Promise(resolve => {
-                            vehiculoRequest.onsuccess = () => resolve(vehiculoRequest.result);
-                            vehiculoRequest.onerror = () => resolve(null);
-                        });
-                    } else {
-                        const colaboradorRequest = colaboradoresStore.get(Number(searchId));
-                        item = await new Promise(resolve => {
-                            colaboradorRequest.onsuccess = () => resolve(colaboradorRequest.result);
-                            colaboradorRequest.onerror = () => resolve(null);
-                        });
-                    }
-
-                    if (!item) {
-                        console.log('No se encontró colaborador o vehículo en caché para ID:', cleanId);
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Sin Conexión',
-                            text: 'No se encontraron datos en caché para este colaborador o vehículo.'
-                        });
-                        return;
-                    }
-
-                    solicitudId = item.solicitudId;
-                    const solicitudRequest = solicitudesStore.get(solicitudId);
-                    const solicitud = await new Promise(resolve => {
-                        solicitudRequest.onsuccess = () => resolve(solicitudRequest.result);
-                        solicitudRequest.onerror = () => resolve(null);
-                    });
-
-                    if (!solicitud) {
-                        console.log('No se encontraron detalles de la solicitud en caché para ID:', solicitudId);
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Sin Conexión',
-                            text: 'No se encontraron detalles de la solicitud en caché.'
-                        });
-                        return;
-                    }
-
-                    // Obtener todos los colaboradores de la solicitud
-                    const colaboradoresIndex = colaboradoresStore.index('solicitudId');
-                    const colaboradoresRequest = colaboradoresIndex.getAll(solicitudId);
-                    const colaboradores = await new Promise(resolve => {
-                        colaboradoresRequest.onsuccess = () => resolve(colaboradoresRequest.result);
-                        colaboradoresRequest.onerror = () => resolve([]);
-                    });
-
-                    // Obtener todos los vehículos de la solicitud
-                    const vehiculosIndex = vehiculosStore.index('solicitudId');
-                    const vehiculosRequest = vehiculosIndex.getAll(solicitudId);
-                    const vehiculos = await new Promise(resolve => {
-                        vehiculosRequest.onsuccess = () => resolve(vehiculosRequest.result);
-                        vehiculosRequest.onerror = () => resolve([]);
-                    });
-
-                    // Construir objeto completo para el modal
-                    const detalles = {
-                        ...solicitud,
-                        colaboradores,
-                        vehiculos
-                    };
-
-                    console.log('Detalles preparados para mostrar:', {
-                        itemId: cleanId,
-                        solicitudId: detalles.id,
-                        nombre_lugar: detalles.nombre_lugar,
-                        inicio_obra: detalles.inicio_obra,
-                        fin_obra: detalles.fin_obra,
-                        colaboradores: detalles.colaboradores.length,
-                        vehiculos: detalles.vehiculos.length,
-                        mensajeCursoSiso: detalles.mensajeCursoSiso,
-                        mensajePlantillaSS: detalles.mensajePlantillaSS,
-                        mensajeVehiculos: detalles.mensajeVehiculos
-                    });
-
-                    llenarModal(detalles, cleanId, isVehicle);
-                }
-            } catch (error) {
-                console.error('Error al obtener detalles:', error);
+            const data = await response.json();
+            if (!data) {
                 Swal.fire({ 
                     icon: 'error', 
                     title: 'Error', 
-                    text: error.message || 'Ocurrió un error al obtener los detalles. Por favor, intenta nuevamente.' 
+                    text: 'No se recibieron datos válidos del servidor.' 
+                });
+                return;
+            }
+
+            // Guardar en IndexedDB
+            const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
+            const solicitudesStore = transaction.objectStore('solicitudes');
+            const colaboradoresStore = transaction.objectStore('colaboradores');
+            const vehiculosStore = transaction.objectStore('vehiculos');
+
+            const solicitudData = {
+                id: data.id,
+                empresa: data.empresa,
+                nit: data.nit,
+                estado: data.estado,
+                interventor: data.interventor,
+                lugar: data.lugar,
+                nombre_lugar: data.nombre_lugar,
+                inicio_obra: data.inicio_obra,
+                fin_obra: data.fin_obra,
+                labor: data.labor,
+                estado_actual: data.estado_actual,
+                advertencia: data.advertencia,
+                mensajeCursoSiso: data.mensajeCursoSiso,
+                mensajePlantillaSS: data.mensajePlantillaSS,
+                mensajeVehiculos: data.mensajeVehiculos,
+                timestamp: new Date().toISOString()
+            };
+            await solicitudesStore.put(solicitudData);
+
+            if (data.colaboradores) {
+                for (const colaborador of data.colaboradores) {
+                    await colaboradoresStore.put({
+                        id: colaborador.id,
+                        nombre: colaborador.nombre,
+                        cedula: colaborador.cedula,
+                        foto: colaborador.foto,
+                        cedulaFoto: colaborador.cedulaFoto,
+                        estado: colaborador.estado,
+                        cursoSiso: colaborador.cursoSiso,
+                        curso_siso_estado: colaborador.curso_siso_estado,
+                        curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
+                        plantillaSS: colaborador.plantillaSS,
+                        plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
+                        plantilla_ss_fin: colaborador.plantilla_ss_fin,
+                        mensajeCursoSiso: colaborador.mensajeCursoSiso,
+                        mensajePlantillaSS: colaborador.mensajePlantillaSS,
+                        solicitudId: data.id,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+
+            if (data.vehiculos) {
+                for (const vehiculo of data.vehiculos) {
+                    await vehiculosStore.put({
+                        id: vehiculo.id,
+                        matricula: vehiculo.matricula,
+                        foto: vehiculo.foto,
+                        estado: vehiculo.estado,
+                        soat_inicio: vehiculo.soat_inicio,
+                        soat_fin: vehiculo.soat_fin,
+                        tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
+                        tecnomecanica_fin: vehiculo.tecnomecanica_fin,
+                        licencia_conduccion: vehiculo.licencia_conduccion,
+                        licencia_transito: vehiculo.licencia_transito,
+                        estado_soat: vehiculo.estado_soat,
+                        estado_tecnomecanica: vehiculo.estado_tecnomecanica,
+                        mensajesAdvertencia: vehiculo.mensajesAdvertencia,
+                        solicitudId: data.id,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+
+            // Filtrar datos para el modal
+            const detalles = {
+                ...data,
+                colaboradores: isVehicle ? [] : data.colaboradores.filter(c => c.id.toString() === searchId),
+                vehiculos: isVehicle ? data.vehiculos.filter(v => v.id.toString() === searchId) : [],
+                mensajeVehiculos: isVehicle ? data.mensajeVehiculos : null // Excluir mensajeVehiculos para colaboradores
+            };
+
+            llenarModal(detalles, cleanId, isVehicle);
+        } else {
+            console.log('Sin conexión, buscando en caché');
+            const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readonly');
+            const colaboradoresStore = transaction.objectStore('colaboradores');
+            const vehiculosStore = transaction.objectStore('vehiculos');
+            const solicitudesStore = transaction.objectStore('solicitudes');
+
+            let item, solicitudId;
+            if (isVehicle) {
+                const vehiculoRequest = vehiculosStore.get(Number(searchId));
+                item = await new Promise(resolve => {
+                    vehiculoRequest.onsuccess = () => resolve(vehiculoRequest.result);
+                    vehiculoRequest.onerror = () => resolve(null);
+                });
+            } else {
+                const colaboradorRequest = colaboradoresStore.get(Number(searchId));
+                item = await new Promise(resolve => {
+                    colaboradorRequest.onsuccess = () => resolve(colaboradorRequest.result);
+                    colaboradorRequest.onerror = () => resolve(null);
                 });
             }
+
+            if (!item) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin Conexión',
+                    text: 'No se encontraron datos en caché para este colaborador o vehículo.'
+                });
+                return;
+            }
+
+            solicitudId = item.solicitudId;
+            const solicitudRequest = solicitudesStore.get(solicitudId);
+            const solicitud = await new Promise(resolve => {
+                solicitudRequest.onsuccess = () => resolve(solicitudRequest.result);
+                solicitudRequest.onerror = () => resolve(null);
+            });
+
+            if (!solicitud) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin Conexión',
+                    text: 'No se encontraron detalles de la solicitud en caché.'
+                });
+                return;
+            }
+
+            // Obtener todos los colaboradores de la solicitud
+            const colaboradoresIndex = colaboradoresStore.index('solicitudId');
+            const colaboradoresRequest = colaboradoresIndex.getAll(solicitudId);
+            const colaboradores = await new Promise(resolve => {
+                colaboradoresRequest.onsuccess = () => resolve(colaboradoresRequest.result);
+                colaboradoresRequest.onerror = () => resolve([]);
+            });
+
+            // Obtener todos los vehículos de la solicitud
+            const vehiculosIndex = vehiculosStore.index('solicitudId');
+            const vehiculosRequest = vehiculosIndex.getAll(solicitudId);
+            const vehiculos = await new Promise(resolve => {
+                vehiculosRequest.onsuccess = () => resolve(vehiculosRequest.result);
+                vehiculosRequest.onerror = () => resolve([]);
+            });
+
+            // Construir objeto completo para el modal
+            const detalles = {
+                ...solicitud,
+                colaboradores: isVehicle ? [] : colaboradores.filter(c => c.id.toString() === searchId),
+                vehiculos: isVehicle ? vehiculos.filter(v => v.id.toString() === searchId) : [],
+                mensajeVehiculos: isVehicle ? solicitud.mensajeVehiculos : null // Excluir mensajeVehiculos para colaboradores
+            };
+
+            llenarModal(detalles, cleanId, isVehicle);
         }
+    } catch (error) {
+        console.error('Error al obtener detalles:', error);
+        Swal.fire({ 
+            icon: 'error', 
+            title: 'Error', 
+            text: error.message || 'Ocurrió un error al obtener los detalles. Por favor, intenta nuevamente.' 
+        });
+    }
+}
 
         function buscar() {
             const id = document.getElementById('buscarId').value.trim();
