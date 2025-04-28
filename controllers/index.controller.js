@@ -141,7 +141,7 @@ controllers.appLogin = async (req, res) => {
                 id: user.id, 
                 username: user.username, 
                 role: 'seguridad',
-                exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 horas
+                exp: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60) // 30 días
             },
             SECRET_KEY
         );
