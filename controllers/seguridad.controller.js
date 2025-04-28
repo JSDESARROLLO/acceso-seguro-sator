@@ -1180,6 +1180,7 @@ controller.registrarIngreso = async (req, res) => {
     }
 };
 
+
 controller.getSolicitudesActivas = async (req, res) => {
     try {
         const token = req.cookies.token;
@@ -1197,7 +1198,7 @@ controller.getSolicitudesActivas = async (req, res) => {
 
         const { id } = decoded;
 
-        // Consulta para solicitudes activas
+        // Consulta corregida
         console.log('Ejecutando consulta de solicitudes activas para usuario ID:', id);
         const [solicitudes] = await connection.execute(`
             SELECT 
@@ -1208,13 +1209,13 @@ controller.getSolicitudesActivas = async (req, res) => {
                 us.username AS interventor, 
                 s.lugar,
                 l.nombre_lugar,
-                COALESCE(DATE_FORMAT(s.inicio_obra, '%d/%m/%Y'), 'N/A') AS inicio_obra,
-                COALESCE(DATE_FORMAT(s.fin_obra, '%d/%m/%Y'), 'N/A') AS fin_obra,
+                DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') AS inicio_obra,
+                DATE_FORMAT(s.fin_obra, '%d/%m/%Y') AS fin_obra,
                 s.labor,
                 CASE
-                    WHEN s.estado = 'aprobada' AND s.fin_obra IS NOT NULL AND CURDATE() > s.fin_obra THEN 'pendiente ingreso - vencido'
+                    WHEN s.estado = 'aprobada' AND CURDATE() > s.fin_obra THEN 'pendiente ingreso - vencido'
                     WHEN s.estado = 'aprobada' THEN 'pendiente ingreso'
-                    WHEN s.estado = 'en labor' AND s.fin_obra IS NOT NULL AND CURDATE() > s.fin_obra THEN 'en labor - vencida'
+                    WHEN s.estado = 'en labor' AND CURDATE() > s.fin_obra THEN 'en labor - vencida'
                     WHEN s.estado = 'en labor' THEN 'en labor'
                     WHEN s.estado = 'labor detenida' THEN 'labor detenida'
                     ELSE s.estado
@@ -1227,24 +1228,27 @@ controller.getSolicitudesActivas = async (req, res) => {
                 users us ON us.id = s.interventor_id
             JOIN 
                 lugares l ON s.lugar = l.id
-            JOIN 
-                users seguridad ON seguridad.username = l.nombre_lugar
             WHERE 
                 s.estado IN ('aprobada', 'en labor', 'labor detenida')
                 AND a.accion = 'aprobada'
-                AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
-                AND seguridad.id = ?
+                AND EXISTS (
+                    SELECT 1 
+                    FROM users seguridad 
+                    WHERE seguridad.id = ? 
+                    AND seguridad.role_id = (SELECT id FROM roles WHERE role_name = 'seguridad')
+                )
             ORDER BY 
                 s.id DESC;
         `, [id]);
         console.log('Solicitudes obtenidas:', solicitudes.length, solicitudes.map(s => ({
             id: s.id,
             empresa: s.empresa,
-            lugar: s.nombre_lugar,
-            labor: s.labor,
-            estado: s.estado_actual,
+            lugar: s.lugar,
+            nombre_lugar: s.nombre_lugar,
             inicio_obra: s.inicio_obra,
-            fin_obra: s.fin_obra
+            fin_obra: s.fin_obra,
+            labor: s.labor,
+            estado: s.estado_actual
         })));
 
         // Procesar cada solicitud
@@ -1268,9 +1272,9 @@ controller.getSolicitudesActivas = async (req, res) => {
                     c.foto,
                     c.estado,
                     MAX(rc.estado) AS curso_siso_estado,
-                    COALESCE(DATE_FORMAT(MAX(rc.fecha_vencimiento), '%d/%m/%Y'), 'N/A') AS curso_siso_vencimiento,
-                    COALESCE(DATE_FORMAT(MAX(pss.fecha_inicio), '%d/%m/%Y'), 'N/A') AS plantilla_ss_inicio,
-                    COALESCE(DATE_FORMAT(MAX(pss.fecha_fin), '%d/%m/%Y'), 'N/A') AS plantilla_ss_fin,
+                    MAX(rc.fecha_vencimiento) AS curso_siso_vencimiento,
+                    MAX(pss.fecha_inicio) AS plantilla_ss_inicio,
+                    MAX(pss.fecha_fin) AS plantilla_ss_fin,
                     CASE
                         WHEN MAX(rc.estado) IS NULL THEN 'No'
                         WHEN MAX(rc.estado) = 'APROBADO' AND MAX(rc.fecha_vencimiento) < CURDATE() THEN 'Vencido'
@@ -1287,20 +1291,10 @@ controller.getSolicitudesActivas = async (req, res) => {
                 LEFT JOIN resultados_capacitaciones rc ON c.id = rc.colaborador_id
                 LEFT JOIN capacitaciones cap ON rc.capacitacion_id = cap.id AND cap.nombre = 'Curso SISO'
                 LEFT JOIN plantilla_seguridad_social pss ON c.id = pss.colaborador_id
-                WHERE 
-                    c.solicitud_id = ?
+                WHERE c.solicitud_id = ?
                 GROUP BY c.id, c.nombre, c.cedula, c.foto, c.estado
             `, [solicitud.id]);
-            console.log(`Colaboradores para solicitud ${solicitud.id}:`, colaboradores.length, colaboradores.map(c => ({
-                id: c.id,
-                nombre: c.nombre,
-                cedula: c.cedula,
-                cursoSiso: c.cursoSiso,
-                plantillaSS: c.plantillaSS,
-                curso_siso_vencimiento: c.curso_siso_vencimiento,
-                plantilla_ss_inicio: c.plantilla_ss_inicio,
-                plantilla_ss_fin: c.plantilla_ss_fin
-            })));
+            console.log(`Colaboradores para solicitud ${solicitud.id}:`, colaboradores.length);
 
             // Verificar vehículos
             const [vehiculosCheck] = await connection.execute(`
@@ -1317,10 +1311,10 @@ controller.getSolicitudesActivas = async (req, res) => {
                     v.matricula,
                     v.foto,
                     v.estado,
-                    COALESCE(DATE_FORMAT(MAX(pdv_soat.fecha_inicio), '%d/%m/%Y'), 'N/A') AS soat_inicio,
-                    COALESCE(DATE_FORMAT(MAX(pdv_soat.fecha_fin), '%d/%m/%Y'), 'N/A') AS soat_fin,
-                    COALESCE(DATE_FORMAT(MAX(pdv_tecno.fecha_inicio), '%d/%m/%Y'), 'N/A') AS tecnomecanica_inicio,
-                    COALESCE(DATE_FORMAT(MAX(pdv_tecno.fecha_fin), '%d/%m/%Y'), 'N/A') AS tecnomecanica_fin,
+                    MAX(pdv_soat.fecha_inicio) AS soat_inicio,
+                    MAX(pdv_soat.fecha_fin) AS soat_fin,
+                    MAX(pdv_tecno.fecha_inicio) AS tecnomecanica_inicio,
+                    MAX(pdv_tecno.fecha_fin) AS tecnomecanica_fin,
                     MAX(lv_conduccion.estado) AS licencia_conduccion,
                     MAX(lv_transito.estado) AS licencia_transito,
                     CASE
@@ -1345,18 +1339,7 @@ controller.getSolicitudesActivas = async (req, res) => {
                     v.solicitud_id = ?
                 GROUP BY v.id, v.matricula, v.foto, v.estado
             `, [solicitud.id]);
-            console.log(`Vehículos para solicitud ${solicitud.id}:`, vehiculos.length, vehiculos.map(v => ({
-                id: v.id,
-                matricula: v.matricula,
-                soat_inicio: v.soat_inicio,
-                soat_fin: v.soat_fin,
-                tecnomecanica_inicio: v.tecnomecanica_inicio,
-                tecnomecanica_fin: v.tecnomecanica_fin,
-                estado_soat: v.estado_soat,
-                estado_tecnomecanica: v.estado_tecnomecanica,
-                licencia_conduccion: v.licencia_conduccion,
-                licencia_transito: v.licencia_transito
-            })));
+            console.log(`Vehículos para solicitud ${solicitud.id}:`, vehiculos.length);
 
             // Agregar mensajes de advertencia para vehículos
             vehiculos.forEach(vehiculo => {
@@ -1373,9 +1356,6 @@ controller.getSolicitudesActivas = async (req, res) => {
                 if (!vehiculo.licencia_transito || vehiculo.licencia_transito !== '1') {
                     vehiculo.mensajesAdvertencia.push('Licencia de tránsito no aprobada');
                 }
-                if (vehiculo.mensajesAdvertencia.length > 0) {
-                    console.log(`Advertencias para vehículo ${vehiculo.matricula}:`, vehiculo.mensajesAdvertencia);
-                }
             });
 
             // Agregar colaboradores y vehículos a la solicitud
@@ -1389,15 +1369,12 @@ controller.getSolicitudesActivas = async (req, res) => {
 
             if (cursoSisoProblema) {
                 solicitud.mensajeCursoSiso = 'Hay colaboradores con curso SISO vencido o no aprobado';
-                console.log(`Solicitud ${solicitud.id}: Curso SISO problema detectado`);
             }
             if (plantillaSSProblema) {
                 solicitud.mensajePlantillaSS = 'Hay colaboradores con plantilla SS vencida o no definida';
-                console.log(`Solicitud ${solicitud.id}: Plantilla SS problema detectado`);
             }
             if (vehiculosProblema) {
                 solicitud.mensajeVehiculos = 'Hay vehículos con documentos vencidos o no aprobados';
-                console.log(`Solicitud ${solicitud.id}: Vehículos con problemas detectados`);
             }
         }
 
