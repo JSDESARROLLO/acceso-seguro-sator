@@ -5,6 +5,7 @@ const urlsToCache = [
     '/vista-seguridad',
     '/css/styles.css',
     '/js/sw.js',
+    '/js/cdn.tailwindcss.com3.4.16.js',
     'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
     'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
     'https://cdn.jsdelivr.net/npm/sweetalert2@11',
