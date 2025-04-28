@@ -88,7 +88,10 @@ const s3Client = new S3Client({
 app.use(cors({
   origin: function(origin, callback) {
     // Permitir solicitudes sin origen (como mobile apps o curl)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log('🔍 CORS: Solicitud sin origen (probablemente mobile app)');
+      return callback(null, true);
+    }
     
     // Lista de orígenes permitidos
     const allowedOrigins = [
@@ -98,24 +101,66 @@ app.use(cors({
       'ionic://localhost'       // Para aplicaciones móviles con Ionic
     ];
     
+    console.log('🔍 CORS: Verificando origen:', {
+      origen: origin,
+      allowedOrigins: allowedOrigins,
+      DOMAIN_URL: process.env.DOMAIN_URL,
+      NODE_ENV: process.env.NODE_ENV
+    });
+    
     // Verificar si el origen está en la lista de permitidos
     if (allowedOrigins.includes(origin)) {
+      console.log('✅ CORS: Origen permitido:', origin);
       callback(null, true);
     } else {
       // En producción, también permitir subdominios del dominio principal
       if (process.env.NODE_ENV === 'production' && 
           process.env.DOMAIN_URL && 
           origin.endsWith(new URL(process.env.DOMAIN_URL).hostname)) {
+        console.log('✅ CORS: Subdominio permitido:', origin);
         callback(null, true);
       } else {
-        callback(new Error('Origen no permitido por CORS'));
+        console.error('❌ CORS: Origen no permitido:', {
+          origin: origin,
+          allowedOrigins: allowedOrigins,
+          DOMAIN_URL: process.env.DOMAIN_URL,
+          NODE_ENV: process.env.NODE_ENV
+        });
+        callback(new Error(`Origen no permitido por CORS: ${origin}`));
       }
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
+
+// Middleware para logging de errores CORS
+app.use((err, req, res, next) => {
+  if (err.message.includes('CORS')) {
+    console.error('❌ Error CORS:', {
+      error: err.message,
+      origin: req.headers.origin,
+      method: req.method,
+      url: req.url,
+      headers: req.headers
+    });
+    res.status(403).json({
+      error: 'Error de CORS',
+      message: err.message,
+      origin: req.headers.origin,
+      allowedOrigins: [
+        'http://localhost:8100',
+        process.env.DOMAIN_URL,
+        'capacitor://localhost',
+        'ionic://localhost'
+      ]
+    });
+  } else {
+    next(err);
+  }
+});
 
 // Middleware
 app.use(express.json());
