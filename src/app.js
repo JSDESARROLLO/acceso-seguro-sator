@@ -195,6 +195,13 @@ app.use('/', uploadRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api', solicitudRoutes);
 
+// Importar rutas de seguridad móvil
+const seguridadAppMovilRoutes = require('../routes/seguridad-app-movil.routes');
+
+// Usar rutas de seguridad móvil
+app.use('/seguridad-app', seguridadAppMovilRoutes); 
+
+
 // Ruta para servir archivos desde DigitalOcean Spaces
 app.get('/spaces/:key', async (req, res) => {
   const { key } = req.params;
