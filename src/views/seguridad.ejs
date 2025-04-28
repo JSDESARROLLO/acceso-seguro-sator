@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Seguridad</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#000000">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -27,9 +29,29 @@
         #pendingActionsTable th { background-color: #f8f9fa; }
         #pendingActionsTable tr:nth-child(even) { background-color: #f2f2f2; }
         .highlight-card { border: 2px solid #007bff; background-color: #e7f1ff; }
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #ffc107;
+            color: #000;
+            text-align: center;
+            padding: 10px;
+            z-index: 9999;
+            display: none;
+        }
+        .offline-banner.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
+    <!-- Banner de estado offline -->
+    <div id="offlineBanner" class="offline-banner">
+        Estás trabajando en modo offline. Las acciones se guardarán localmente.
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="hidden">
         <h2>Cargando datos...</h2>
@@ -58,6 +80,7 @@
         <div class="mb-4 d-flex justify-content-start gap-3">
             <button class="btn btn-primary" onclick="cargarTodosLosRegistros()">Cargar Datos Online</button>
             <button class="btn btn-success" onclick="syncPendingActions()">Sincronizar Datos</button>
+            <button class="btn btn-warning" onclick="limpiarCache()">Limpiar Caché</button>
         </div>
 
         <!-- Buscador -->
@@ -705,17 +728,43 @@
             inicializarSelectoresHora();
             configurarModalConfirmacion();
 
+            // Verificar si el Service Worker está registrado
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/js/sw.js')
-                    .then(registration => {
-                        console.log('Service Worker registrado con éxito:', registration.scope);
-                        return registration.update();
-                    })
-                    .catch(error => {
-                        console.error('Error al registrar el Service Worker:', error);
-                    });
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/js/sw.js')
+                        .then(registration => {
+                            console.log('Service Worker registrado con éxito:', registration.scope);
+                            
+                            // Verificar si hay una nueva versión del Service Worker
+                            registration.addEventListener('updatefound', () => {
+                                const newWorker = registration.installing;
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        // Hay una nueva versión disponible
+                                        Swal.fire({
+                                            title: 'Nueva versión disponible',
+                                            text: 'Hay una nueva versión de la aplicación. ¿Deseas actualizar?',
+                                            icon: 'info',
+                                            showCancelButton: true,
+                                            confirmButtonText: 'Actualizar',
+                                            cancelButtonText: 'Más tarde'
+                                        }).then((result) => {
+                                            if (result.isConfirmed) {
+                                                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                                window.location.reload();
+                                            }
+                                        });
+                                    }
+                                });
+                            });
+                        })
+                        .catch(error => {
+                            console.error('Error al registrar el Service Worker:', error);
+                        });
+                });
             }
 
+            // Manejar cambios en la conexión
             window.addEventListener('online', () => {
                 console.log('Conexión restaurada.');
                 Swal.fire({
@@ -733,6 +782,23 @@
                     text: 'Las acciones se guardarán localmente y se sincronizarán cuando haya conexión.'
                 });
             });
+
+            // Función para verificar el estado de la conexión
+            function verificarConexion() {
+                if (!navigator.onLine) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Sin Conexión',
+                        text: 'Estás trabajando en modo offline. Las acciones se guardarán localmente.'
+                    });
+                }
+            }
+
+            // Verificar conexión al cargar la página
+            verificarConexion();
+
+            // Función para actualizar el banner de estado offline
+            updateOfflineBanner();
         });
 
         function inicializarSelectoresHora() {
@@ -1077,15 +1143,6 @@
 
         // Function to load all records
         async function cargarTodosLosRegistros() {
-            if (!navigator.onLine) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Sin Conexión',
-                    text: 'No hay conexión a internet. Por favor, intenta de nuevo cuando estés en línea.'
-                });
-                return;
-            }
-
             const loadingOverlay = document.getElementById('loadingOverlay');
             const progressFill = document.getElementById('progressFill');
             const loadingMessage = document.getElementById('loadingMessage');
@@ -1096,7 +1153,12 @@
 
             try {
                 console.log('Cargando todos los registros...');
-                const response = await fetch('/api/solicitudes/seguridad_activas');
+                const response = await fetch('/api/solicitudes/seguridad_activas')
+                    .catch(error => {
+                        console.error('Error de red:', error);
+                        throw new Error('No se pudo conectar al servidor. Usando datos en caché.');
+                    });
+
                 if (!response.ok) {
                     throw new Error(`Error al cargar los registros: ${response.statusText}`);
                 }
@@ -1241,7 +1303,12 @@
 
                 if (navigator.onLine) {
                     console.log('Conexión en línea, realizando búsqueda en servidor');
-                    const response = await fetch(url);
+                    const response = await fetch(url)
+                        .catch(error => {
+                            console.error('Error de red:', error);
+                            throw new Error('No se pudo conectar al servidor. Usando datos en caché.');
+                        });
+
                     if (!response.ok) {
                         const errorData = await response.json();
                         console.error('Error en la respuesta del servidor:', errorData);
@@ -1433,7 +1500,7 @@
                 Swal.fire({ 
                     icon: 'error', 
                     title: 'Error', 
-                    text: 'Ocurrió un error al obtener los detalles. Por favor, intenta nuevamente.' 
+                    text: error.message || 'Ocurrió un error al obtener los detalles. Por favor, intenta nuevamente.' 
                 });
             }
         }
@@ -1493,6 +1560,64 @@
                     icon: 'error',
                     title: 'Error',
                     text: error.message || 'Error al registrar el ingreso'
+                });
+            }
+        }
+
+        // Función para actualizar el banner de estado offline
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offlineBanner');
+            if (!navigator.onLine) {
+                banner.classList.add('show');
+            } else {
+                banner.classList.remove('show');
+            }
+        }
+
+        // Función para limpiar la caché
+        async function limpiarCache() {
+            try {
+                // Limpiar IndexedDB
+                const dbNames = ['SeguridadDB'];
+                for (const dbName of dbNames) {
+                    await new Promise((resolve, reject) => {
+                        const request = indexedDB.deleteDatabase(dbName);
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                    });
+                }
+
+                // Limpiar caché del Service Worker
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(
+                        cacheNames.map(cacheName => caches.delete(cacheName))
+                    );
+                }
+
+                // Desregistrar Service Worker
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                    }
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Caché Limpiada',
+                    text: 'La caché ha sido limpiada exitosamente. La página se recargará.',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload(true);
+                });
+            } catch (error) {
+                console.error('Error al limpiar la caché:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Hubo un problema al limpiar la caché.'
                 });
             }
         }
