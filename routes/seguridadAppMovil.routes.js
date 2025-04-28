@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const controller = require('../controllers/seguridad-app-movil.controller');
+const controller = require('../controllers/seguridadAppMovil.controller');
 const router = express.Router();
 
 // Middleware de autenticación y autorización
@@ -46,6 +46,6 @@ router
   .post('/solicitudes/:id/salida-vehiculo', controller.registrarSalidaVehiculo)
   .get('/solicitudes/:id/historial', controller.obtenerHistorialRegistros);
 
-console.info(`[${new Date().toISOString()}] Rutas de seguridad-app-movil inicializadas`);
+console.info(`[${new Date().toISOString()}] Rutas de seguridadAppMovil.controller inicializadas`);
 
 module.exports = router;
