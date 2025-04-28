@@ -154,21 +154,16 @@ controllers.appLogin = async (req, res) => {
             sameSite: 'none' // Permitir cross-site cookies
         });
 
-        // Obtener información adicional del usuario
-        const [userDetails] = await connection.execute(
-            'SELECT id, username, role_id, email, created_at FROM users WHERE id = ?',
-            [user.id]
-        );
-
         return res.status(200).json({
             success: true,
             token: token,
             user: {
-                id: userDetails[0].id,
-                username: userDetails[0].username,
+                id: user.id,
+                username: user.username,
                 role: 'seguridad',
-                email: userDetails[0].email,
-                created_at: userDetails[0].created_at
+                email: user.email,
+                empresa: user.empresa,
+                nit: user.nit
             }
         });
         
