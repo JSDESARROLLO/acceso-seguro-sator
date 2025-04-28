@@ -86,9 +86,35 @@ const s3Client = new S3Client({
 
 // Configuración de CORS
 app.use(cors({
-  origin: process.env.DOMAIN_URL || '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: function(origin, callback) {
+    // Permitir solicitudes sin origen (como mobile apps o curl)
+    if (!origin) return callback(null, true);
+    
+    // Lista de orígenes permitidos
+    const allowedOrigins = [
+      'http://localhost:8100',  // Desarrollo local
+      process.env.DOMAIN_URL,   // URL de producción
+      'capacitor://localhost',  // Para aplicaciones móviles con Capacitor
+      'ionic://localhost'       // Para aplicaciones móviles con Ionic
+    ];
+    
+    // Verificar si el origen está en la lista de permitidos
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // En producción, también permitir subdominios del dominio principal
+      if (process.env.NODE_ENV === 'production' && 
+          process.env.DOMAIN_URL && 
+          origin.endsWith(new URL(process.env.DOMAIN_URL).hostname)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Origen no permitido por CORS'));
+      }
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: true
 }));
 
 // Middleware
