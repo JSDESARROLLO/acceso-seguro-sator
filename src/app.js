@@ -113,21 +113,29 @@ app.use(cors({
       console.log('✅ CORS: Origen permitido:', origin);
       callback(null, true);
     } else {
-      // En producción, también permitir subdominios del dominio principal
-      if (process.env.NODE_ENV === 'production' && 
-          process.env.DOMAIN_URL && 
-          origin.endsWith(new URL(process.env.DOMAIN_URL).hostname)) {
-        console.log('✅ CORS: Subdominio permitido:', origin);
-        callback(null, true);
-      } else {
-        console.error('❌ CORS: Origen no permitido:', {
-          origin: origin,
-          allowedOrigins: allowedOrigins,
-          DOMAIN_URL: process.env.DOMAIN_URL,
-          NODE_ENV: process.env.NODE_ENV
-        });
-        callback(new Error(`Origen no permitido por CORS: ${origin}`));
+      // En producción, permitir tanto el dominio con www como sin www
+      if (process.env.NODE_ENV === 'production' && process.env.DOMAIN_URL) {
+        const domainUrl = new URL(process.env.DOMAIN_URL);
+        const domainHostname = domainUrl.hostname;
+        const originHostname = new URL(origin).hostname;
+        
+        // Permitir tanto el dominio con www como sin www
+        if (originHostname === domainHostname || 
+            originHostname === `www.${domainHostname}` || 
+            `www.${originHostname}` === domainHostname) {
+          console.log('✅ CORS: Dominio permitido:', origin);
+          callback(null, true);
+          return;
+        }
       }
+      
+      console.error('❌ CORS: Origen no permitido:', {
+        origin: origin,
+        allowedOrigins: allowedOrigins,
+        DOMAIN_URL: process.env.DOMAIN_URL,
+        NODE_ENV: process.env.NODE_ENV
+      });
+      callback(new Error(`Origen no permitido por CORS: ${origin}`));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
