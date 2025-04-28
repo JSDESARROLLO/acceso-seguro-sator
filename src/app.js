@@ -83,61 +83,9 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.DO_SPACES_SECRET
   }
 });
-
-// Configuración de CORS
+// Configuración de CORS simplificada
 app.use(cors({
-  origin: function(origin, callback) {
-    // Permitir solicitudes sin origen (como mobile apps o curl)
-    if (!origin) {
-      console.log('🔍 CORS: Solicitud sin origen (probablemente mobile app)');
-      return callback(null, true);
-    }
-    
-    // Lista de orígenes permitidos
-    const allowedOrigins = [
-      'http://localhost:8100',  // Desarrollo local
-      process.env.DOMAIN_URL,   // URL de producción
-      'capacitor://localhost',  // Para aplicaciones móviles con Capacitor
-      'ionic://localhost'       // Para aplicaciones móviles con Ionic
-    ];
-    
-    console.log('🔍 CORS: Verificando origen:', {
-      origen: origin,
-      allowedOrigins: allowedOrigins,
-      DOMAIN_URL: process.env.DOMAIN_URL,
-      NODE_ENV: process.env.NODE_ENV
-    });
-    
-    // Verificar si el origen está en la lista de permitidos
-    if (allowedOrigins.includes(origin)) {
-      console.log('✅ CORS: Origen permitido:', origin);
-      callback(null, true);
-    } else {
-      // En producción, permitir tanto el dominio con www como sin www
-      if (process.env.NODE_ENV === 'production' && process.env.DOMAIN_URL) {
-        const domainUrl = new URL(process.env.DOMAIN_URL);
-        const domainHostname = domainUrl.hostname;
-        const originHostname = new URL(origin).hostname;
-        
-        // Permitir tanto el dominio con www como sin www
-        if (originHostname === domainHostname || 
-            originHostname === `www.${domainHostname}` || 
-            `www.${originHostname}` === domainHostname) {
-          console.log('✅ CORS: Dominio permitido:', origin);
-          callback(null, true);
-          return;
-        }
-      }
-      
-      console.error('❌ CORS: Origen no permitido:', {
-        origin: origin,
-        allowedOrigins: allowedOrigins,
-        DOMAIN_URL: process.env.DOMAIN_URL,
-        NODE_ENV: process.env.NODE_ENV
-      });
-      callback(new Error(`Origen no permitido por CORS: ${origin}`));
-    }
-  },
+  origin: [process.env.DOMAIN_URL, process.env.DOMAIN_URL.replace('www.', '')], // Permitir solicitudes desde el dominio configurado y sin www
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: true,
@@ -204,7 +152,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api', solicitudRoutes);
 
 // Importar rutas de seguridad móvil
-const seguridadAppMovilRoutes = require('../routes/seguridadAppMovil.routes');
+const seguridadAppMovilRoutes = require('../routes/seguridad-app-movil.routes');
 
 // Usar rutas de seguridad móvil
 app.use('/seguridad-app', seguridadAppMovilRoutes); 
