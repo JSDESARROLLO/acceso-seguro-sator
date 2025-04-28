@@ -694,24 +694,18 @@
     if (registrarEntradaBtn && registrarSalidaBtn) {
         const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
         
-        registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
-        registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
-        
-        registrarEntradaBtn.title = mensajeDetallado;
-        registrarSalidaBtn.title = mensajeDetallado;
-
-        // Mostrar mensaje de depuración en consola
-        console.log('Estado actual:', data.estado_actual);
-        console.log('Restricciones:', {
-            hayColaboradoresInactivos,
-            hayVehiculosInactivos,
-            hayProblemasCursoSiso,
-            hayProblemasPlantillaSS,
-            hayProblemasVehiculos,
-            estadoVencido,
-            hayAdvertenciaUbicacion
-        });
-        console.log('Puede registrar entrada/salida:', puedeRegistrarEntradaSalida);
+        // En modo offline, permitir registrar entrada/salida si los datos están en caché
+        if (!navigator.onLine) {
+            registrarEntradaBtn.disabled = false;
+            registrarSalidaBtn.disabled = false;
+            registrarEntradaBtn.title = 'Registrar entrada (se guardará localmente)';
+            registrarSalidaBtn.title = 'Registrar salida (se guardará localmente)';
+        } else {
+            registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
+            registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
+            registrarEntradaBtn.title = mensajeDetallado;
+            registrarSalidaBtn.title = mensajeDetallado;
+        }
     }
 }
 
