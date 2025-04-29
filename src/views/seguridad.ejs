@@ -1582,18 +1582,21 @@
             if (registrarEntradaBtn && registrarSalidaBtn) {
                 const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
                 
-                // En modo offline, permitir registrar entrada/salida si los datos están en caché
-                if (!navigator.onLine) {
-                    registrarEntradaBtn.disabled = false;
-                    registrarSalidaBtn.disabled = false;
-                    registrarEntradaBtn.title = 'Registrar entrada (se guardará localmente)';
-                    registrarSalidaBtn.title = 'Registrar salida (se guardará localmente)';
-                } else {
-                    registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
-                    registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
-                    registrarEntradaBtn.title = mensajeDetallado;
-                    registrarSalidaBtn.title = mensajeDetallado;
-                }
+                // Aplicar las mismas restricciones tanto en línea como fuera de línea
+                registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
+                registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
+                
+                // Actualizar los títulos de los botones
+                const tituloBase = mensajeDetallado;
+                const tituloOffline = ' (se guardará localmente)';
+                
+                registrarEntradaBtn.title = !navigator.onLine && puedeRegistrarEntradaSalida ? 
+                    tituloBase + tituloOffline : 
+                    tituloBase;
+                    
+                registrarSalidaBtn.title = !navigator.onLine && puedeRegistrarEntradaSalida ? 
+                    tituloBase + tituloOffline : 
+                    tituloBase;
             }
         }
 
