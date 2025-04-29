@@ -614,6 +614,8 @@
             position: relative;
             flex: 1 1 auto;
             padding: 1.5rem;
+            height: 60vh;
+            overflow-y: auto;
         }
         
         .modal-footer {
@@ -856,6 +858,8 @@
         
         .confirmacion-body {
             padding: 1.5rem;
+            height: 60vh;
+            overflow-y: auto;
         }
         
         .confirmacion-footer {
@@ -928,6 +932,659 @@
             .col-lg-4 {
                 flex: 0 0 33.333333%;
                 max-width: 33.333333%;
+            }
+        }
+
+        /* Media queries para responsividad */
+        @media (max-width: 576px) {
+            /* Estilos para móviles pequeños */
+            .container {
+                padding: 0 var(--spacing-2);
+            }
+
+            .navbar {
+                padding: var(--spacing-2);
+                flex-direction: column;
+                gap: var(--spacing-2);
+            }
+
+            .navbar-brand {
+                font-size: var(--font-size-base);
+            }
+
+            .d-flex.justify-content-start.gap-3.mb-4 {
+                flex-direction: column;
+                gap: var(--spacing-2);
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .d-flex.align-items-center.gap-2.w-75.w-md-50 {
+                width: 100%;
+                flex-direction: column;
+            }
+
+            .modal-dialog {
+                margin: var(--spacing-2);
+            }
+
+            .card {
+                margin-bottom: var(--spacing-3);
+            }
+
+            .table-responsive {
+                font-size: var(--font-size-sm);
+            }
+
+            #pendingActionsTable th,
+            #pendingActionsTable td {
+                padding: var(--spacing-2);
+                font-size: var(--font-size-xs);
+            }
+        }
+
+        @media (min-width: 577px) and (max-width: 768px) {
+            /* Estilos para móviles grandes y tablets pequeñas */
+            .container {
+                padding: 0 var(--spacing-3);
+            }
+
+            .navbar {
+                padding: var(--spacing-2) var(--spacing-3);
+            }
+
+            .d-flex.justify-content-start.gap-3.mb-4 {
+                flex-wrap: wrap;
+            }
+
+            .btn {
+                min-width: 120px;
+            }
+
+            .modal-dialog {
+                margin: var(--spacing-3);
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 992px) {
+            /* Estilos para tablets grandes */
+            .container {
+                max-width: 960px;
+            }
+
+            .col-md-6 {
+                flex: 0 0 50%;
+                max-width: 50%;
+            }
+
+            .col-md-4 {
+                flex: 0 0 33.333333%;
+                max-width: 33.333333%;
+            }
+        }
+
+        @media (min-width: 993px) and (max-width: 1200px) {
+            /* Estilos para pantallas medianas */
+            .container {
+                max-width: 1140px;
+            }
+
+            .col-lg-4 {
+                flex: 0 0 33.333333%;
+                max-width: 33.333333%;
+            }
+        }
+
+        @media (min-width: 1201px) {
+            /* Estilos para pantallas grandes */
+            .container {
+                max-width: 1320px;
+            }
+        }
+
+        /* Estilos específicos para modales en diferentes tamaños */
+        @media (max-width: 576px) {
+            .modal-content {
+                margin: var(--spacing-2);
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding: var(--spacing-2);
+            }
+
+            .confirmacion-content {
+                margin: var(--spacing-2);
+            }
+        }
+
+        @media (min-width: 577px) and (max-width: 768px) {
+            .modal-content {
+                margin: var(--spacing-3);
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding: var(--spacing-3);
+            }
+        }
+
+        /* Ajustes para la tabla de acciones pendientes */
+        @media (max-width: 768px) {
+            #pendingActionsTable {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            #pendingActionsTable th,
+            #pendingActionsTable td {
+                min-width: 120px;
+            }
+        }
+
+        /* Ajustes para los selectores de hora */
+        @media (max-width: 576px) {
+            .d-flex.gap-2 {
+                flex-direction: column;
+            }
+
+            #horaSelect,
+            #minutoSelect {
+                width: 100%;
+                margin-bottom: var(--spacing-2);
+            }
+        }
+
+        /* Ajustes para las tarjetas de colaboradores y vehículos */
+        @media (max-width: 576px) {
+            .card {
+                margin-bottom: var(--spacing-3);
+            }
+
+            .card-img-top {
+                max-height: 150px;
+            }
+
+            .card-body {
+                padding: var(--spacing-2);
+            }
+        }
+
+        /* Ajustes para el banner offline */
+        @media (max-width: 576px) {
+            .offline-banner {
+                font-size: var(--font-size-sm);
+                padding: var(--spacing-2);
+            }
+        }
+
+        /* Ajustes para el overlay de carga */
+        @media (max-width: 576px) {
+            #loadingOverlay h2 {
+                font-size: var(--font-size-lg);
+            }
+
+            #loadingMessage {
+                font-size: var(--font-size-sm);
+            }
+
+            #progressBar {
+                width: 80%;
+            }
+        }
+
+        /* Ajustes para los botones de acción */
+        @media (max-width: 576px) {
+            .modal-footer {
+                flex-direction: column;
+                gap: var(--spacing-2);
+            }
+
+            .modal-footer .btn {
+                width: 100%;
+            }
+        }
+
+        /* Ajustes para el buscador */
+        @media (max-width: 576px) {
+            #buscarId {
+                width: 100%;
+                margin-bottom: var(--spacing-2);
+            }
+
+            .d-flex.justify-content-between.align-items-center.gap-3.mb-4 {
+                flex-direction: column;
+            }
+        }
+
+        /* Ajustes para los mensajes de estado */
+        @media (max-width: 576px) {
+            #mensajeEstado,
+            #advertencia {
+                font-size: var(--font-size-xs);
+                padding: var(--spacing-1);
+            }
+        }
+
+        /* Ajustes para los checkboxes */
+        @media (max-width: 576px) {
+            .colaborador-checkbox,
+            .vehiculo-checkbox {
+                transform: scale(0.8);
+            }
+        }
+
+        /* Ajustes para las alertas */
+        @media (max-width: 576px) {
+            .alert {
+                padding: var(--spacing-2);
+                font-size: var(--font-size-sm);
+            }
+
+            .alert-dismissible {
+                padding-right: var(--spacing-4);
+            }
+        }
+
+        /* Ajustes para el contenedor principal */
+        @media (max-width: 576px) {
+            .container.mt-5 {
+                margin-top: var(--spacing-3) !important;
+            }
+        }
+
+        /* Ajustes para los títulos */
+        @media (max-width: 576px) {
+            h5 {
+                font-size: var(--font-size-base);
+            }
+        }
+
+        /* Ajustes para los formularios */
+        @media (max-width: 576px) {
+            .form-group {
+                margin-bottom: var(--spacing-2);
+            }
+
+            .form-label {
+                font-size: var(--font-size-sm);
+            }
+
+            .form-control,
+            .form-select {
+                height: 2.25rem;
+                font-size: var(--font-size-sm);
+            }
+        }
+
+        /* Ajustes para los badges */
+        @media (max-width: 576px) {
+            .badge {
+                font-size: var(--font-size-xs);
+                padding: 0.2em 0.4em;
+            }
+        }
+
+        /* Ajustes para las listas */
+        @media (max-width: 576px) {
+            #listaColaboradoresConfirmacion {
+                font-size: var(--font-size-sm);
+                padding-left: var(--spacing-3);
+            }
+        }
+
+        /* Ajustes para los mensajes de SweetAlert2 */
+        @media (max-width: 576px) {
+            .swal2-popup {
+                width: 90% !important;
+                padding: var(--spacing-2) !important;
+            }
+
+            .swal2-title {
+                font-size: var(--font-size-base) !important;
+            }
+
+            .swal2-content {
+                font-size: var(--font-size-sm) !important;
+            }
+        }
+
+        /* Ajustes para los modales y sus imágenes */
+        @media (max-width: 576px) {
+            .modal-dialog {
+                margin: var(--spacing-2);
+                max-width: 95%;
+            }
+
+            .modal-content {
+                margin: 0;
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding: var(--spacing-2);
+            }
+
+            .card-img-top {
+                max-height: 120px;
+                object-fit: cover;
+            }
+
+            .card-body {
+                padding: var(--spacing-2);
+            }
+
+            .card-title {
+                font-size: var(--font-size-base);
+            }
+
+            .card-text {
+                font-size: var(--font-size-sm);
+            }
+
+            .modal-lg {
+                max-width: 95%;
+            }
+        }
+
+        @media (min-width: 577px) and (max-width: 768px) {
+            .modal-dialog {
+                margin: var(--spacing-3);
+                max-width: 90%;
+            }
+
+            .card-img-top {
+                max-height: 150px;
+                object-fit: cover;
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 992px) {
+            .modal-dialog {
+                max-width: 85%;
+            }
+
+            .card-img-top {
+                max-height: 180px;
+                object-fit: cover;
+            }
+        }
+
+        @media (min-width: 993px) {
+            .modal-dialog {
+                max-width: 800px;
+            }
+
+            .card-img-top {
+                max-height: 200px;
+                object-fit: cover;
+            }
+        }
+
+        /* Ajustes específicos para el modal de confirmación */
+        @media (max-width: 576px) {
+            .confirmacion-content {
+                margin: var(--spacing-2);
+                max-width: 95%;
+            }
+
+            .confirmacion-header,
+            .confirmacion-body,
+            .confirmacion-footer {
+                padding: var(--spacing-2);
+            }
+
+            #listaColaboradoresConfirmacion {
+                font-size: var(--font-size-sm);
+                padding-left: var(--spacing-3);
+            }
+        }
+
+        /* Ajustes para el modal de detalles */
+        @media (max-width: 576px) {
+            #detallesModal .modal-dialog {
+                margin: var(--spacing-2);
+                max-width: 95%;
+            }
+
+            #detallesModal .modal-body {
+                padding: var(--spacing-2);
+            }
+
+            #detallesModal .row {
+                margin: 0;
+            }
+
+            #detallesModal .col-md-4 {
+                padding: var(--spacing-1);
+            }
+
+            #detallesModal .card {
+                margin-bottom: var(--spacing-2);
+            }
+
+            #detallesModal .modal-footer {
+                flex-direction: column;
+                gap: var(--spacing-2);
+            }
+
+            #detallesModal .modal-footer .btn {
+                width: 100%;
+            }
+        }
+
+        /* Ajustes para las imágenes dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .card-img-top {
+                height: 120px;
+                object-fit: cover;
+            }
+
+            .modal .card {
+                margin-bottom: var(--spacing-2);
+            }
+
+            .modal .card-body {
+                padding: var(--spacing-2);
+            }
+        }
+
+        @media (min-width: 577px) and (max-width: 768px) {
+            .modal .card-img-top {
+                height: 150px;
+                object-fit: cover;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .modal .card-img-top {
+                height: 200px;
+                object-fit: cover;
+            }
+        }
+
+        /* Ajustes para el contenido del modal en diferentes tamaños */
+        @media (max-width: 576px) {
+            .modal .row {
+                flex-direction: column;
+            }
+
+            .modal .col-md-6,
+            .modal .col-md-4 {
+                width: 100%;
+                padding: var(--spacing-1);
+            }
+
+            .modal h5 {
+                font-size: var(--font-size-base);
+                margin-bottom: var(--spacing-2);
+            }
+
+            .modal p {
+                font-size: var(--font-size-sm);
+                margin-bottom: var(--spacing-1);
+            }
+        }
+
+        /* Ajustes para los botones dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .btn {
+                width: 100%;
+                margin-bottom: var(--spacing-1);
+            }
+
+            .modal .d-flex.gap-2 {
+                flex-direction: column;
+            }
+
+            .modal .d-flex.gap-2 .btn {
+                margin-bottom: var(--spacing-1);
+            }
+        }
+
+        /* Ajustes para los formularios dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .form-control,
+            .modal .form-select {
+                font-size: var(--font-size-sm);
+                height: 2.25rem;
+            }
+
+            .modal .form-label {
+                font-size: var(--font-size-sm);
+            }
+
+            .modal .form-group {
+                margin-bottom: var(--spacing-2);
+            }
+        }
+
+        /* Ajustes para los mensajes de estado dentro de los modales */
+        @media (max-width: 576px) {
+            .modal #mensajeEstado,
+            .modal #advertencia {
+                font-size: var(--font-size-xs);
+                padding: var(--spacing-1);
+            }
+        }
+
+        /* Ajustes para los checkboxes dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .colaborador-checkbox,
+            .modal .vehiculo-checkbox {
+                transform: scale(0.8);
+            }
+        }
+
+        /* Ajustes para las tablas dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .table-responsive {
+                font-size: var(--font-size-xs);
+            }
+
+            .modal .table th,
+            .modal .table td {
+                padding: var(--spacing-1);
+            }
+        }
+
+        /* Ajustes para los badges dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .badge {
+                font-size: var(--font-size-xs);
+                padding: 0.2em 0.4em;
+            }
+        }
+
+        /* Ajustes para los títulos dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .modal-title {
+                font-size: var(--font-size-base);
+            }
+
+            .modal h5 {
+                font-size: var(--font-size-base);
+            }
+        }
+
+        /* Ajustes para los contenedores dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .container {
+                padding: 0 var(--spacing-2);
+            }
+
+            .modal .row {
+                margin: 0;
+            }
+
+            .modal .col {
+                padding: var(--spacing-1);
+            }
+        }
+
+        /* Ajustes para los mensajes de SweetAlert2 dentro de los modales */
+        @media (max-width: 576px) {
+            .modal .swal2-popup {
+                width: 90% !important;
+                padding: var(--spacing-2) !important;
+            }
+
+            .modal .swal2-title {
+                font-size: var(--font-size-base) !important;
+            }
+
+            .modal .swal2-content {
+                font-size: var(--font-size-sm) !important;
+            }
+        }
+
+        /* Ajustes para el scroll del modal-body en diferentes tamaños de pantalla */
+        @media (max-width: 576px) {
+            .modal-body {
+                height: 50vh;
+                padding: var(--spacing-2);
+            }
+        }
+
+        @media (min-width: 577px) and (max-width: 768px) {
+            .modal-body {
+                height: 55vh;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .modal-body {
+                height: 60vh;
+            }
+        }
+
+        /* Ajustes para el scroll en el modal de detalles */
+        #detallesModal .modal-body {
+            height: 60vh;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 576px) {
+            #detallesModal .modal-body {
+                height: 50vh;
+            }
+        }
+
+        /* Ajustes para el scroll en el modal de confirmación */
+        .confirmacion-body {
+            height: 60vh;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 576px) {
+            .confirmacion-body {
+                height: 50vh;
             }
         }
     </style>
