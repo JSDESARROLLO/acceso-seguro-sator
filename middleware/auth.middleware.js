@@ -10,7 +10,7 @@ function authMiddleware(req, res, next) {
       return res.redirect('/login');
     }
     
-    // Verificar y decodificar el token
+    // Verificar y decodificar el token localmente
     const decoded = jwt.verify(token, SECRET_KEY);
     
     // Guardar la información del usuario en el objeto request
@@ -24,8 +24,13 @@ function authMiddleware(req, res, next) {
     next();
   } catch (error) {
     console.error('Error de autenticación:', error);
-    res.clearCookie('token');
-    res.redirect('/login');
+    // Solo redirigir al login si el token es inválido o ha expirado
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      res.clearCookie('token');
+      return res.redirect('/login');
+    }
+    // Si es otro tipo de error (como falta de conexión), permitir continuar
+    next();
   }
 }
 

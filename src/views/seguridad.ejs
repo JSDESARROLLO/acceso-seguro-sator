@@ -6,43 +6,729 @@
     <title>Seguridad</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#000000">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-    <script src="/js/cdn.tailwindcss.com.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        video { display: flex; justify-content: center; }
-        .ocultar { display: none; }
-        #advertencia { color: #ff0000; }
-        .colaborador-checkbox { height: 20px; width: 20px; }
-        #mensajeEstado { color: #ff0000; font-style: italic; }
-        #loadingOverlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7);
-            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: white;
+        /* Variables CSS */
+        :root {
+            --color-primary: #007bff;
+            --color-primary-dark: #0056b3;
+            --color-secondary: #6c757d;
+            --color-success: #28a745;
+            --color-danger: #dc3545;
+            --color-warning: #ffc107;
+            --color-info: #17a2b8;
+            --color-light: #f8f9fa;
+            --color-dark: #343a40;
+            --color-white: #ffffff;
+            --color-black: #000000;
+            --color-gray: #6c757d;
+            --color-gray-dark: #343a40;
+            --color-gray-light: #f8f9fa;
+            
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-size-base: 1rem;
+            --font-size-lg: 1.25rem;
+            --font-size-sm: 0.875rem;
+            
+            --border-radius: 0.25rem;
+            --border-radius-lg: 0.5rem;
+            --border-radius-sm: 0.2rem;
+            
+            --spacing-1: 0.25rem;
+            --spacing-2: 0.5rem;
+            --spacing-3: 1rem;
+            --spacing-4: 1.5rem;
+            --spacing-5: 3rem;
+            
+            --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
         }
-        #loadingOverlay.hidden { display: none; }
-        #progressBar { width: 50%; height: 20px; background: #ddd; border-radius: 10px; overflow: hidden; }
-        #progressFill { height: 100%; background: #28a745; width: 0; transition: width 0.3s ease; }
-        #loadingMessage { margin-top: 10px; font-size: 1.2rem; }
-        #pendingActionsTable { margin-top: 20px; }
-        #pendingActionsTable th, #pendingActionsTable td { text-align: left; padding: 8px; }
-        #pendingActionsTable th { background-color: #f8f9fa; }
-        #pendingActionsTable tr:nth-child(even) { background-color: #f2f2f2; }
-        .highlight-card { border: 2px solid #007bff; background-color: #e7f1ff; }
+        
+        /* Reset y estilos base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-family);
+            font-size: var(--font-size-base);
+            line-height: 1.5;
+            color: var(--color-dark);
+            background-color: var(--color-light);
+        }
+        
+        /* Utilidades */
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-3);
+        }
+        
+        .mt-1 { margin-top: var(--spacing-1); }
+        .mt-2 { margin-top: var(--spacing-2); }
+        .mt-3 { margin-top: var(--spacing-3); }
+        .mt-4 { margin-top: var(--spacing-4); }
+        .mt-5 { margin-top: var(--spacing-5); }
+        
+        .mb-1 { margin-bottom: var(--spacing-1); }
+        .mb-2 { margin-bottom: var(--spacing-2); }
+        .mb-3 { margin-bottom: var(--spacing-3); }
+        .mb-4 { margin-bottom: var(--spacing-4); }
+        .mb-5 { margin-bottom: var(--spacing-5); }
+        
+        .ml-1 { margin-left: var(--spacing-1); }
+        .ml-2 { margin-left: var(--spacing-2); }
+        .ml-3 { margin-left: var(--spacing-3); }
+        .ml-4 { margin-left: var(--spacing-4); }
+        .ml-5 { margin-left: var(--spacing-5); }
+        
+        .mr-1 { margin-right: var(--spacing-1); }
+        .mr-2 { margin-right: var(--spacing-2); }
+        .mr-3 { margin-right: var(--spacing-3); }
+        .mr-4 { margin-right: var(--spacing-4); }
+        .mr-5 { margin-right: var(--spacing-5); }
+        
+        .p-1 { padding: var(--spacing-1); }
+        .p-2 { padding: var(--spacing-2); }
+        .p-3 { padding: var(--spacing-3); }
+        .p-4 { padding: var(--spacing-4); }
+        .p-5 { padding: var(--spacing-5); }
+        
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        
+        .text-primary { color: var(--color-primary); }
+        .text-secondary { color: var(--color-secondary); }
+        .text-success { color: var(--color-success); }
+        .text-danger { color: var(--color-danger); }
+        .text-warning { color: var(--color-warning); }
+        .text-info { color: var(--color-info); }
+        .text-light { color: var(--color-light); }
+        .text-dark { color: var(--color-dark); }
+        .text-white { color: var(--color-white); }
+        .text-muted { color: var(--color-gray); }
+        
+        .bg-primary { background-color: var(--color-primary); }
+        .bg-secondary { background-color: var(--color-secondary); }
+        .bg-success { background-color: var(--color-success); }
+        .bg-danger { background-color: var(--color-danger); }
+        .bg-warning { background-color: var(--color-warning); }
+        .bg-info { background-color: var(--color-info); }
+        .bg-light { background-color: var(--color-light); }
+        .bg-dark { background-color: var(--color-dark); }
+        .bg-white { background-color: var(--color-white); }
+        
+        .d-flex { display: flex; }
+        .flex-column { flex-direction: column; }
+        .flex-row { flex-direction: row; }
+        .justify-content-start { justify-content: flex-start; }
+        .justify-content-end { justify-content: flex-end; }
+        .justify-content-center { justify-content: center; }
+        .justify-content-between { justify-content: space-between; }
+        .justify-content-around { justify-content: space-around; }
+        .align-items-start { align-items: flex-start; }
+        .align-items-end { align-items: flex-end; }
+        .align-items-center { align-items: center; }
+        .align-items-baseline { align-items: baseline; }
+        .align-items-stretch { align-items: stretch; }
+        .flex-wrap { flex-wrap: wrap; }
+        .flex-nowrap { flex-wrap: nowrap; }
+        .flex-grow-1 { flex-grow: 1; }
+        
+        .w-100 { width: 100%; }
+        .w-75 { width: 75%; }
+        .w-50 { width: 50%; }
+        .w-25 { width: 25%; }
+        
+        .h-100 { height: 100%; }
+        .h-75 { height: 75%; }
+        .h-50 { height: 50%; }
+        .h-25 { height: 25%; }
+        
+        .rounded { border-radius: var(--border-radius); }
+        .rounded-lg { border-radius: var(--border-radius-lg); }
+        .rounded-sm { border-radius: var(--border-radius-sm); }
+        .rounded-circle { border-radius: 50%; }
+        
+        .shadow { box-shadow: var(--shadow); }
+        .shadow-sm { box-shadow: var(--shadow-sm); }
+        .shadow-lg { box-shadow: var(--shadow-lg); }
+        
+        .border { border: 1px solid #dee2e6; }
+        .border-top { border-top: 1px solid #dee2e6; }
+        .border-right { border-right: 1px solid #dee2e6; }
+        .border-bottom { border-bottom: 1px solid #dee2e6; }
+        .border-left { border-left: 1px solid #dee2e6; }
+        
+        .hidden { display: none; }
+        .visible { display: block; }
+        
+        /* Componentes */
+        /* Navbar */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-3);
+            background-color: var(--color-dark);
+            color: var(--color-white);
+        }
+        
+        .navbar a {
+            color: var(--color-white);
+            text-decoration: none;
+        }
+        
+        .navbar-brand {
+            font-size: var(--font-size-lg);
+            font-weight: bold;
+        }
+        
+        /* Botones */
+        .btn {
+            display: inline-block;
+            font-weight: 400;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: middle;
+            user-select: none;
+            border: 1px solid transparent;
+            padding: 0.375rem 0.75rem;
+            font-size: var(--font-size-base);
+            line-height: 1.5;
+            border-radius: var(--border-radius);
+            transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            cursor: pointer;
+        }
+        
+        .btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            color: var(--color-white);
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--color-primary-dark);
+            border-color: var(--color-primary-dark);
+        }
+        
+        .btn-secondary {
+            color: var(--color-white);
+            background-color: var(--color-secondary);
+            border-color: var(--color-secondary);
+        }
+        
+        .btn-success {
+            color: var(--color-white);
+            background-color: var(--color-success);
+            border-color: var(--color-success);
+        }
+        
+        .btn-danger {
+            color: var(--color-white);
+            background-color: var(--color-danger);
+            border-color: var(--color-danger);
+        }
+        
+        .btn-warning {
+            color: var(--color-dark);
+            background-color: var(--color-warning);
+            border-color: var(--color-warning);
+        }
+        
+        .btn-info {
+            color: var(--color-white);
+            background-color: var(--color-info);
+            border-color: var(--color-info);
+        }
+        
+        .btn-light {
+            color: var(--color-dark);
+            background-color: var(--color-light);
+            border-color: var(--color-light);
+        }
+        
+        .btn-dark {
+            color: var(--color-white);
+            background-color: var(--color-dark);
+            border-color: var(--color-dark);
+        }
+        
+        /* Formularios */
+        .form-group {
+            margin-bottom: var(--spacing-3);
+        }
+        
+        .form-control {
+            display: block;
+            width: 100%;
+            padding: 0.375rem 0.75rem;
+            font-size: var(--font-size-base);
+            line-height: 1.5;
+            color: var(--color-dark);
+            background-color: var(--color-white);
+            background-clip: padding-box;
+            border: 1px solid #ced4da;
+            border-radius: var(--border-radius);
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        
+        .form-control:focus {
+            color: var(--color-dark);
+            background-color: var(--color-white);
+            border-color: #80bdff;
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        
+        .form-label {
+            display: inline-block;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-select {
+            display: block;
+            width: 100%;
+            padding: 0.375rem 0.75rem;
+            font-size: var(--font-size-base);
+            line-height: 1.5;
+            color: var(--color-dark);
+            background-color: var(--color-white);
+            background-clip: padding-box;
+            border: 1px solid #ced4da;
+            border-radius: var(--border-radius);
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        
+        /* Alertas */
+        .alert {
+            position: relative;
+            padding: 0.75rem 1.25rem;
+            margin-bottom: 1rem;
+            border: 1px solid transparent;
+            border-radius: var(--border-radius);
+        }
+        
+        .alert-danger {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        
+        .alert-dismissible {
+            padding-right: 4rem;
+        }
+        
+        .alert-dismissible .btn-close {
+            position: absolute;
+            top: 0;
+            right: 0;
+            padding: 0.75rem 1.25rem;
+            color: inherit;
+            background: transparent;
+            border: 0;
+            cursor: pointer;
+        }
+        
+        /* Tablas */
+        .table {
+            width: 100%;
+            margin-bottom: 1rem;
+            color: var(--color-dark);
+            border-collapse: collapse;
+        }
+        
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            vertical-align: top;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .table thead th {
+            vertical-align: bottom;
+            border-bottom: 2px solid #dee2e6;
+            background-color: var(--color-light);
+        }
+        
+        .table-bordered {
+            border: 1px solid #dee2e6;
+        }
+        
+        .table-bordered th,
+        .table-bordered td {
+            border: 1px solid #dee2e6;
+        }
+        
+        .table-responsive {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25em 0.4em;
+            font-size: 75%;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: var(--border-radius);
+        }
+        
+        /* Cards */
+        .card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            word-wrap: break-word;
+            background-color: var(--color-white);
+            background-clip: border-box;
+            border: 1px solid rgba(0, 0, 0, 0.125);
+            border-radius: var(--border-radius);
+        }
+        
+        .card-body {
+            flex: 1 1 auto;
+            padding: 1.25rem;
+        }
+        
+        .card-title {
+            margin-bottom: 0.75rem;
+        }
+        
+        .card-text:last-child {
+            margin-bottom: 0;
+        }
+        
+        .card-img-top {
+            width: 100%;
+            border-top-left-radius: calc(0.25rem - 1px);
+            border-top-right-radius: calc(0.25rem - 1px);
+        }
+        
+        /* Modales */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1050;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            outline: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-dialog {
+            position: relative;
+            width: auto;
+            margin: 0.5rem;
+            pointer-events: none;
+            max-width: 500px;
+        }
+        
+        .modal-lg {
+            max-width: 800px;
+        }
+        
+        .modal-content {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            pointer-events: auto;
+            background-color: var(--color-white);
+            background-clip: padding-box;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            border-radius: var(--border-radius-lg);
+            outline: 0;
+        }
+        
+        .modal-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+            border-top-left-radius: calc(0.3rem - 1px);
+            border-top-right-radius: calc(0.3rem - 1px);
+        }
+        
+        .modal-title {
+            margin-bottom: 0;
+            line-height: 1.5;
+        }
+        
+        .modal-body {
+            position: relative;
+            flex: 1 1 auto;
+            padding: 1rem;
+        }
+        
+        .modal-footer {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0.75rem;
+            border-top: 1px solid #dee2e6;
+            border-bottom-right-radius: calc(0.3rem - 1px);
+            border-bottom-left-radius: calc(0.3rem - 1px);
+        }
+        
+        .modal-footer > * {
+            margin: 0.25rem;
+        }
+        
+        .btn-close {
+            background: transparent;
+            border: 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #000;
+            text-shadow: 0 1px 0 #fff;
+            opacity: 0.5;
+            cursor: pointer;
+        }
+        
+        /* Componentes específicos de la aplicación */
+        video { 
+            display: flex; 
+            justify-content: center; 
+        }
+        
+        .ocultar { 
+            display: none; 
+        }
+        
+        #advertencia { 
+            color: var(--color-danger); 
+        }
+        
+        .colaborador-checkbox { 
+            height: 20px; 
+            width: 20px; 
+        }
+        
+        #mensajeEstado { 
+            color: var(--color-danger); 
+            font-style: italic; 
+        }
+        
+        #loadingOverlay {
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0, 0, 0, 0.7);
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 9999; 
+            color: white;
+        }
+        
+        #loadingOverlay.hidden { 
+            display: none; 
+        }
+        
+        #progressBar { 
+            width: 50%; 
+            height: 20px; 
+            background: #ddd; 
+            border-radius: 10px; 
+            overflow: hidden; 
+        }
+        
+        #progressFill { 
+            height: 100%; 
+            background: var(--color-success); 
+            width: 0; 
+            transition: width 0.3s ease; 
+        }
+        
+        #loadingMessage { 
+            margin-top: 10px; 
+            font-size: 1.2rem; 
+        }
+        
+        #pendingActionsTable { 
+            margin-top: 20px; 
+        }
+        
+        #pendingActionsTable th, 
+        #pendingActionsTable td { 
+            text-align: left; 
+            padding: 8px; 
+        }
+        
+        #pendingActionsTable th { 
+            background-color: var(--color-light); 
+        }
+        
+        #pendingActionsTable tr:nth-child(even) { 
+            background-color: #f2f2f2; 
+        }
+        
+        .highlight-card { 
+            border: 2px solid var(--color-primary); 
+            background-color: #e7f1ff; 
+        }
+        
         .offline-banner {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background-color: #ffc107;
-            color: #000;
+            background-color: var(--color-warning);
+            color: var(--color-black);
             text-align: center;
             padding: 10px;
             z-index: 9999;
             display: none;
         }
+        
         .offline-banner.show {
             display: block;
+        }
+        
+        /* Confirmación modal */
+        #confirmacionModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        
+        #confirmacionModal.show {
+            display: flex;
+        }
+        
+        .confirmacion-content {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 500px;
+            margin: 0 16px;
+        }
+        
+        .confirmacion-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .confirmacion-body {
+            padding: 24px;
+        }
+        
+        .confirmacion-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        /* Layout */
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: -15px;
+            margin-left: -15px;
+        }
+        
+        .col {
+            flex-basis: 0;
+            flex-grow: 1;
+            max-width: 100%;
+            padding-right: 15px;
+            padding-left: 15px;
+        }
+        
+        .col-12 {
+            flex: 0 0 100%;
+            max-width: 100%;
+            padding-right: 15px;
+            padding-left: 15px;
+        }
+        
+        .col-md-6 {
+            padding-right: 15px;
+            padding-left: 15px;
+        }
+        
+        .col-md-4 {
+            padding-right: 15px;
+            padding-left: 15px;
+        }
+        
+        .gap-2 {
+            gap: 0.5rem;
+        }
+        
+        .gap-3 {
+            gap: 1rem;
+        }
+        
+        /* Media queries para responsividad */
+        @media (min-width: 768px) {
+            .col-md-6 {
+                flex: 0 0 50%;
+                max-width: 50%;
+            }
+            
+            .col-md-4 {
+                flex: 0 0 33.333333%;
+                max-width: 33.333333%;
+            }
+            
+            .w-md-50 {
+                width: 50%;
+            }
+        }
+        
+        @media (min-width: 992px) {
+            .col-lg-4 {
+                flex: 0 0 33.333333%;
+                max-width: 33.333333%;
+            }
         }
     </style>
 </head>
@@ -62,29 +748,29 @@
     </div>
 
     <!-- Barra de navegación -->
-    <nav class="flex justify-between items-center bg-gray-800 text-white p-4">
-        <a class="text-lg font-semibold" href="#">Vista Seguridad GA - <%= username %></a>
-        <a class="text-lg" href="/logout">Cerrar sesión</a>
+    <nav class="navbar">
+        <a class="navbar-brand" href="#">Vista Seguridad GA - <%= username %></a>
+        <a href="/logout">Cerrar sesión</a>
     </nav>
 
     <div class="container mt-5">
         <!-- Mensaje de error -->
         <% if (typeof error !== 'undefined' && error) { %>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div class="alert alert-danger alert-dismissible">
                 <strong>Error:</strong> <%= error %>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                <button type="button" class="btn-close" onclick="this.parentElement.style.display='none';">&times;</button>
             </div>
         <% } %>
         
         <!-- Botones para cargar y sincronizar -->
-        <div class="mb-4 d-flex justify-content-start gap-3">
+        <div class="d-flex justify-content-start gap-3 mb-4">
             <button class="btn btn-primary" onclick="cargarTodosLosRegistros()">Cargar Datos Online</button>
             <button class="btn btn-success" onclick="syncPendingActions()">Sincronizar Datos</button>
             <button class="btn btn-warning" onclick="limpiarCache()">Limpiar Caché</button>
         </div>
 
         <!-- Buscador -->
-        <div class="mb-4 d-flex justify-content-between align-items-center gap-3">
+        <div class="d-flex justify-content-between align-items-center gap-3 mb-4">
             <div class="d-flex align-items-center gap-2 w-75 w-md-50">
                 <input 
                     type="text" 
@@ -94,7 +780,7 @@
                     title="Ingrese ID de colaborador o vehículo" 
                     required>
                 <button class="btn btn-primary" onclick="buscar()">
-                    <i class="bi bi-search me-1"></i> Buscar
+                    Buscar
                 </button>
             </div>
         </div>
@@ -118,20 +804,20 @@
     </div>
 
     <!-- Modal de Confirmación para Entrada/Salida -->
-    <div id="confirmacionModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden" style="z-index: 10000">
-        <div class="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
-            <div class="px-6 py-4 border-b flex justify-between items-center">
+    <div id="confirmacionModal">
+        <div class="confirmacion-content">
+            <div class="confirmacion-header">
                 <h5 class="modal-title">Confirmar Registro</h5>
-                <button id="cerrarModal" class="text-gray-500 hover:text-gray-700">×</button>
+                <button id="cerrarModal" class="btn-close">&times;</button>
             </div>
-            <div class="p-6">
-                <p id="confirmacionTexto" class="text-gray-700"></p>
-                <ul id="listaColaboradoresConfirmacion" class="mt-2 text-gray-600 list-disc pl-5"></ul>
+            <div class="confirmacion-body">
+                <p id="confirmacionTexto"></p>
+                <ul id="listaColaboradoresConfirmacion" class="mt-2"></ul>
                 <div class="mt-4">
                     <div class="row">
                         <div class="col-md-6">
                             <label for="fechaRegistro" class="form-label">Fecha del Evento:</label>
-                            <input type="date" id="fechaRegistro" class="form-control w-full" required>
+                            <input type="date" id="fechaRegistro" class="form-control w-100" required>
                             <small class="text-muted">Seleccione la fecha en que ocurrió el evento</small>
                         </div>
                         <div class="col-md-6">
@@ -149,20 +835,20 @@
                     </div>
                 </div>
             </div>
-            <div class="px-6 py-4 border-t flex justify-end space-x-3">
-                <button id="cancelarBtn" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded">Cancelar</button>
-                <button id="confirmarRegistroBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Confirmar</button>
+            <div class="confirmacion-footer">
+                <button id="cancelarBtn" class="btn btn-secondary">Cancelar</button>
+                <button id="confirmarRegistroBtn" class="btn btn-primary">Confirmar</button>
             </div>
         </div>
     </div>
 
     <!-- Modal para Ver Detalles -->
-    <div class="modal fade" id="detallesModal" tabindex="-1" aria-labelledby="detallesModalLabel" aria-hidden="true">
+    <div id="detallesModal" class="modal">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="detallesModalLabel">Detalles de la Solicitud</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title">Detalles de la Solicitud</h5>
+                    <button type="button" class="btn-close" id="closeDetallesModal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="row">
@@ -182,12 +868,12 @@
                         </div>
                     </div>
                     <h5 class="mt-4">Colaboradores</h5>
-                    <div id="detalleColaboradores" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3"></div>
+                    <div id="detalleColaboradores" class="row"></div>
                     <h5 class="mt-4">Vehículos</h5>
-                    <div id="detalleVehiculos" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3"></div>
+                    <div id="detalleVehiculos" class="row"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-secondary" id="cerrarDetallesBtn">Cerrar</button>
                     <button type="button" class="btn btn-primary" id="registrarIngresoBtn">Registrar Ingreso</button>
                     <button type="button" class="btn btn-success" id="registrarEntradaBtn">Registrar Entrada</button>
                     <button type="button" class="btn btn-danger" id="registrarSalidaBtn">Registrar Salida</button>
@@ -196,7 +882,6 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Initialize IndexedDB
         let db;
@@ -314,7 +999,7 @@
             const actions = await getPendingActions();
 
             if (actions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5">No hay acciones pendientes.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">No hay acciones pendientes.</td></tr>';
                 return;
             }
 
@@ -502,212 +1187,215 @@
 
         // Function to fill the modal
         async function llenarModal(data, selectedId, isVehicle = false) {
-    modalData = data;
-    document.getElementById('detalleId').textContent = data.id || 'N/A';
-    document.getElementById('detalleEmpresa').textContent = data.empresa || 'N/A';
-    document.getElementById('detalleLugar').textContent = data.nombre_lugar || 'N/A';
-    document.getElementById('detalleLabor').textContent = data.labor || 'N/A';
-    document.getElementById('detalleInterventor').textContent = data.interventor || 'N/A';
-    document.getElementById('detalleInicio').textContent = formatFecha(data.inicio_obra);
-    document.getElementById('detalleFin').textContent = formatFecha(data.fin_obra);
-    document.getElementById('detalleEstado').textContent = data.estado_actual || 'Desconocido';
-    document.getElementById('detalleEstado').className = 'badge ' + getEstadoClass(data.estado_actual);
+            modalData = data;
+            document.getElementById('detalleId').textContent = data.id || 'N/A';
+            document.getElementById('detalleEmpresa').textContent = data.empresa || 'N/A';
+            document.getElementById('detalleLugar').textContent = data.nombre_lugar || 'N/A';
+            document.getElementById('detalleLabor').textContent = data.labor || 'N/A';
+            document.getElementById('detalleInterventor').textContent = data.interventor || 'N/A';
+            document.getElementById('detalleInicio').textContent = formatFecha(data.inicio_obra);
+            document.getElementById('detalleFin').textContent = formatFecha(data.fin_obra);
+            document.getElementById('detalleEstado').textContent = data.estado_actual || 'Desconocido';
+            document.getElementById('detalleEstado').className = 'badge ' + getEstadoClass(data.estado_actual);
 
-    // Mostrar advertencias específicas
-    let advertencia = '';
-    if (data.advertencia) advertencia += data.advertencia + ' ';
-    if (data.mensajeCursoSiso && !isVehicle) advertencia += data.mensajeCursoSiso + ' ';
-    if (data.mensajePlantillaSS && !isVehicle) advertencia += data.mensajePlantillaSS + ' ';
-    if (data.mensajeVehiculos && isVehicle) advertencia += data.mensajeVehiculos + ' ';
-    document.getElementById('advertencia').textContent = advertencia.trim() || 'Sin advertencias';
+            // Mostrar advertencias específicas
+            let advertencia = '';
+            if (data.advertencia) advertencia += data.advertencia + ' ';
+            if (data.mensajeCursoSiso && !isVehicle) advertencia += data.mensajeCursoSiso + ' ';
+            if (data.mensajePlantillaSS && !isVehicle) advertencia += data.mensajePlantillaSS + ' ';
+            if (data.mensajeVehiculos && isVehicle) advertencia += data.mensajeVehiculos + ' ';
+            document.getElementById('advertencia').textContent = advertencia.trim() || 'Sin advertencias';
 
-    const colaboradoresContainer = document.getElementById('detalleColaboradores');
-    const vehiculosContainer = document.getElementById('detalleVehiculos');
-    const colaboradoresTitle = document.querySelector('h5.mt-4:first-of-type');
-    const vehiculosTitle = document.querySelector('h5.mt-4:last-of-type');
-    
-    colaboradoresContainer.style.display = 'none';
-    vehiculosContainer.style.display = 'none';
-    colaboradoresTitle.style.display = 'none';
-    vehiculosTitle.style.display = 'none';
+            const colaboradoresContainer = document.getElementById('detalleColaboradores');
+            const vehiculosContainer = document.getElementById('detalleVehiculos');
+            const colaboradoresTitle = document.querySelectorAll('h5.mt-4')[0];
+            const vehiculosTitle = document.querySelectorAll('h5.mt-4')[1];
+            
+            colaboradoresContainer.style.display = 'none';
+            vehiculosContainer.style.display = 'none';
+            colaboradoresTitle.style.display = 'none';
+            vehiculosTitle.style.display = 'none';
 
-    if (isVehicle) {
-        // Mostrar solo el vehículo específico
-        if (data.vehiculos && data.vehiculos.length > 0) {
-            const vehiculo = data.vehiculos.find(v => v.id.toString() === selectedId.replace('VH-', ''));
-            if (vehiculo) {
-                vehiculosContainer.style.display = 'block';
-                vehiculosTitle.style.display = 'block';
-                vehiculosContainer.innerHTML = '';
-                const vehDiv = document.createElement('div');
-                vehDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
-                vehDiv.innerHTML = `
-                    <div class="card">
-                        <img src="${vehiculo.foto || '/default.jpg'}" class="card-img-top" alt="Foto del vehículo ${vehiculo.matricula}">
-                        <div class="card-body">
-                            <h6 class="card-title">Vehículo: ${vehiculo.matricula}</h6>
-                            <p class="card-text">ID Vehículo: VH-${vehiculo.id}</p>
-                            <p class="card-text">SOAT: ${vehiculo.soat_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.soat_fin) : 'No definido'}</p>
-                            <p class="card-text">Tecnomecánica: ${vehiculo.tecnomecanica_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.tecnomecanica_fin) : 'No definida'}</p>
-                            <p class="card-text">Licencia Conducción: ${vehiculo.licencia_conduccion ? 'Aprobada' : 'No aprobada'}</p>
-                            <p class="card-text">Licencia Tránsito: ${vehiculo.licencia_transito ? 'Aprobada' : 'No aprobada'}</p>
-                            ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '" checked>'}
-                        </div>
-                    </div>
-                `;
-                vehiculosContainer.appendChild(vehDiv);
+            if (isVehicle) {
+                // Mostrar solo el vehículo específico
+                if (data.vehiculos && data.vehiculos.length > 0) {
+                    const vehiculo = data.vehiculos.find(v => v.id.toString() === selectedId.replace('VH-', ''));
+                    if (vehiculo) {
+                        vehiculosContainer.style.display = 'flex';
+                        vehiculosTitle.style.display = 'block';
+                        vehiculosContainer.innerHTML = '';
+                        const vehDiv = document.createElement('div');
+                        vehDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
+                        vehDiv.innerHTML = `
+                            <div class="card">
+                                <img src="${vehiculo.foto || '/default.jpg'}" class="card-img-top" alt="Foto del vehículo ${vehiculo.matricula}">
+                                <div class="card-body">
+                                    <h6 class="card-title">Vehículo: ${vehiculo.matricula}</h6>
+                                    <p class="card-text">ID Vehículo: VH-${vehiculo.id}</p>
+                                    <p class="card-text">SOAT: ${vehiculo.soat_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.soat_fin) : 'No definido'}</p>
+                                    <p class="card-text">Tecnomecánica: ${vehiculo.tecnomecanica_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.tecnomecanica_fin) : 'No definida'}</p>
+                                    <p class="card-text">Licencia Conducción: ${vehiculo.licencia_conduccion ? 'Aprobada' : 'No aprobada'}</p>
+                                    <p class="card-text">Licencia Tránsito: ${vehiculo.licencia_transito ? 'Aprobada' : 'No aprobada'}</p>
+                                    ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '" checked>'}
+                                </div>
+                            </div>
+                        `;
+                        vehiculosContainer.appendChild(vehDiv);
+                    }
+                }
+            } else {
+                // Mostrar solo el colaborador específico
+                if (data.colaboradores && data.colaboradores.length > 0) {
+                    const colaborador = data.colaboradores.find(c => c.id.toString() === selectedId);
+                    if (colaborador) {
+                        colaboradoresContainer.style.display = 'flex';
+                        colaboradoresTitle.style.display = 'block';
+                        colaboradoresContainer.innerHTML = '';
+                        const colDiv = document.createElement('div');
+                        colDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
+                        colDiv.innerHTML = `
+                            <div class="card">
+                                <img src="${colaborador.foto || '/default.jpg'}" class="card-img-top" alt="Foto del colaborador ${colaborador.nombre}">
+                                <div class="card-body">
+                                    <h6 class="card-title">${colaborador.nombre}</h6>
+                                    <p class="card-text">Cédula: ${colaborador.cedula}</p>
+                                    <p class="card-text">Curso SISO: ${colaborador.cursoSiso || 'No definido'}</p>
+                                    <p class="card-text">Plantilla SS: ${colaborador.plantillaSS || 'No definida'}</p>
+                                    ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '" checked>'}
+                                </div>
+                            </div>
+                        `;
+                        colaboradoresContainer.appendChild(colDiv);
+                    }
+                }
             }
-        }
-    } else {
-        // Mostrar solo el colaborador específico
-        if (data.colaboradores && data.colaboradores.length > 0) {
-            const colaborador = data.colaboradores.find(c => c.id.toString() === selectedId);
-            if (colaborador) {
-                colaboradoresContainer.style.display = 'block';
-                colaboradoresTitle.style.display = 'block';
-                colaboradoresContainer.innerHTML = '';
-                const colDiv = document.createElement('div');
-                colDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
-                colDiv.innerHTML = `
-                    <div class="card">
-                        <img src="${colaborador.foto || '/default.jpg'}" class="card-img-top" alt="Foto del colaborador ${colaborador.nombre}">
-                        <div class="card-body">
-                            <h6 class="card-title">${colaborador.nombre}</h6>
-                            <p class="card-text">Cédula: ${colaborador.cedula}</p>
-                            <p class="card-text">Curso SISO: ${colaborador.cursoSiso || 'No definido'}</p>
-                            <p class="card-text">Plantilla SS: ${colaborador.plantillaSS || 'No definida'}</p>
-                            ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '" checked>'}
-                        </div>
-                    </div>
-                `;
-                colaboradoresContainer.appendChild(colDiv);
-            }
-        }
-    }
 
-    configurarBotones(data, isVehicle);
-    const modal = new bootstrap.Modal(document.getElementById('detallesModal'));
-    modal.show();
-}
+            configurarBotones(data, isVehicle);
+            
+            // Mostrar el modal
+            const detallesModal = document.getElementById('detallesModal');
+            detallesModal.classList.add('show');
+        }
+        
         // Function to configure buttons
         function configurarBotones(data, isVehicle = false) {
-    const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
-    const registrarEntradaBtn = document.getElementById('registrarEntradaBtn');
-    const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
-    const mensajeEstado = document.getElementById('mensajeEstado');
+            const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
+            const registrarEntradaBtn = document.getElementById('registrarEntradaBtn');
+            const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
+            const mensajeEstado = document.getElementById('mensajeEstado');
 
-    // Verificar si hay colaboradores inactivos
-    const hayColaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
-    
-    // Verificar si hay vehículos inactivos (solo para vehículos)
-    const hayVehiculosInactivos = isVehicle && data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
-    
-    // Verificar problemas con documentos basado en el estado real de los colaboradores
-    const hayProblemasCursoSiso = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
-        col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
-    );
-    
-    const hayProblemasPlantillaSS = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
-        col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
-    );
-    
-    // Verificar problemas con vehículos (solo para vehículos)
-    const problemasVehiculos = [];
-    if (isVehicle && data.vehiculos) {
-        data.vehiculos.forEach(veh => {
-            const hoy = new Date();
-            const soatFin = new Date(veh.soat_fin);
-            const tecnomecanicaFin = new Date(veh.tecnomecanica_fin);
+            // Verificar si hay colaboradores inactivos
+            const hayColaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
             
-            const formatDate = (date) => {
-                if (!date || isNaN(date.getTime())) return 'N/A';
-                return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-            };
+            // Verificar si hay vehículos inactivos (solo para vehículos)
+            const hayVehiculosInactivos = isVehicle && data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
             
-            if (soatFin < hoy) {
-                problemasVehiculos.push(`SOAT del vehículo ${veh.matricula} vencido desde ${formatDate(soatFin)}`);
+            // Verificar problemas con documentos basado en el estado real de los colaboradores
+            const hayProblemasCursoSiso = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
+                col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
+            );
+            
+            const hayProblemasPlantillaSS = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
+                col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
+            );
+            
+            // Verificar problemas con vehículos (solo para vehículos)
+            const problemasVehiculos = [];
+            if (isVehicle && data.vehiculos) {
+                data.vehiculos.forEach(veh => {
+                    const hoy = new Date();
+                    const soatFin = new Date(veh.soat_fin);
+                    const tecnomecanicaFin = new Date(veh.tecnomecanica_fin);
+                    
+                    const formatDate = (date) => {
+                        if (!date || isNaN(date.getTime())) return 'N/A';
+                        return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+                    };
+                    
+                    if (soatFin < hoy) {
+                        problemasVehiculos.push(`SOAT del vehículo ${veh.matricula} vencido desde ${formatDate(soatFin)}`);
+                    }
+                    if (tecnomecanicaFin < hoy) {
+                        problemasVehiculos.push(`Tecnomecánica del vehículo ${veh.matricula} vencida desde ${formatDate(tecnomecanicaFin)}`);
+                    }
+                    if (!veh.licencia_conduccion) {
+                        problemasVehiculos.push(`Licencia de conducción del vehículo ${veh.matricula} no aprobada`);
+                    }
+                    if (!veh.licencia_transito) {
+                        problemasVehiculos.push(`Licencia de tránsito del vehículo ${veh.matricula} no aprobada`);
+                    }
+                });
             }
-            if (tecnomecanicaFin < hoy) {
-                problemasVehiculos.push(`Tecnomecánica del vehículo ${veh.matricula} vencida desde ${formatDate(tecnomecanicaFin)}`);
-            }
-            if (!veh.licencia_conduccion) {
-                problemasVehiculos.push(`Licencia de conducción del vehículo ${veh.matricula} no aprobada`);
-            }
-            if (!veh.licencia_transito) {
-                problemasVehiculos.push(`Licencia de tránsito del vehículo ${veh.matricula} no aprobada`);
-            }
-        });
-    }
-    const hayProblemasVehiculos = problemasVehiculos.length > 0;
-    
-    // Verificar estado vencido
-    const estadoVencido = data.estado_actual ? data.estado_actual.includes('vencido') : false;
-    
-    // Verificar advertencia de ubicación
-    const hayAdvertenciaUbicacion = data.advertencia ? data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación') : false;
+            const hayProblemasVehiculos = problemasVehiculos.length > 0;
+            
+            // Verificar estado vencido
+            const estadoVencido = data.estado_actual ? data.estado_actual.includes('vencido') : false;
+            
+            // Verificar advertencia de ubicación
+            const hayAdvertenciaUbicacion = data.advertencia ? data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación') : false;
 
-    // Determinar si hay alguna restricción que deshabilite los botones
-    const hayRestricciones = hayColaboradoresInactivos || 
-                            hayVehiculosInactivos || 
-                            hayProblemasCursoSiso || 
-                            hayProblemasPlantillaSS || 
-                            hayProblemasVehiculos || 
-                            estadoVencido || 
-                            hayAdvertenciaUbicacion;
+            // Determinar si hay alguna restricción que deshabilite los botones
+            const hayRestricciones = hayColaboradoresInactivos || 
+                                    hayVehiculosInactivos || 
+                                    hayProblemasCursoSiso || 
+                                    hayProblemasPlantillaSS || 
+                                    hayProblemasVehiculos || 
+                                    estadoVencido || 
+                                    hayAdvertenciaUbicacion;
 
-    // Construir mensaje de estado detallado
-    let mensajeDetallado = '';
-    if (hayRestricciones) {
-        mensajeDetallado = 'No se pueden realizar acciones debido a:';
-        if (hayColaboradoresInactivos) mensajeDetallado += '\n- Hay colaboradores inactivos';
-        if (hayVehiculosInactivos) mensajeDetallado += '\n- Hay vehículos inactivos';
-        if (hayProblemasCursoSiso) mensajeDetallado += '\n- Hay problemas con cursos SISO';
-        if (hayProblemasPlantillaSS) mensajeDetallado += '\n- Hay problemas con plantillas SS';
-        if (hayProblemasVehiculos) {
-            mensajeDetallado += '\n- Problemas con vehículos:';
-            problemasVehiculos.forEach(problema => {
-                mensajeDetallado += `\n  * ${problema}`;
-            });
+            // Construir mensaje de estado detallado
+            let mensajeDetallado = '';
+            if (hayRestricciones) {
+                mensajeDetallado = 'No se pueden realizar acciones debido a:';
+                if (hayColaboradoresInactivos) mensajeDetallado += '\n- Hay colaboradores inactivos';
+                if (hayVehiculosInactivos) mensajeDetallado += '\n- Hay vehículos inactivos';
+                if (hayProblemasCursoSiso) mensajeDetallado += '\n- Hay problemas con cursos SISO';
+                if (hayProblemasPlantillaSS) mensajeDetallado += '\n- Hay problemas con plantillas SS';
+                if (hayProblemasVehiculos) {
+                    mensajeDetallado += '\n- Problemas con vehículos:';
+                    problemasVehiculos.forEach(problema => {
+                        mensajeDetallado += `\n  * ${problema}`;
+                    });
+                }
+                if (estadoVencido) mensajeDetallado += '\n- El estado de la solicitud está vencido';
+                if (hayAdvertenciaUbicacion) mensajeDetallado += '\n- El lugar de la solicitud no coincide con tu ubicación';
+            } else {
+                mensajeDetallado = 'Todos los requisitos están en orden. Puedes realizar las acciones.';
+            }
+
+            // Actualizar el mensaje de estado
+            if (mensajeEstado) {
+                mensajeEstado.textContent = mensajeDetallado;
+                mensajeEstado.style.color = hayRestricciones ? 'var(--color-danger)' : 'var(--color-success)';
+            }
+
+            // Configurar botón de Registrar Ingreso
+            if (registrarIngresoBtn) {
+                const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !hayRestricciones;
+                registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
+                registrarIngresoBtn.title = puedeRegistrarIngreso ? 
+                    'Registrar ingreso de colaboradores' : 
+                    mensajeDetallado;
+            }
+
+            // Configurar botones de Entrada y Salida
+            if (registrarEntradaBtn && registrarSalidaBtn) {
+                const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
+                
+                // En modo offline, permitir registrar entrada/salida si los datos están en caché
+                if (!navigator.onLine) {
+                    registrarEntradaBtn.disabled = false;
+                    registrarSalidaBtn.disabled = false;
+                    registrarEntradaBtn.title = 'Registrar entrada (se guardará localmente)';
+                    registrarSalidaBtn.title = 'Registrar salida (se guardará localmente)';
+                } else {
+                    registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
+                    registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
+                    registrarEntradaBtn.title = mensajeDetallado;
+                    registrarSalidaBtn.title = mensajeDetallado;
+                }
+            }
         }
-        if (estadoVencido) mensajeDetallado += '\n- El estado de la solicitud está vencido';
-        if (hayAdvertenciaUbicacion) mensajeDetallado += '\n- El lugar de la solicitud no coincide con tu ubicación';
-    } else {
-        mensajeDetallado = 'Todos los requisitos están en orden. Puedes realizar las acciones.';
-    }
-
-    // Actualizar el mensaje de estado
-    if (mensajeEstado) {
-        mensajeEstado.textContent = mensajeDetallado;
-        mensajeEstado.style.color = hayRestricciones ? '#dc3545' : '#28a745';
-    }
-
-    // Configurar botón de Registrar Ingreso
-    if (registrarIngresoBtn) {
-        const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !hayRestricciones;
-        registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
-        registrarIngresoBtn.title = puedeRegistrarIngreso ? 
-            'Registrar ingreso de colaboradores' : 
-            mensajeDetallado;
-    }
-
-    // Configurar botones de Entrada y Salida
-    if (registrarEntradaBtn && registrarSalidaBtn) {
-        const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
-        
-        // En modo offline, permitir registrar entrada/salida si los datos están en caché
-        if (!navigator.onLine) {
-            registrarEntradaBtn.disabled = false;
-            registrarSalidaBtn.disabled = false;
-            registrarEntradaBtn.title = 'Registrar entrada (se guardará localmente)';
-            registrarSalidaBtn.title = 'Registrar salida (se guardará localmente)';
-        } else {
-            registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
-            registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
-            registrarEntradaBtn.title = mensajeDetallado;
-            registrarSalidaBtn.title = mensajeDetallado;
-        }
-    }
-}
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
@@ -718,6 +1406,7 @@
             
             inicializarSelectoresHora();
             configurarModalConfirmacion();
+            configurarModalDetalles();
 
             // Verificar si el Service Worker está registrado
             if ('serviceWorker' in navigator) {
@@ -758,6 +1447,7 @@
             // Manejar cambios en la conexión
             window.addEventListener('online', () => {
                 console.log('Conexión restaurada.');
+                updateOfflineBanner();
                 Swal.fire({
                     icon: 'info',
                     title: 'Conexión Restaurada',
@@ -767,6 +1457,7 @@
 
             window.addEventListener('offline', () => {
                 console.log('Sin conexión. Las acciones se guardarán localmente.');
+                updateOfflineBanner();
                 Swal.fire({
                     icon: 'info',
                     title: 'Sin Conexión',
@@ -825,6 +1516,20 @@
             }
         }
 
+        function configurarModalDetalles() {
+            const detallesModal = document.getElementById('detallesModal');
+            const closeDetallesModal = document.getElementById('closeDetallesModal');
+            const cerrarDetallesBtn = document.getElementById('cerrarDetallesBtn');
+            
+            closeDetallesModal.addEventListener('click', () => {
+                detallesModal.classList.remove('show');
+            });
+            
+            cerrarDetallesBtn.addEventListener('click', () => {
+                detallesModal.classList.remove('show');
+            });
+        }
+
         function configurarModalConfirmacion() {
             const modal = document.getElementById('confirmacionModal');
             const cerrarModal = document.getElementById('cerrarModal');
@@ -844,11 +1549,11 @@
             });
 
             cerrarModal.addEventListener('click', () => {
-                if (!procesoEnCurso) modal.classList.add('hidden');
+                if (!procesoEnCurso) modal.classList.remove('show');
             });
             
             cancelarBtn.addEventListener('click', () => {
-                if (!procesoEnCurso) modal.classList.add('hidden');
+                if (!procesoEnCurso) modal.classList.remove('show');
             });
 
             window.mostrarConfirmacionModal = function(tipo) {
@@ -912,10 +1617,10 @@
                     .join('');
                 document.getElementById('confirmacionTexto').textContent = `¿Estás seguro de registrar la ${tipo} de los siguientes elementos?`;
                 
-                const detallesModal = bootstrap.Modal.getInstance(document.getElementById('detallesModal'));
-                if (detallesModal) detallesModal.hide();
+                const detallesModal = document.getElementById('detallesModal');
+                detallesModal.classList.remove('show');
                 
-                modal.classList.remove('hidden');
+                modal.classList.add('show');
             };
 
             document.getElementById('registrarEntradaBtn').onclick = () => {
@@ -1037,7 +1742,7 @@
                             });
                             document.querySelectorAll('.colaborador-checkbox:checked').forEach(checkbox => checkbox.checked = false);
                             document.querySelectorAll('.vehiculo-checkbox:checked').forEach(checkbox => checkbox.checked = false);
-                            modal.classList.add('hidden');
+                            modal.classList.remove('show');
                         } else {
                             Swal.fire({
                                 icon: 'error',
@@ -1114,7 +1819,7 @@
                         });
                         document.querySelectorAll('.colaborador-checkbox:checked').forEach(checkbox => checkbox.checked = false);
                         document.querySelectorAll('.vehiculo-checkbox:checked').forEach(checkbox => checkbox.checked = false);
-                        modal.classList.add('hidden');
+                        modal.classList.remove('show');
                     } catch (error) {
                         Swal.fire({
                             icon: 'error',
@@ -1133,326 +1838,336 @@
         }
 
         // Function to load all records
-
         async function cargarTodosLosRegistros() {
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const progressFill = document.getElementById('progressFill');
-    const loadingMessage = document.getElementById('loadingMessage');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const progressFill = document.getElementById('progressFill');
+            const loadingMessage = document.getElementById('loadingMessage');
 
-    loadingOverlay.classList.remove('hidden');
-    loadingMessage.textContent = 'Obteniendo solicitudes...';
-    progressFill.style.width = '0%';
+            loadingOverlay.classList.remove('hidden');
+            loadingMessage.textContent = 'Obteniendo solicitudes...';
+            progressFill.style.width = '0%';
 
-    try {
-        const response = await fetch('/api/solicitudes/obtenerSolicitudesActivasConColaboradoresYVehiculos');
-        if (!response.ok) {
-            throw new Error(`Error al cargar los registros: ${response.statusText}`);
-        }
+            try {
+                const response = await fetch('/api/solicitudes/obtenerSolicitudesActivasConColaboradoresYVehiculos');
+                if (!response.ok) {
+                    throw new Error(`Error al cargar los registros: ${response.statusText}`);
+                }
 
-        const solicitudes = await response.json();
-        let totalItems = solicitudes.length;
-        solicitudes.forEach(solicitud => {
-            totalItems += (solicitud.colaboradores ? solicitud.colaboradores.length : 0);
-            totalItems += (solicitud.vehiculos ? solicitud.vehiculos.length : 0);
-        });
-        let processedItems = 0;
+                const solicitudes = await response.json();
+                let totalItems = solicitudes.length;
+                solicitudes.forEach(solicitud => {
+                    totalItems += (solicitud.colaboradores ? solicitud.colaboradores.length : 0);
+                    totalItems += (solicitud.vehiculos ? solicitud.vehiculos.length : 0);
+                });
+                let processedItems = 0;
 
-        function updateProgress() {
-            processedItems++;
-            const progress = (processedItems / totalItems) * 100;
-            progressFill.style.width = `${progress}%`;
-            loadingMessage.textContent = `Procesando ${processedItems} de ${totalItems} elementos...`;
-        }
+                function updateProgress() {
+                    processedItems++;
+                    const progress = (processedItems / totalItems) * 100;
+                    progressFill.style.width = `${progress}%`;
+                    loadingMessage.textContent = `Procesando ${processedItems} de ${totalItems} elementos...`;
+                }
 
-        const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
-        const solicitudesStore = transaction.objectStore('solicitudes');
-        const colaboradoresStore = transaction.objectStore('colaboradores');
-        const vehiculosStore = transaction.objectStore('vehiculos');
+                const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
+                const solicitudesStore = transaction.objectStore('solicitudes');
+                const colaboradoresStore = transaction.objectStore('colaboradores');
+                const vehiculosStore = transaction.objectStore('vehiculos');
 
-        for (const solicitud of solicitudes) {
-            const solicitudData = {
-                id: solicitud.id,
-                empresa: solicitud.empresa,
-                nit: solicitud.nit,
-                estado: solicitud.estado,
-                interventor: solicitud.interventor,
-                lugar: solicitud.lugar,
-                nombre_lugar: solicitud.nombre_lugar,
-                inicio_obra: solicitud.inicio_obra,
-                fin_obra: solicitud.fin_obra,
-                labor: solicitud.labor,
-                estado_actual: solicitud.estado_actual,
-                advertencia: solicitud.advertencia,
-                mensajeCursoSiso: solicitud.mensajeCursoSiso,
-                mensajePlantillaSS: solicitud.mensajePlantillaSS,
-                mensajeVehiculos: solicitud.mensajeVehiculos,
-                timestamp: new Date().toISOString()
-            };
-            await solicitudesStore.put(solicitudData);
-            updateProgress();
-
-            if (solicitud.colaboradores && solicitud.colaboradores.length > 0) {
-                for (const colaborador of solicitud.colaboradores) {
-                    const colaboradorData = {
-                        id: colaborador.id,
-                        nombre: colaborador.nombre,
-                        cedula: colaborador.cedula,
-                        foto: colaborador.foto,
-                        cedulaFoto: colaborador.cedulaFoto,
-                        estado: colaborador.estado,
-                        cursoSiso: colaborador.cursoSiso,
-                        curso_siso_estado: colaborador.curso_siso_estado,
-                        curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
-                        plantillaSS: colaborador.plantillaSS,
-                        plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
-                        plantilla_ss_fin: colaborador.plantilla_ss_fin,
-                        mensajeCursoSiso: colaborador.mensajeCursoSiso,
-                        mensajePlantillaSS: colaborador.mensajePlantillaSS,
-                        solicitudId: solicitud.id,
+                for (const solicitud of solicitudes) {
+                    const solicitudData = {
+                        id: solicitud.id,
+                        empresa: solicitud.empresa,
+                        nit: solicitud.nit,
+                        estado: solicitud.estado,
+                        interventor: solicitud.interventor,
+                        lugar: solicitud.lugar,
+                        nombre_lugar: solicitud.nombre_lugar,
+                        inicio_obra: solicitud.inicio_obra,
+                        fin_obra: solicitud.fin_obra,
+                        labor: solicitud.labor,
+                        estado_actual: solicitud.estado_actual,
+                        advertencia: solicitud.advertencia,
+                        mensajeCursoSiso: solicitud.mensajeCursoSiso,
+                        mensajePlantillaSS: solicitud.mensajePlantillaSS,
+                        mensajeVehiculos: solicitud.mensajeVehiculos,
                         timestamp: new Date().toISOString()
                     };
-                    await colaboradoresStore.put(colaboradorData);
+                    await solicitudesStore.put(solicitudData);
                     updateProgress();
-                }
-            }
 
-            if (solicitud.vehiculos && solicitud.vehiculos.length > 0) {
-                for (const vehiculo of solicitud.vehiculos) {
-                    const vehiculoData = {
-                        id: vehiculo.id,
-                        matricula: vehiculo.matricula,
-                        foto: vehiculo.foto,
-                        estado: vehiculo.estado,
-                        soat_inicio: vehiculo.soat_inicio,
-                        soat_fin: vehiculo.soat_fin,
-                        tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
-                        tecnomecanica_fin: vehiculo.tecnomecanica_fin,
-                        licencia_conduccion: vehiculo.licencia_conduccion,
-                        licencia_transito: vehiculo.licencia_transito,
-                        estado_soat: vehiculo.estado_soat,
-                        estado_tecnomecanica: vehiculo.estado_tecnomecanica,
-                        mensajesAdvertencia: vehiculo.mensajesAdvertencia,
-                        solicitudId: solicitud.id,
-                        timestamp: new Date().toISOString()
-                    };
-                    await vehiculosStore.put(vehiculoData);
-                    updateProgress();
+                    if (solicitud.colaboradores && solicitud.colaboradores.length > 0) {
+                        for (const colaborador of solicitud.colaboradores) {
+                            const colaboradorData = {
+                                id: colaborador.id,
+                                nombre: colaborador.nombre,
+                                cedula: colaborador.cedula,
+                                foto: colaborador.foto,
+                                cedulaFoto: colaborador.cedulaFoto,
+                                estado: colaborador.estado,
+                                cursoSiso: colaborador.cursoSiso,
+                                curso_siso_estado: colaborador.curso_siso_estado,
+                                curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
+                                plantillaSS: colaborador.plantillaSS,
+                                plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
+                                plantilla_ss_fin: colaborador.plantilla_ss_fin,
+                                mensajeCursoSiso: colaborador.mensajeCursoSiso,
+                                mensajePlantillaSS: colaborador.mensajePlantillaSS,
+                                solicitudId: solicitud.id,
+                                timestamp: new Date().toISOString()
+                            };
+                            await colaboradoresStore.put(colaboradorData);
+                            updateProgress();
+                        }
+                    }
+
+                    if (solicitud.vehiculos && solicitud.vehiculos.length > 0) {
+                        for (const vehiculo of solicitud.vehiculos) {
+                            const vehiculoData = {
+                                id: vehiculo.id,
+                                matricula: vehiculo.matricula,
+                                foto: vehiculo.foto,
+                                estado: vehiculo.estado,
+                                soat_inicio: vehiculo.soat_inicio,
+                                soat_fin: vehiculo.soat_fin,
+                                tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
+                                tecnomecanica_fin: vehiculo.tecnomecanica_fin,
+                                licencia_conduccion: vehiculo.licencia_conduccion,
+                                licencia_transito: vehiculo.licencia_transito,
+                                estado_soat: vehiculo.estado_soat,
+                                estado_tecnomecanica: vehiculo.estado_tecnomecanica,
+                                mensajesAdvertencia: vehiculo.mensajesAdvertencia,
+                                solicitudId: solicitud.id,
+                                timestamp: new Date().toISOString()
+                            };
+                            await vehiculosStore.put(vehiculoData);
+                            updateProgress();
+                        }
+                    }
                 }
+
+                loadingMessage.textContent = 'Carga completa!';
+                progressFill.style.width = '100%';
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                }, 500);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Datos Cargados',
+                    text: 'Los datos se han cargado correctamente.'
+                });
+            } catch (error) {
+                console.error('Error al cargar registros:', error);
+                loadingMessage.textContent = 'Error al cargar datos. Usando caché.';
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                }, 1000);
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'No se pudieron cargar los datos. ' + error.message
+                });
             }
         }
-
-        loadingMessage.textContent = 'Carga completa!';
-        progressFill.style.width = '100%';
-        setTimeout(() => {
-            loadingOverlay.classList.add('hidden');
-        }, 500);
-    } catch (error) {
-        console.error('Error al cargar registros:', error);
-        loadingMessage.textContent = 'Error al cargar datos. Usando caché.';
-        setTimeout(() => {
-            loadingOverlay.classList.add('hidden');
-        }, 1000);
-    }
-}
-
 
         // Function to view details
         async function verDetalles(id) {
-    try {
-        console.log('Iniciando verDetalles con ID:', id);
-        const cleanId = id.trim().toUpperCase();
-        const isVehicle = cleanId.startsWith('VH-');
-        const searchId = isVehicle ? cleanId.replace('VH-', '') : cleanId;
-        const url = `/api/solicitudes/seguridad/${cleanId}`;
+            try {
+                console.log('Iniciando verDetalles con ID:', id);
+                const cleanId = id.trim().toUpperCase();
+                const isVehicle = cleanId.startsWith('VH-');
+                const searchId = isVehicle ? cleanId.replace('VH-', '') : cleanId;
+                const url = `/api/solicitudes/seguridad/${cleanId}`;
 
-        if (navigator.onLine) {
-            const response = await fetch(url).catch(error => {
-                console.error('Error de red:', error);
-                throw new Error('No se pudo conectar al servidor. Usando datos en caché.');
-            });
+                if (navigator.onLine) {
+                    const response = await fetch(url).catch(error => {
+                        console.error('Error de red:', error);
+                        throw new Error('No se pudo conectar al servidor. Usando datos en caché.');
+                    });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                Swal.fire({ 
-                    icon: 'error', 
-                    title: 'No encontrado', 
-                    text: errorData.message || 'No se ha encontrado registro de este colaborador o vehículo.' 
-                });
-                return;
-            }
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        Swal.fire({ 
+                            icon: 'error', 
+                            title: 'No encontrado', 
+                            text: errorData.message || 'No se ha encontrado registro de este colaborador o vehículo.' 
+                        });
+                        return;
+                    }
 
-            const data = await response.json();
-            if (!data) {
+                    const data = await response.json();
+                    if (!data) {
+                        Swal.fire({ 
+                            icon: 'error', 
+                            title: 'Error', 
+                            text: 'No se recibieron datos válidos del servidor.' 
+                        });
+                        return;
+                    }
+
+                    // Guardar en IndexedDB
+                    const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
+                    const solicitudesStore = transaction.objectStore('solicitudes');
+                    const colaboradoresStore = transaction.objectStore('colaboradores');
+                    const vehiculosStore = transaction.objectStore('vehiculos');
+
+                    const solicitudData = {
+                        id: data.id,
+                        empresa: data.empresa,
+                        nit: data.nit,
+                        estado: data.estado,
+                        interventor: data.interventor,
+                        lugar: data.lugar,
+                        nombre_lugar: data.nombre_lugar,
+                        inicio_obra: data.inicio_obra,
+                        fin_obra: data.fin_obra,
+                        labor: data.labor,
+                        estado_actual: data.estado_actual,
+                        advertencia: data.advertencia,
+                        mensajeCursoSiso: data.mensajeCursoSiso,
+                        mensajePlantillaSS: data.mensajePlantillaSS,
+                        mensajeVehiculos: data.mensajeVehiculos,
+                        timestamp: new Date().toISOString()
+                    };
+                    await solicitudesStore.put(solicitudData);
+
+                    if (data.colaboradores) {
+                        for (const colaborador of data.colaboradores) {
+                            await colaboradoresStore.put({
+                                id: colaborador.id,
+                                nombre: colaborador.nombre,
+                                cedula: colaborador.cedula,
+                                foto: colaborador.foto,
+                                cedulaFoto: colaborador.cedulaFoto,
+                                estado: colaborador.estado,
+                                cursoSiso: colaborador.cursoSiso,
+                                curso_siso_estado: colaborador.curso_siso_estado,
+                                curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
+                                plantillaSS: colaborador.plantillaSS,
+                                plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
+                                plantilla_ss_fin: colaborador.plantilla_ss_fin,
+                                mensajeCursoSiso: colaborador.mensajeCursoSiso,
+                                mensajePlantillaSS: colaborador.mensajePlantillaSS,
+                                solicitudId: data.id,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+
+                    if (data.vehiculos) {
+                        for (const vehiculo of data.vehiculos) {
+                            await vehiculosStore.put({
+                                id: vehiculo.id,
+                                matricula: vehiculo.matricula,
+                                foto: vehiculo.foto,
+                                estado: vehiculo.estado,
+                                soat_inicio: vehiculo.soat_inicio,
+                                soat_fin: vehiculo.soat_fin,
+                                tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
+                                tecnomecanica_fin: vehiculo.tecnomecanica_fin,
+                                licencia_conduccion: vehiculo.licencia_conduccion,
+                                licencia_transito: vehiculo.licencia_transito,
+                                estado_soat: vehiculo.estado_soat,
+                                estado_tecnomecanica: vehiculo.estado_tecnomecanica,
+                                mensajesAdvertencia: vehiculo.mensajesAdvertencia,
+                                solicitudId: data.id,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+
+                    // Filtrar datos para el modal
+                    const detalles = {
+                        ...data,
+                        colaboradores: isVehicle ? [] : data.colaboradores.filter(c => c.id.toString() === searchId),
+                        vehiculos: isVehicle ? data.vehiculos.filter(v => v.id.toString() === searchId) : [],
+                        mensajeVehiculos: isVehicle ? data.mensajeVehiculos : null // Excluir mensajeVehiculos para colaboradores
+                    };
+
+                    llenarModal(detalles, cleanId, isVehicle);
+                } else {
+                    console.log('Sin conexión, buscando en caché');
+                    const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readonly');
+                    const colaboradoresStore = transaction.objectStore('colaboradores');
+                    const vehiculosStore = transaction.objectStore('vehiculos');
+                    const solicitudesStore = transaction.objectStore('solicitudes');
+
+                    let item, solicitudId;
+                    if (isVehicle) {
+                        const vehiculoRequest = vehiculosStore.get(Number(searchId));
+                        item = await new Promise(resolve => {
+                            vehiculoRequest.onsuccess = () => resolve(vehiculoRequest.result);
+                            vehiculoRequest.onerror = () => resolve(null);
+                        });
+                    } else {
+                        const colaboradorRequest = colaboradoresStore.get(Number(searchId));
+                        item = await new Promise(resolve => {
+                            colaboradorRequest.onsuccess = () => resolve(colaboradorRequest.result);
+                            colaboradorRequest.onerror = () => resolve(null);
+                        });
+                    }
+
+                    if (!item) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Sin Conexión',
+                            text: 'No se encontraron datos en caché para este colaborador o vehículo.'
+                        });
+                        return;
+                    }
+
+                    solicitudId = item.solicitudId;
+                    const solicitudRequest = solicitudesStore.get(solicitudId);
+                    const solicitud = await new Promise(resolve => {
+                        solicitudRequest.onsuccess = () => resolve(solicitudRequest.result);
+                        solicitudRequest.onerror = () => resolve(null);
+                    });
+
+                    if (!solicitud) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Sin Conexión',
+                            text: 'No se encontraron detalles de la solicitud en caché.'
+                        });
+                        return;
+                    }
+
+                    // Obtener todos los colaboradores de la solicitud
+                    const colaboradoresIndex = colaboradoresStore.index('solicitudId');
+                    const colaboradoresRequest = colaboradoresIndex.getAll(solicitudId);
+                    const colaboradores = await new Promise(resolve => {
+                        colaboradoresRequest.onsuccess = () => resolve(colaboradoresRequest.result);
+                        colaboradoresRequest.onerror = () => resolve([]);
+                    });
+
+                    // Obtener todos los vehículos de la solicitud
+                    const vehiculosIndex = vehiculosStore.index('solicitudId');
+                    const vehiculosRequest = vehiculosIndex.getAll(solicitudId);
+                    const vehiculos = await new Promise(resolve => {
+                        vehiculosRequest.onsuccess = () => resolve(vehiculosRequest.result);
+                        vehiculosRequest.onerror = () => resolve([]);
+                    });
+
+                    // Construir objeto completo para el modal
+                    const detalles = {
+                        ...solicitud,
+                        colaboradores: isVehicle ? [] : colaboradores.filter(c => c.id.toString() === searchId),
+                        vehiculos: isVehicle ? vehiculos.filter(v => v.id.toString() === searchId) : [],
+                        mensajeVehiculos: isVehicle ? solicitud.mensajeVehiculos : null // Excluir mensajeVehiculos para colaboradores
+                    };
+
+                    llenarModal(detalles, cleanId, isVehicle);
+                }
+            } catch (error) {
+                console.error('Error al obtener detalles:', error);
                 Swal.fire({ 
                     icon: 'error', 
                     title: 'Error', 
-                    text: 'No se recibieron datos válidos del servidor.' 
-                });
-                return;
-            }
-
-            // Guardar en IndexedDB
-            const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readwrite');
-            const solicitudesStore = transaction.objectStore('solicitudes');
-            const colaboradoresStore = transaction.objectStore('colaboradores');
-            const vehiculosStore = transaction.objectStore('vehiculos');
-
-            const solicitudData = {
-                id: data.id,
-                empresa: data.empresa,
-                nit: data.nit,
-                estado: data.estado,
-                interventor: data.interventor,
-                lugar: data.lugar,
-                nombre_lugar: data.nombre_lugar,
-                inicio_obra: data.inicio_obra,
-                fin_obra: data.fin_obra,
-                labor: data.labor,
-                estado_actual: data.estado_actual,
-                advertencia: data.advertencia,
-                mensajeCursoSiso: data.mensajeCursoSiso,
-                mensajePlantillaSS: data.mensajePlantillaSS,
-                mensajeVehiculos: data.mensajeVehiculos,
-                timestamp: new Date().toISOString()
-            };
-            await solicitudesStore.put(solicitudData);
-
-            if (data.colaboradores) {
-                for (const colaborador of data.colaboradores) {
-                    await colaboradoresStore.put({
-                        id: colaborador.id,
-                        nombre: colaborador.nombre,
-                        cedula: colaborador.cedula,
-                        foto: colaborador.foto,
-                        cedulaFoto: colaborador.cedulaFoto,
-                        estado: colaborador.estado,
-                        cursoSiso: colaborador.cursoSiso,
-                        curso_siso_estado: colaborador.curso_siso_estado,
-                        curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
-                        plantillaSS: colaborador.plantillaSS,
-                        plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
-                        plantilla_ss_fin: colaborador.plantilla_ss_fin,
-                        mensajeCursoSiso: colaborador.mensajeCursoSiso,
-                        mensajePlantillaSS: colaborador.mensajePlantillaSS,
-                        solicitudId: data.id,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            }
-
-            if (data.vehiculos) {
-                for (const vehiculo of data.vehiculos) {
-                    await vehiculosStore.put({
-                        id: vehiculo.id,
-                        matricula: vehiculo.matricula,
-                        foto: vehiculo.foto,
-                        estado: vehiculo.estado,
-                        soat_inicio: vehiculo.soat_inicio,
-                        soat_fin: vehiculo.soat_fin,
-                        tecnomecanica_inicio: vehiculo.tecnomecanica_inicio,
-                        tecnomecanica_fin: vehiculo.tecnomecanica_fin,
-                        licencia_conduccion: vehiculo.licencia_conduccion,
-                        licencia_transito: vehiculo.licencia_transito,
-                        estado_soat: vehiculo.estado_soat,
-                        estado_tecnomecanica: vehiculo.estado_tecnomecanica,
-                        mensajesAdvertencia: vehiculo.mensajesAdvertencia,
-                        solicitudId: data.id,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            }
-
-            // Filtrar datos para el modal
-            const detalles = {
-                ...data,
-                colaboradores: isVehicle ? [] : data.colaboradores.filter(c => c.id.toString() === searchId),
-                vehiculos: isVehicle ? data.vehiculos.filter(v => v.id.toString() === searchId) : [],
-                mensajeVehiculos: isVehicle ? data.mensajeVehiculos : null // Excluir mensajeVehiculos para colaboradores
-            };
-
-            llenarModal(detalles, cleanId, isVehicle);
-        } else {
-            console.log('Sin conexión, buscando en caché');
-            const transaction = db.transaction(['solicitudes', 'colaboradores', 'vehiculos'], 'readonly');
-            const colaboradoresStore = transaction.objectStore('colaboradores');
-            const vehiculosStore = transaction.objectStore('vehiculos');
-            const solicitudesStore = transaction.objectStore('solicitudes');
-
-            let item, solicitudId;
-            if (isVehicle) {
-                const vehiculoRequest = vehiculosStore.get(Number(searchId));
-                item = await new Promise(resolve => {
-                    vehiculoRequest.onsuccess = () => resolve(vehiculoRequest.result);
-                    vehiculoRequest.onerror = () => resolve(null);
-                });
-            } else {
-                const colaboradorRequest = colaboradoresStore.get(Number(searchId));
-                item = await new Promise(resolve => {
-                    colaboradorRequest.onsuccess = () => resolve(colaboradorRequest.result);
-                    colaboradorRequest.onerror = () => resolve(null);
+                    text: error.message || 'Ocurrió un error al obtener los detalles. Por favor, intenta nuevamente.' 
                 });
             }
-
-            if (!item) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Sin Conexión',
-                    text: 'No se encontraron datos en caché para este colaborador o vehículo.'
-                });
-                return;
-            }
-
-            solicitudId = item.solicitudId;
-            const solicitudRequest = solicitudesStore.get(solicitudId);
-            const solicitud = await new Promise(resolve => {
-                solicitudRequest.onsuccess = () => resolve(solicitudRequest.result);
-                solicitudRequest.onerror = () => resolve(null);
-            });
-
-            if (!solicitud) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Sin Conexión',
-                    text: 'No se encontraron detalles de la solicitud en caché.'
-                });
-                return;
-            }
-
-            // Obtener todos los colaboradores de la solicitud
-            const colaboradoresIndex = colaboradoresStore.index('solicitudId');
-            const colaboradoresRequest = colaboradoresIndex.getAll(solicitudId);
-            const colaboradores = await new Promise(resolve => {
-                colaboradoresRequest.onsuccess = () => resolve(colaboradoresRequest.result);
-                colaboradoresRequest.onerror = () => resolve([]);
-            });
-
-            // Obtener todos los vehículos de la solicitud
-            const vehiculosIndex = vehiculosStore.index('solicitudId');
-            const vehiculosRequest = vehiculosIndex.getAll(solicitudId);
-            const vehiculos = await new Promise(resolve => {
-                vehiculosRequest.onsuccess = () => resolve(vehiculosRequest.result);
-                vehiculosRequest.onerror = () => resolve([]);
-            });
-
-            // Construir objeto completo para el modal
-            const detalles = {
-                ...solicitud,
-                colaboradores: isVehicle ? [] : colaboradores.filter(c => c.id.toString() === searchId),
-                vehiculos: isVehicle ? vehiculos.filter(v => v.id.toString() === searchId) : [],
-                mensajeVehiculos: isVehicle ? solicitud.mensajeVehiculos : null // Excluir mensajeVehiculos para colaboradores
-            };
-
-            llenarModal(detalles, cleanId, isVehicle);
         }
-    } catch (error) {
-        console.error('Error al obtener detalles:', error);
-        Swal.fire({ 
-            icon: 'error', 
-            title: 'Error', 
-            text: error.message || 'Ocurrió un error al obtener los detalles. Por favor, intenta nuevamente.' 
-        });
-    }
-}
 
         function buscar() {
             const id = document.getElementById('buscarId').value.trim();
