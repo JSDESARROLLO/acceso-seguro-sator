@@ -2491,6 +2491,79 @@
                 if (!procesoEnCurso) mostrarConfirmacionModal('salida');
             };
 
+            document.getElementById('registrarIngresoBtn').onclick = async () => {
+                if (procesoEnCurso) return;
+                procesoEnCurso = true;
+                try {
+                    const solicitudId = document.getElementById('detalleId').textContent;
+                    
+                    if (navigator.onLine) {
+                        const response = await fetch(`/api/solicitudes/${solicitudId}/registrar-ingreso`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Error al registrar el ingreso');
+                        }
+
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            // Actualizar el estado en el modal
+                            modalData.estado_actual = 'en labor';
+                            
+                            // Actualizar los botones
+                            configurarBotones(modalData);
+                            
+                            // Mostrar mensaje de éxito
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Éxito',
+                                text: 'Ingreso registrado correctamente',
+                                timer: 1500
+                            });
+                        } else {
+                            throw new Error(data.message || 'Error al registrar el ingreso');
+                        }
+                    } else {
+                        // Modo offline - guardar en IndexedDB
+                        await addActionToDB({
+                            type: 'registrarIngreso',
+                            data: {
+                                solicitudId,
+                                estadoActual: modalData.estado_actual
+                            }
+                        });
+
+                        // Actualizar el estado en el modal
+                        modalData.estado_actual = 'en labor';
+                        
+                        // Actualizar los botones
+                        configurarBotones(modalData);
+                        
+                        // Mostrar mensaje de éxito
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Sin Conexión',
+                            text: 'La acción se ha guardado localmente y se sincronizará cuando haya conexión.',
+                            timer: 1500
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error al registrar ingreso:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: error.message || 'Error al registrar el ingreso'
+                    });
+                } finally {
+                    procesoEnCurso = false;
+                }
+            };
+
             confirmarRegistroBtn.addEventListener('click', async () => {
                 if (procesoEnCurso) return;
 
@@ -2840,6 +2913,13 @@
                 const searchId = isVehicle ? cleanId.replace('VH-', '') : cleanId;
                 const url = `/api/solicitudes/seguridad/${cleanId}`;
 
+                // Primero verificar si hay acciones pendientes de ingreso en IndexedDB
+                const pendingActions = await getPendingActions();
+                const pendingIngreso = pendingActions.find(action => 
+                    action.type === 'registrarIngreso' && 
+                    action.data.solicitudId === searchId
+                );
+
                 if (navigator.onLine) {
                     const response = await fetch(url).catch(error => {
                         console.error('Error de red:', error);
@@ -2864,6 +2944,11 @@
                             text: 'No se recibieron datos válidos del servidor.' 
                         });
                         return;
+                    }
+
+                    // Si hay un ingreso pendiente, actualizar el estado
+                    if (pendingIngreso) {
+                        data.estado_actual = 'en labor';
                     }
 
                     // Guardar en IndexedDB
@@ -2991,6 +3076,11 @@
                             text: 'No se encontraron detalles de la solicitud en caché.'
                         });
                         return;
+                    }
+
+                    // Si hay un ingreso pendiente, actualizar el estado
+                    if (pendingIngreso) {
+                        solicitud.estado_actual = 'en labor';
                     }
 
                     // Obtener todos los colaboradores de la solicitud
