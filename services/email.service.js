@@ -1,7 +1,7 @@
 // services/email.service.js
 const nodemailer = require('nodemailer');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
 const handlebars = require('handlebars');
 const { format } = require('date-fns');
 const { Upload } = require('@aws-sdk/lib-storage');
@@ -38,7 +38,7 @@ class EmailService {
           if (options.template) {
             // Si se proporciona un template, leer y compilar el archivo
             const templatePath = path.join(__dirname, '../templates/emails', `${options.template}.html`);
-            const templateContent = await fs.readFile(templatePath, 'utf-8');
+            const templateContent = fs.readFileSync(templatePath, 'utf-8');
             const template = handlebars.compile(templateContent);
             htmlContent = template(options.context || {});
           } else if (options.html) {
