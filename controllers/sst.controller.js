@@ -924,8 +924,7 @@ controller.getColaboradores = async (req, res) => {
     }
 };
 
-
-  // Obtener Plantilla SS existente
+// Obtener Plantilla SS existente
  
   controller.getPlantillaSS = async (req, res) => {
     const { documentoId } = req.params;

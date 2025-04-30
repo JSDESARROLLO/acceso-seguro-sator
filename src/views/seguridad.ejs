@@ -2136,127 +2136,107 @@
         
         // Function to configure buttons
         function configurarBotones(data, isVehicle = false) {
-            const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
-            const registrarEntradaBtn = document.getElementById('registrarEntradaBtn');
-            const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
-            const mensajeEstado = document.getElementById('mensajeEstado');
+    const registrarIngresoBtn = document.getElementById('registrarIngresoBtn');
+    const registrarEntradaBtn = document.getElementById('registrarEntradaBtn');
+    const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
+    const mensajeEstado = document.getElementById('mensajeEstado');
 
-            // Verificar si hay colaboradores inactivos
-            const hayColaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
+    // Verificar si hay colaboradores inactivos
+    const hayColaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
+    
+    // Verificar si hay vehículos inactivos (solo para vehículos)
+    const hayVehiculosInactivos = isVehicle && data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
+    
+    // Verificar problemas con documentos basado en el estado real de los colaboradores
+    const hayProblemasCursoSiso = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
+        col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
+    );
+    
+    const hayProblemasPlantillaSS = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
+        col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
+    );
+    
+    // Verificar problemas con vehículos (solo para vehículos)
+    const problemasVehiculos = [];
+    if (isVehicle && data.vehiculos) {
+        data.vehiculos.forEach(veh => {
+            const hoy = new Date();
+            const soatFin = new Date(veh.soat_fin);
+            const tecnomecanicaFin = new Date(veh.tecnomecanica_fin);
             
-            // Verificar si hay vehículos inactivos (solo para vehículos)
-            const hayVehiculosInactivos = isVehicle && data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
+            const formatDate = (date) => {
+                if (!date || isNaN(date.getTime())) return 'N/A';
+                return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+            };
             
-            // Verificar problemas con documentos basado en el estado real de los colaboradores
-            const hayProblemasCursoSiso = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
-                col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
-            );
-            
-            const hayProblemasPlantillaSS = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
-                col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
-            );
-            
-            // Verificar problemas con vehículos (solo para vehículos)
-            const problemasVehiculos = [];
-            if (isVehicle && data.vehiculos) {
-                data.vehiculos.forEach(veh => {
-                    const hoy = new Date();
-                    const soatFin = new Date(veh.soat_fin);
-                    const tecnomecanicaFin = new Date(veh.tecnomecanica_fin);
-                    
-                    const formatDate = (date) => {
-                        if (!date || isNaN(date.getTime())) return 'N/A';
-                        return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-                    };
-                    
-                    if (soatFin < hoy) {
-                        problemasVehiculos.push(`SOAT del vehículo ${veh.matricula} vencido desde ${formatDate(soatFin)}`);
-                    }
-                    if (tecnomecanicaFin < hoy) {
-                        problemasVehiculos.push(`Tecnomecánica del vehículo ${veh.matricula} vencida desde ${formatDate(tecnomecanicaFin)}`);
-                    }
-                    if (!veh.licencia_conduccion) {
-                        problemasVehiculos.push(`Licencia de conducción del vehículo ${veh.matricula} no aprobada`);
-                    }
-                    if (!veh.licencia_transito) {
-                        problemasVehiculos.push(`Licencia de tránsito del vehículo ${veh.matricula} no aprobada`);
-                    }
-                });
+            if (soatFin < hoy) {
+                problemasVehiculos.push(`SOAT del vehículo ${veh.matricula} vencido desde ${formatDate(soatFin)}`);
             }
-            const hayProblemasVehiculos = problemasVehiculos.length > 0;
+            if (tecnomecanicaFin < hoy) {
+                problemasVehiculos.push(`Tecnomecánica del vehículo ${veh.matricula} vencida desde ${formatDate(tecnomecanicaFin)}`);
+            }
+            if (!veh.licencia_conduccion) {
+                problemasVehiculos.push(`Licencia de conducción del vehículo ${veh.matricula} no aprobada`);
+            }
+            if (!veh.licencia_transito) {
+                problemasVehiculos.push(`Licencia de tránsito del vehículo ${veh.matricula} no aprobada`);
+            }
+        });
+    }
+    const hayProblemasVehiculos = problemasVehiculos.length > 0;
+    
+    // Verificar estado vencido
+    const estadoVencido = data.estado_actual ? data.estado_actual.includes('vencido') : false;
+    
+    // Verificar advertencia de ubicación
+    const hayAdvertenciaUbicacion = data.advertencia ? data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación') : false;
+
+    // Construir mensaje detallado para restricciones
+    let mensajeDetallado = '';
+    if (hayColaboradoresInactivos) mensajeDetallado += 'Hay colaboradores con ingreso cancelado. ';
+    if (hayVehiculosInactivos) mensajeDetallado += 'Hay vehículos con ingreso cancelado. ';
+    if (estadoVencido) mensajeDetallado += 'La solicitud está vencida. ';
+    if (hayAdvertenciaUbicacion) mensajeDetallado += data.advertencia + ' ';
+    if (hayProblemasCursoSiso) mensajeDetallado += 'Hay problemas con el curso SISO de los colaboradores. ';
+    if (hayProblemasPlantillaSS) mensajeDetallado += 'Hay problemas con la plantilla de seguridad social. ';
+    if (hayProblemasVehiculos) mensajeDetallado += problemasVehiculos.join('; ') + ' ';
+    
+    // Determinar si hay alguna restricción que deshabilite los botones
+    const hayRestricciones = hayColaboradoresInactivos || hayVehiculosInactivos || estadoVencido || 
+                           hayAdvertenciaUbicacion || hayProblemasCursoSiso || hayProblemasPlantillaSS || 
+                           hayProblemasVehiculos;
+
+    // Actualizar mensaje de estado
+    mensajeEstado.textContent = hayRestricciones ? mensajeDetallado.trim() : '';
+
+    // Configurar botón de Registrar Ingreso
+    if (registrarIngresoBtn) {
+        const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !hayRestricciones;
+        registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
+        registrarIngresoBtn.title = puedeRegistrarIngreso ? 
+            'Registrar ingreso de colaboradores' : 
+            (mensajeDetallado.trim() || 'No se puede registrar ingreso en este momento');
+    }
+
+    // Configurar botones de Entrada y Salida
+    if (registrarEntradaBtn && registrarSalidaBtn) {
+        const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
+        
+        registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
+        registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
+        
+        const tituloBase = mensajeDetallado.trim() || 'No se puede registrar entrada/salida en este momento';
+        const tituloOffline = ' (se guardará localmente)';
+        
+        registrarEntradaBtn.title = puedeRegistrarEntradaSalida ? 
+            (!navigator.onLine ? 'Registrar entrada' + tituloOffline : 'Registrar entrada') : 
+            tituloBase;
             
-            // Verificar estado vencido
-            const estadoVencido = data.estado_actual ? data.estado_actual.includes('vencido') : false;
-            
-            // Verificar advertencia de ubicación
-            const hayAdvertenciaUbicacion = data.advertencia ? data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación') : false;
-
-            // Determinar si hay alguna restricción que deshabilite los botones
-            const hayRestricciones = hayColaboradoresInactivos || 
-                                    hayVehiculosInactivos || 
-                                    hayProblemasCursoSiso || 
-                                    hayProblemasPlantillaSS || 
-                                    hayProblemasVehiculos || 
-                                    estadoVencido || 
-                                    hayAdvertenciaUbicacion;
-
-            // Construir mensaje de estado detallado
-            let mensajeDetallado = '';
-            if (hayRestricciones) {
-                mensajeDetallado = 'No se pueden realizar acciones debido a:';
-                if (hayColaboradoresInactivos) mensajeDetallado += '\n- Hay colaboradores inactivos';
-                if (hayVehiculosInactivos) mensajeDetallado += '\n- Hay vehículos inactivos';
-                if (hayProblemasCursoSiso) mensajeDetallado += '\n- Hay problemas con cursos SISO';
-                if (hayProblemasPlantillaSS) mensajeDetallado += '\n- Hay problemas con plantillas SS';
-                if (hayProblemasVehiculos) {
-                    mensajeDetallado += '\n- Problemas con vehículos:';
-                    problemasVehiculos.forEach(problema => {
-                        mensajeDetallado += `\n  * ${problema}`;
-                    });
-                }
-                if (estadoVencido) mensajeDetallado += '\n- El estado de la solicitud está vencido';
-                if (hayAdvertenciaUbicacion) mensajeDetallado += '\n- El lugar de la solicitud no coincide con tu ubicación';
-            } else {
-                mensajeDetallado = 'Todos los requisitos están en orden. Puedes realizar las acciones.';
-            }
-
-            // Actualizar el mensaje de estado
-            if (mensajeEstado) {
-                mensajeEstado.textContent = mensajeDetallado;
-                mensajeEstado.style.color = hayRestricciones ? 'var(--color-danger)' : 'var(--color-success)';
-            }
-
-            // Configurar botón de Registrar Ingreso
-            if (registrarIngresoBtn) {
-                const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !hayRestricciones;
-                registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
-                registrarIngresoBtn.title = puedeRegistrarIngreso ? 
-                    'Registrar ingreso de colaboradores' : 
-                    mensajeDetallado;
-            }
-
-            // Configurar botones de Entrada y Salida
-            if (registrarEntradaBtn && registrarSalidaBtn) {
-                const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
-                
-                // Aplicar las mismas restricciones tanto en línea como fuera de línea
-                registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
-                registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
-                
-                // Actualizar los títulos de los botones
-                const tituloBase = mensajeDetallado;
-                const tituloOffline = ' (se guardará localmente)';
-                
-                registrarEntradaBtn.title = !navigator.onLine && puedeRegistrarEntradaSalida ? 
-                    tituloBase + tituloOffline : 
-                    tituloBase;
-                    
-                registrarSalidaBtn.title = !navigator.onLine && puedeRegistrarEntradaSalida ? 
-                    tituloBase + tituloOffline : 
-                    tituloBase;
-            }
-        }
-
+        registrarSalidaBtn.title = puedeRegistrarEntradaSalida ? 
+            (!navigator.onLine ? 'Registrar salida' + tituloOffline : 'Registrar salida') : 
+            tituloBase;
+    }
+}
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
             const initialData = <%- JSON.stringify(typeof modalData !== 'undefined' ? modalData : null) %>;

@@ -183,21 +183,18 @@ async function handleStaticAssetRequest(request) {
   } catch (error) {
     console.warn("Solicitud de recurso estático fallida:", request.url)
 
-    // Para solicitudes de imágenes, devolver un placeholder
+    // Para solicitudes de imágenes, devolver una respuesta vacía
     if (request.url.match(/\.(jpg|jpeg|png|gif|svg)$/i)) {
-      return (
-        caches.match("/img/placeholder.svg") ||
-        new Response("Imagen no disponible offline", {
-          status: 404,
-          headers: { "Content-Type": "text/plain" },
-        })
-      )
+      return new Response(null, {
+        status: 200,
+        headers: { "Content-Type": "image/png" }
+      })
     }
 
     // Para otros recursos, devolver una respuesta de error simple
     return new Response("Recurso no disponible offline", {
       status: 404,
-      headers: { "Content-Type": "text/plain" },
+      headers: { "Content-Type": "text/plain" }
     })
   }
 }
