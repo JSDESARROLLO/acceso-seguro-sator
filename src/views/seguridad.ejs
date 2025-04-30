@@ -664,39 +664,27 @@
             color: var(--color-danger);
             font-size: var(--font-size-sm);
             margin-top: 0.5rem;
+            display: block;
         }
         
-        .colaborador-checkbox,
-        .vehiculo-checkbox { 
-            height: 1.25rem; 
-            width: 1.25rem;
-            border-radius: var(--border-radius-sm);
-            border: 2px solid var(--color-muted);
-            appearance: none;
-            background-color: var(--color-white);
-            margin-top: 0.5rem;
-            cursor: pointer;
+        #advertencia:empty {
+            display: none;
+        }
+        
+        #advertencia.ubicacion-error {
+            color: var(--color-danger);
+            font-weight: bold;
+            background-color: #ffeeee;
+            border-left: 4px solid var(--color-danger);
+            padding: 8px 12px;
+            margin-top: 10px;
+            border-radius: var(--border-radius);
             position: relative;
-            transition: var(--transition-all);
         }
         
-        .colaborador-checkbox:checked,
-        .vehiculo-checkbox:checked {
-            background-color: var(--color-primary);
-            border-color: var(--color-primary);
-        }
-        
-        .colaborador-checkbox:checked::after,
-        .vehiculo-checkbox:checked::after {
-            content: '';
-            position: absolute;
-            left: 6px;
-            top: 2px;
-            width: 5px;
-            height: 10px;
-            border: solid white;
-            border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
+        #advertencia.ubicacion-error::before {
+            content: '⚠️';
+            margin-right: 8px;
         }
         
         #mensajeEstado { 
@@ -707,6 +695,26 @@
             padding: 0.5rem;
             background-color: var(--color-gray-light);
             border-radius: var(--border-radius);
+            display: block;
+        }
+        
+        #mensajeEstado:empty {
+            display: none;
+        }
+        
+        #mensajeEstado.text-warning {
+            color: var(--color-dark);
+            background-color: #fff3cd;
+            border-left: 4px solid var(--color-warning);
+            padding-left: 0.75rem;
+        }
+
+        #mensajeEstado.text-danger {
+            color: var(--color-white);
+            background-color: var(--color-danger);
+            border-left: 4px solid #991b1b;
+            padding-left: 0.75rem;
+            font-weight: bold;
         }
         
         #loadingOverlay {
@@ -1587,6 +1595,39 @@
                 height: 50vh;
             }
         }
+
+        .colaborador-checkbox,
+        .vehiculo-checkbox { 
+            height: 1.25rem; 
+            width: 1.25rem;
+            border-radius: var(--border-radius-sm);
+            border: 2px solid var(--color-muted);
+            appearance: none;
+            background-color: var(--color-white);
+            margin-top: 0.5rem;
+            cursor: pointer;
+            position: relative;
+            transition: var(--transition-all);
+        }
+        
+        .colaborador-checkbox:checked,
+        .vehiculo-checkbox:checked {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+        
+        .colaborador-checkbox:checked::after,
+        .vehiculo-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 2px;
+            width: 5px;
+            height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
     </style>
 </head>
 <body>
@@ -2055,14 +2096,22 @@
             document.getElementById('detalleEstado').textContent = data.estado_actual || 'Desconocido';
             document.getElementById('detalleEstado').className = 'badge ' + getEstadoClass(data.estado_actual);
 
-            // Mostrar advertencias específicas
-            let advertencia = '';
-            if (data.advertencia) advertencia += data.advertencia + ' ';
-            if (data.mensajeCursoSiso && !isVehicle) advertencia += data.mensajeCursoSiso + ' ';
-            if (data.mensajePlantillaSS && !isVehicle) advertencia += data.mensajePlantillaSS + ' ';
-            if (data.mensajeVehiculos && isVehicle) advertencia += data.mensajeVehiculos + ' ';
-            document.getElementById('advertencia').textContent = advertencia.trim() || 'Sin advertencias';
-
+            // Mostrar solo la advertencia de ubicación en el elemento advertencia
+            const advertenciaElem = document.getElementById('advertencia');
+            const mensajeEstadoElem = document.getElementById('mensajeEstado');
+            
+            if (data.advertencia && data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación')) {
+                // Aplicar a advertencia y dejar mensajeEstado vacío para evitar duplicación
+                advertenciaElem.textContent = data.advertencia;
+                advertenciaElem.className = 'ubicacion-error';
+                mensajeEstadoElem.textContent = '';
+                mensajeEstadoElem.className = '';
+            } else {
+                advertenciaElem.textContent = '';
+                advertenciaElem.className = '';
+                // mensajeEstado se actualizará en configurarBotones
+            }
+            
             const colaboradoresContainer = document.getElementById('detalleColaboradores');
             const vehiculosContainer = document.getElementById('detalleVehiculos');
             const colaboradoresTitle = document.querySelectorAll('h5.mt-4')[0];
@@ -2141,102 +2190,107 @@
     const registrarSalidaBtn = document.getElementById('registrarSalidaBtn');
     const mensajeEstado = document.getElementById('mensajeEstado');
 
-    // Verificar si hay colaboradores inactivos
-    const hayColaboradoresInactivos = data.colaboradores && data.colaboradores.some(col => col.estado === 0);
-    
-    // Verificar si hay vehículos inactivos (solo para vehículos)
-    const hayVehiculosInactivos = isVehicle && data.vehiculos && data.vehiculos.some(veh => veh.estado === 0);
-    
-    // Verificar problemas con documentos basado en el estado real de los colaboradores
-    const hayProblemasCursoSiso = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
-        col.cursoSiso === 'Vencido' || col.cursoSiso === 'Perdido' || col.cursoSiso === 'No'
-    );
-    
-    const hayProblemasPlantillaSS = !isVehicle && data.colaboradores && data.colaboradores.some(col => 
-        col.plantillaSS === 'Vencida' || col.plantillaSS === 'No definida'
-    );
-    
-    // Verificar problemas con vehículos (solo para vehículos)
-    const problemasVehiculos = [];
-    if (isVehicle && data.vehiculos) {
-        data.vehiculos.forEach(veh => {
-            const hoy = new Date();
-            const soatFin = new Date(veh.soat_fin);
-            const tecnomecanicaFin = new Date(veh.tecnomecanica_fin);
-            
-            const formatDate = (date) => {
-                if (!date || isNaN(date.getTime())) return 'N/A';
-                return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-            };
-            
-            if (soatFin < hoy) {
-                problemasVehiculos.push(`SOAT del vehículo ${veh.matricula} vencido desde ${formatDate(soatFin)}`);
-            }
-            if (tecnomecanicaFin < hoy) {
-                problemasVehiculos.push(`Tecnomecánica del vehículo ${veh.matricula} vencida desde ${formatDate(tecnomecanicaFin)}`);
-            }
-            if (!veh.licencia_conduccion) {
-                problemasVehiculos.push(`Licencia de conducción del vehículo ${veh.matricula} no aprobada`);
-            }
-            if (!veh.licencia_transito) {
-                problemasVehiculos.push(`Licencia de tránsito del vehículo ${veh.matricula} no aprobada`);
-            }
-        });
-    }
-    const hayProblemasVehiculos = problemasVehiculos.length > 0;
-    
-    // Verificar estado vencido
-    const estadoVencido = data.estado_actual ? data.estado_actual.includes('vencido') : false;
-    
-    // Verificar advertencia de ubicación
-    const hayAdvertenciaUbicacion = data.advertencia ? data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación') : false;
-
-    // Construir mensaje detallado para restricciones
     let mensajeDetallado = '';
-    if (hayColaboradoresInactivos) mensajeDetallado += 'Hay colaboradores con ingreso cancelado. ';
-    if (hayVehiculosInactivos) mensajeDetallado += 'Hay vehículos con ingreso cancelado. ';
-    if (estadoVencido) mensajeDetallado += 'La solicitud está vencida. ';
-    if (hayAdvertenciaUbicacion) mensajeDetallado += data.advertencia + ' ';
-    if (hayProblemasCursoSiso) mensajeDetallado += 'Hay problemas con el curso SISO de los colaboradores. ';
-    if (hayProblemasPlantillaSS) mensajeDetallado += 'Hay problemas con la plantilla de seguridad social. ';
-    if (hayProblemasVehiculos) mensajeDetallado += problemasVehiculos.join('; ') + ' ';
-    
-    // Determinar si hay alguna restricción que deshabilite los botones
-    const hayRestricciones = hayColaboradoresInactivos || hayVehiculosInactivos || estadoVencido || 
-                           hayAdvertenciaUbicacion || hayProblemasCursoSiso || hayProblemasPlantillaSS || 
-                           hayProblemasVehiculos;
+    let bloqueoRegistro = false; // Controla si se bloquea el registro
 
-    // Actualizar mensaje de estado
-    mensajeEstado.textContent = hayRestricciones ? mensajeDetallado.trim() : '';
-
-    // Configurar botón de Registrar Ingreso
-    if (registrarIngresoBtn) {
-        const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !hayRestricciones;
-        registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
-        registrarIngresoBtn.title = puedeRegistrarIngreso ? 
-            'Registrar ingreso de colaboradores' : 
-            (mensajeDetallado.trim() || 'No se puede registrar ingreso en este momento');
+    // Verificar advertencia de ubicación (bloquea cualquier registro)
+    const hayAdvertenciaUbicacion = data.advertencia && data.advertencia.includes('ADVERTENCIA: El lugar de la solicitud no coincide con tu ubicación');
+    if (hayAdvertenciaUbicacion) {
+        // No añadir al mensajeDetallado para evitar duplicación (ya se muestra en el elemento advertencia)
+        bloqueoRegistro = true;
     }
 
-    // Configurar botones de Entrada y Salida
+    // Validar estado vencido de la solicitud
+    const estadoVencido = data.estado_actual && data.estado_actual.includes('vencido');
+    if (estadoVencido) {
+        mensajeDetallado += 'La solicitud está vencida. ';
+        bloqueoRegistro = true;
+    }
+
+    // Validar documentos de colaboradores
+    if (!isVehicle && data.colaboradores && data.colaboradores.length === 1) {
+        const colaborador = data.colaboradores[0];
+        if (colaborador.cursoSiso === 'Vencido' || colaborador.cursoSiso === 'Perdido' || colaborador.cursoSiso === 'No') {
+            mensajeDetallado += `Curso SISO ${colaborador.cursoSiso.toLowerCase()} para ${colaborador.nombre}. `;
+            bloqueoRegistro = true;
+        }
+        if (colaborador.plantillaSS === 'Vencida' || colaborador.plantillaSS === 'No definida') {
+            mensajeDetallado += `Plantilla de Seguridad Social ${colaborador.plantillaSS.toLowerCase()} para ${colaborador.nombre}. `;
+            bloqueoRegistro = true;
+        }
+        if (colaborador.estado === 0) {
+            mensajeDetallado += 'Este colaborador tiene ingreso cancelado. ';
+            bloqueoRegistro = true;
+        }
+    }
+
+    // Validar documentos de vehículos
+    if (isVehicle && data.vehiculos && data.vehiculos.length === 1) {
+        const vehiculo = data.vehiculos[0];
+        const hoy = new Date();
+        if (vehiculo.soat_fin && new Date(vehiculo.soat_fin) < hoy) {
+            mensajeDetallado += `SOAT del vehículo ${vehiculo.matricula} vencido. `;
+            bloqueoRegistro = true;
+        }
+        if (vehiculo.tecnomecanica_fin && new Date(vehiculo.tecnomecanica_fin) < hoy) {
+            mensajeDetallado += `Tecnomecánica del vehículo ${vehiculo.matricula} vencida. `;
+            bloqueoRegistro = true;
+        }
+        if (!vehiculo.licencia_conduccion) {
+            mensajeDetallado += `Licencia de conducción del vehículo ${vehiculo.matricula} no aprobada. `;
+            bloqueoRegistro = true;
+        }
+        if (!vehiculo.licencia_transito) {
+            mensajeDetallado += `Licencia de tránsito del vehículo ${vehiculo.matricula} no aprobada. `;
+            bloqueoRegistro = true;
+        }
+        if (vehiculo.estado === 0) {
+            mensajeDetallado += 'Este vehículo tiene ingreso cancelado. ';
+            bloqueoRegistro = true;
+        }
+    }
+
+    // Determinar si se puede registrar basado en estado y documentos
+    const puedeRegistrarIngreso = data.estado_actual === 'pendiente ingreso' && !bloqueoRegistro;
+    const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !bloqueoRegistro;
+
+    // Actualizar mensaje de estado solo si hay mensajes específicos de documentos para mostrar
+    // y si no hay advertencia de ubicación (para evitar duplicación)
+    if (mensajeDetallado.trim()) {
+        mensajeEstado.textContent = mensajeDetallado.trim();
+        mensajeEstado.className = 'text-warning';
+    } else if (!hayAdvertenciaUbicacion) {
+        mensajeEstado.textContent = '';
+        mensajeEstado.className = '';
+    }
+
+    // Configurar botones
+    if (registrarIngresoBtn) {
+        registrarIngresoBtn.disabled = !puedeRegistrarIngreso;
+        registrarIngresoBtn.title = bloqueoRegistro 
+            ? 'No se puede registrar debido a documentos vencidos o advertencias.'
+            : (data.estado_actual === 'pendiente ingreso' 
+                ? 'Registrar ingreso de colaboradores' 
+                : 'No se puede registrar ingreso cuando la solicitud no está en estado "pendiente ingreso"');
+    }
+
     if (registrarEntradaBtn && registrarSalidaBtn) {
-        const puedeRegistrarEntradaSalida = data.estado_actual === 'en labor' && !hayRestricciones;
-        
         registrarEntradaBtn.disabled = !puedeRegistrarEntradaSalida;
         registrarSalidaBtn.disabled = !puedeRegistrarEntradaSalida;
-        
-        const tituloBase = mensajeDetallado.trim() || 'No se puede registrar entrada/salida en este momento';
         const tituloOffline = ' (se guardará localmente)';
-        
-        registrarEntradaBtn.title = puedeRegistrarEntradaSalida ? 
-            (!navigator.onLine ? 'Registrar entrada' + tituloOffline : 'Registrar entrada') : 
-            tituloBase;
-            
-        registrarSalidaBtn.title = puedeRegistrarEntradaSalida ? 
-            (!navigator.onLine ? 'Registrar salida' + tituloOffline : 'Registrar salida') : 
-            tituloBase;
+        registrarEntradaBtn.title = bloqueoRegistro 
+            ? 'No se puede registrar debido a documentos vencidos o advertencias.'
+            : (data.estado_actual === 'en labor' 
+                ? (!navigator.onLine ? 'Registrar entrada' + tituloOffline : 'Registrar entrada') 
+                : 'No se puede registrar entrada cuando la solicitud no está en estado "en labor"');
+        registrarSalidaBtn.title = bloqueoRegistro 
+            ? 'No se puede registrar debido a documentos vencidos o advertencias.'
+            : (data.estado_actual === 'en labor' 
+                ? (!navigator.onLine ? 'Registrar salida' + tituloOffline : 'Registrar salida') 
+                : 'No se puede registrar salida cuando la solicitud no está en estado "en labor"');
     }
 }
+       
         // Event listeners
         document.addEventListener('DOMContentLoaded', () => {
             const initialData = <%- JSON.stringify(typeof modalData !== 'undefined' ? modalData : null) %>;
@@ -2428,20 +2482,12 @@
                     return;
                 }
 
-                if (modalData.mensajeCursoSiso || modalData.mensajePlantillaSS || modalData.mensajeVehiculos) {
-                    let mensaje = '';
-                    if (modalData.mensajeCursoSiso) mensaje += modalData.mensajeCursoSiso + ' ';
-                    if (modalData.mensajePlantillaSS) mensaje += modalData.mensajePlantillaSS + ' ';
-                    if (modalData.mensajeVehiculos) mensaje += modalData.mensajeVehiculos + ' ';
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Restricción de Registro',
-                        text: mensaje.trim(),
-                        confirmButtonText: 'Entendido'
-                    });
-                    return;
-                }
-
+                // Continuar directamente con el proceso sin verificar advertencias generales
+                prepararYMostrarModal(checkboxes, tipo);
+            };
+            
+            // Función auxiliar para preparar y mostrar el modal de confirmación
+            function prepararYMostrarModal(checkboxes, tipo) {
                 colaboradoresSeleccionados = Array.from(checkboxes).map(checkbox => {
                     const cardBody = checkbox.closest('.card-body');
                     const isVehiculo = checkbox.classList.contains('vehiculo-checkbox');
@@ -2460,8 +2506,9 @@
                 const detallesModal = document.getElementById('detallesModal');
                 detallesModal.classList.remove('show');
                 
+                const modal = document.getElementById('confirmacionModal');
                 modal.classList.add('show');
-            };
+            }
 
             document.getElementById('registrarEntradaBtn').onclick = () => {
                 if (!procesoEnCurso) mostrarConfirmacionModal('entrada');
