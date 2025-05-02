@@ -51,113 +51,204 @@
 let preguntaCount = 0;
 
 function agregarPregunta() {
-    const preguntasDiv = document.getElementById('preguntas');
-    const nuevaPregunta = document.createElement('div');
-    nuevaPregunta.className = 'pregunta border p-4 rounded-lg';
+    const preguntasContainer = document.getElementById('preguntasContainer');
+    const preguntaIndex = preguntasContainer.children.length;
     
-    nuevaPregunta.innerHTML = `
-        <div class="space-y-4">
-            <div class="flex justify-between items-center">
-                <label class="block text-sm font-medium text-gray-700">Pregunta ${preguntaCount + 1}</label>
-                <button type="button" onclick="eliminarPregunta(this)" class="text-red-600 hover:text-red-800">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            <div>
-                <input type="text" name="preguntas[${preguntaCount}][texto]" required 
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Imagen o Video</label>
-                <input type="file" 
-                       name="preguntas[${preguntaCount}][multimedia]" 
-                       accept="image/*,video/*" 
-                       class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-                <p class="mt-1 text-sm text-gray-500">Formatos permitidos: imágenes (jpg, png, gif) y videos (mp4, webm)</p>
-            </div>
-
-            <div class="opciones space-y-2" data-pregunta-index="${preguntaCount}">
-                <div class="flex items-center gap-2 opcion-container">
-                    <input type="radio" name="preguntas[${preguntaCount}][respuesta_correcta]" value="0" required class="mr-2">
-                    <input type="text" name="preguntas[${preguntaCount}][opciones][]" 
-                        placeholder="Opción 1" required 
-                        class="inline-block w-64 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    <button type="button" onclick="eliminarOpcion(this)" class="text-red-600 hover:text-red-800 hidden">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="flex items-center gap-2 opcion-container">
-                    <input type="radio" name="preguntas[${preguntaCount}][respuesta_correcta]" value="1" required class="mr-2">
-                    <input type="text" name="preguntas[${preguntaCount}][opciones][]" 
-                        placeholder="Opción 2" required 
-                        class="inline-block w-64 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    <button type="button" onclick="eliminarOpcion(this)" class="text-red-600 hover:text-red-800">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <button type="button" onclick="agregarOpcion(${preguntaCount})" 
-                class="mt-2 inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                + Agregar Opción
+    const preguntaDiv = document.createElement('div');
+    preguntaDiv.className = 'pregunta bg-white p-6 rounded-lg shadow mb-6';
+    preguntaDiv.innerHTML = `
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Pregunta ${preguntaIndex + 1}</h3>
+            <button type="button" onclick="eliminarPregunta(this)" class="text-red-600 hover:text-red-800">
+                Eliminar
             </button>
         </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Texto de la pregunta</label>
+            <textarea name="preguntas[${preguntaIndex}][texto]" required
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Multimedia (opcional)</label>
+            <input type="file" 
+                   name="preguntas[${preguntaIndex}][multimedia]" 
+                   accept="image/*,video/*"
+                   onchange="handleFileUpload(this)"
+                   class="mt-1 block w-full">
+            <p class="mt-1 text-sm text-gray-500">
+                Para imágenes: se convertirán automáticamente a formato web. Para videos: máximo 150MB.
+            </p>
+        </div>
+        <div class="opciones-container space-y-2">
+            <div class="flex items-center space-x-2">
+                <input type="radio" name="preguntas[${preguntaIndex}][respuesta_correcta]" value="0" required
+                       class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300">
+                <input type="text" name="preguntas[${preguntaIndex}][opciones][]" required
+                       placeholder="Opción 1"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+        </div>
+        <button type="button" onclick="agregarOpcion(this)" 
+                class="mt-2 inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            Agregar opción
+        </button>
     `;
-    preguntasDiv.appendChild(nuevaPregunta);
-    preguntaCount++;
+    
+    preguntasContainer.appendChild(preguntaDiv);
 }
 
-function agregarOpcion(preguntaIndex) {
-    const opcionesDiv = document.querySelector(`[data-pregunta-index="${preguntaIndex}"]`);
-    const numOpciones = opcionesDiv.querySelectorAll('.opcion-container').length;
+async function handleFileUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    // Verificar si es un video
+    if (file.type.startsWith('video/')) {
+        if (file.size > 150 * 1024 * 1024) { // 150MB en bytes
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'El video no puede ser mayor a 150MB'
+            });
+            input.value = '';
+            return;
+        }
+    }
+
+    // Si es una imagen, convertirla a formato web
+    if (file.type.startsWith('image/')) {
+        try {
+            const webImage = await convertToWebImage(file);
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(webImage);
+            input.files = dataTransfer.files;
+        } catch (error) {
+            console.error('Error al convertir imagen:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Error al procesar la imagen'
+            });
+            input.value = '';
+            return;
+        }
+    }
+
+    // Obtener el archivo anterior si existe
+    const preguntaDiv = input.closest('.pregunta');
+    const archivoAnterior = preguntaDiv.querySelector('input[name$="[multimedia_url]"]')?.value;
+
+    // Crear FormData y agregar archivo y archivo anterior
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    if (archivoAnterior) {
+        formData.append('archivoAnterior', archivoAnterior);
+    }
+
+    try {
+        const response = await fetch('/capacitacion/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al subir el archivo');
+        }
+
+        const data = await response.json();
+        
+        // Actualizar el campo oculto con la nueva URL
+        if (!preguntaDiv.querySelector('input[name$="[multimedia_url]"]')) {
+            const inputUrl = document.createElement('input');
+            inputUrl.type = 'hidden';
+            inputUrl.name = input.name.replace('multimedia', 'multimedia_url');
+            preguntaDiv.appendChild(inputUrl);
+        }
+        preguntaDiv.querySelector('input[name$="[multimedia_url]"]').value = data.url;
+
+    } catch (error) {
+        console.error('Error al subir archivo:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al subir el archivo'
+        });
+        input.value = '';
+    }
+}
+
+async function convertToWebImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Mantener la proporción de aspecto
+                let width = img.width;
+                let height = img.height;
+                
+                // Redimensionar si es muy grande
+                const MAX_SIZE = 1920;
+                if (width > MAX_SIZE || height > MAX_SIZE) {
+                    if (width > height) {
+                        height = (height * MAX_SIZE) / width;
+                        width = MAX_SIZE;
+                    } else {
+                        width = (width * MAX_SIZE) / height;
+                        height = MAX_SIZE;
+                    }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Dibujar imagen con fondo blanco
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Convertir a WebP
+                canvas.toBlob((blob) => {
+                    const webImage = new File([blob], file.name.replace(/\.[^/.]+$/, '.webp'), {
+                        type: 'image/webp'
+                    });
+                    resolve(webImage);
+                }, 'image/webp', 0.8);
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function agregarOpcion(button) {
+    const preguntaDiv = button.closest('.pregunta');
+    const opcionesContainer = preguntaDiv.querySelector('.opciones-container');
+    const numOpciones = opcionesContainer.children.length;
     
     const nuevaOpcion = document.createElement('div');
-    nuevaOpcion.className = 'flex items-center gap-2 opcion-container';
+    nuevaOpcion.className = 'flex items-center space-x-2 opcion-container';
     nuevaOpcion.innerHTML = `
-        <input type="radio" name="preguntas[${preguntaIndex}][respuesta_correcta]" value="${numOpciones}" required class="mr-2">
-        <input type="text" name="preguntas[${preguntaIndex}][opciones][]" 
-            placeholder="Opción ${numOpciones + 1}" required 
-            class="inline-block w-64 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+        <input type="radio" name="preguntas[${numOpciones}][respuesta_correcta]" value="${numOpciones}" required class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300">
+        <input type="text" name="preguntas[${numOpciones}][opciones][]" required
+               placeholder="Opción ${numOpciones + 1}"
+               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
         <button type="button" onclick="eliminarOpcion(this)" class="text-red-600 hover:text-red-800">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
         </button>
     `;
-    opcionesDiv.appendChild(nuevaOpcion);
-    
-    // Mostrar todos los botones de eliminar si hay más de 2 opciones
-    if (numOpciones + 1 > 2) {
-        opcionesDiv.querySelectorAll('.opcion-container button').forEach(btn => btn.classList.remove('hidden'));
-    }
+    opcionesContainer.appendChild(nuevaOpcion);
 }
 
 function eliminarOpcion(button) {
-    const opcionesDiv = button.closest('.opciones');
     const opcionContainer = button.closest('.opcion-container');
-    const numOpciones = opcionesDiv.querySelectorAll('.opcion-container').length;
-    
-    if (numOpciones > 2) {
-        opcionContainer.remove();
-        // Actualizar los valores y placeholders de las opciones restantes
-        opcionesDiv.querySelectorAll('.opcion-container').forEach((container, index) => {
-            const radio = container.querySelector('input[type="radio"]');
-            const input = container.querySelector('input[type="text"]');
-            radio.value = index;
-            input.placeholder = `Opción ${index + 1}`;
-        });
-        
-        // Ocultar botones de eliminar si solo quedan 2 opciones
-        if (numOpciones - 1 <= 2) {
-            opcionesDiv.querySelectorAll('.opcion-container button').forEach(btn => btn.classList.add('hidden'));
-        }
-    }
+    opcionContainer.remove();
 }
 
 function eliminarPregunta(button) {
@@ -169,7 +260,7 @@ function eliminarPregunta(button) {
 function actualizarNumeracionPreguntas() {
     const preguntas = document.querySelectorAll('.pregunta');
     preguntas.forEach((pregunta, index) => {
-        const label = pregunta.querySelector('label');
+        const label = pregunta.querySelector('h3');
         label.textContent = `Pregunta ${index + 1}`;
     });
     preguntaCount = preguntas.length;

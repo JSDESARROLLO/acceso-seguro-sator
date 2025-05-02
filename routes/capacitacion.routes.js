@@ -8,8 +8,8 @@ const connection = require('../db/db');
 const crypto = require('crypto'); 
 const multer = require('multer');
 const path = require('path');
-const { S3Client } = require('@aws-sdk/client-s3');
-const { Upload } = require('@aws-sdk/lib-storage');
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { v4: uuidv4 } = require('uuid');
 
 // =========== RUTAS PÚBLICAS ===========
 
@@ -171,7 +171,22 @@ router.post('/crear', authenticateToken,   capacitacionController.crearCapacitac
 router.put('/editar/:id', authenticateToken,   capacitacionController.editarCapacitacion);
 router.get('/obtener/:id', authenticateToken,   capacitacionController.obtenerCapacitacion);
 router.delete('/eliminar/:id', authenticateToken,   capacitacionController.eliminarCapacitacion);
-router.post('/eliminar-multimedia', authenticateToken,   capacitacionController.eliminarMultimedia);
+router.post('/eliminar-multimedia', authenticateToken, async (req, res) => {
+    try {
+        const { fileUrl } = req.body;
+        
+        if (!fileUrl) {
+            return res.status(400).json({ error: 'No se proporcionó URL del archivo' });
+        }
+
+        await deleteFromSpaces(fileUrl);
+        
+        res.json({ success: true, message: 'Archivo eliminado exitosamente' });
+    } catch (error) {
+        console.error('Error al eliminar archivo:', error);
+        res.status(500).json({ error: 'Error al eliminar el archivo' });
+    }
+});
 
 // Ruta para verificar estado de capacitaciones
 router.get('/verificar/:colaborador_id/:solicitud_id', authenticateToken, async (req, res) => {
@@ -217,15 +232,42 @@ const upload = multer({
 });
 
 // Ruta para subir archivos (privada)
-router.post('/upload', authenticateToken,   upload.single('file'), async (req, res) => {
+router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
         }
 
-        const uniqueFilename = generateUniqueFilename(req.file.originalname);
-        const fileUrl = await uploadToSpaces(req.file.buffer, uniqueFilename);
+        // Si hay un archivo anterior, eliminarlo
+        if (req.body.archivoAnterior) {
+            try {
+                const s3Client = new S3Client({
+                    endpoint: `https://${process.env.DO_SPACES_ENDPOINT}`,
+                    region: "us-east-1",
+                    credentials: {
+                        accessKeyId: process.env.DO_SPACES_KEY,
+                        secretAccessKey: process.env.DO_SPACES_SECRET
+                    }
+                });
 
+                // Extraer el nombre del archivo de la URL
+                const urlAnterior = new URL(req.body.archivoAnterior);
+                const keyAnterior = urlAnterior.pathname.substring(1); // Eliminar el slash inicial
+
+                // Eliminar el archivo anterior
+                await s3Client.send(new DeleteObjectCommand({
+                    Bucket: process.env.DO_SPACES_BUCKET,
+                    Key: keyAnterior
+                }));
+
+                console.log('Archivo anterior eliminado:', keyAnterior);
+            } catch (error) {
+                console.error('Error al eliminar archivo anterior:', error);
+                // Continuar con la subida aunque falle la eliminación
+            }
+        }
+
+        const fileUrl = await uploadToSpaces(req.file, req.body.archivoAnterior);
         res.json({ url: fileUrl });
     } catch (error) {
         console.error('Error al procesar la subida del archivo:', error);
@@ -244,24 +286,60 @@ function generateUniqueFilename(originalname) {
     return `capacitaciones/${timestamp}${extension}`;
 }
 
-async function uploadToSpaces(buffer, filename) {
-    const upload = new Upload({
-        client: s3Client,
-        params: {
-            Bucket: process.env.DO_SPACES_BUCKET,
-            Key: filename,
-            Body: buffer,
-            ACL: 'public-read'
-        }
-    });
-
+async function uploadToSpaces(file, archivoAnterior = null) {
     try {
-        const data = await upload.done();
-        return data.Location;
-    } catch (err) {
-        console.error('Error al subir archivo a DigitalOcean Spaces:', err);
-        throw err;
+        // Si hay un archivo anterior, eliminarlo primero
+        if (archivoAnterior) {
+            await deleteFromSpaces(archivoAnterior);
+        }
+
+        // Verificar el tipo de archivo
+        const isVideo = file.mimetype.startsWith('video/');
+        const isImage = file.mimetype.startsWith('image/');
+
+        // Verificar tamaño para videos
+        if (isVideo && file.size > 150 * 1024 * 1024) { // 150MB en bytes
+            throw new Error('El video no puede ser mayor a 150MB');
+        }
+
+        // Generar nombre único usando UUID
+        const extension = file.originalname.split('.').pop().toLowerCase();
+        const fileName = `capacitaciones-img/${uuidv4()}.${extension}`;
+
+        // Configurar parámetros de subida
+        const uploadParams = {
+            Bucket: process.env.DO_SPACES_BUCKET,
+            Key: fileName,
+            Body: file.buffer,
+            ACL: 'public-read',
+            ContentType: file.mimetype
+        };
+
+        // Subir archivo usando PutObjectCommand
+        await s3Client.send(new PutObjectCommand(uploadParams));
+
+        // Retornar URL pública
+        return `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${fileName}`;
+    } catch (error) {
+        console.error('Error al subir archivo:', error);
+        throw new Error('Error al subir el archivo: ' + error.message);
     }
+}
+
+// Función para obtener el tipo MIME correcto
+function getContentType(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const contentTypes = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'mp4': 'video/mp4',
+        'webm': 'video/webm',
+        'ogg': 'video/ogg'
+    };
+    return contentTypes[ext] || 'application/octet-stream';
 }
 
 router.get('/detalles/:id', authenticateToken, async (req, res) => {
@@ -424,5 +502,31 @@ router.post('/filtrar/:id', authenticateToken, async (req, res) => {
         });
     }
 });
+
+// Función para borrar archivo de Spaces
+async function deleteFromSpaces(fileUrl) {
+    if (!fileUrl) {
+        console.log('No se proporcionó URL de archivo para borrar');
+        return;
+    }
+
+    try {
+        // Extraer la clave del archivo de la URL completa
+        const urlParts = fileUrl.split('/');
+        const fileKey = urlParts.slice(3).join('/'); // Obtener la ruta después del bucket y endpoint
+
+        const command = new DeleteObjectCommand({
+            Bucket: process.env.DO_SPACES_BUCKET,
+            Key: fileKey
+        });
+
+        console.log('Intentando borrar archivo de Spaces:', { fileUrl, fileKey });
+        await s3Client.send(command);
+        console.log('Archivo borrado exitosamente de Spaces:', { fileUrl });
+    } catch (error) {
+        console.error('Error al borrar archivo de Spaces:', error);
+        throw error;
+    }
+}
 
 module.exports = router;

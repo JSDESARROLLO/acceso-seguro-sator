@@ -25,7 +25,7 @@ app.use(helmet({
       connectSrc: ["'self'", "https:", "wss:", "ws:"],
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
+      mediaSrc: ["'self'", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
       frameSrc: ["'none'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"],

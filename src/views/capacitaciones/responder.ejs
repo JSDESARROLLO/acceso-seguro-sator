@@ -105,12 +105,31 @@
                                         
                                         <% if (pregunta.multimedia) { %>
                                             <div class="mb-4">
-                                                <% if (pregunta.multimedia.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/)) { %>
-                                                    <img src="<%= pregunta.multimedia %>" alt="Imagen de la pregunta" class="max-w-full h-auto rounded-lg shadow-md">
-                                                <% } else if (pregunta.multimedia.toLowerCase().match(/\.(mp4|webm|ogg)$/)) { %>
-                                                    <video src="<%= pregunta.multimedia %>" controls class="max-w-full h-auto rounded-lg shadow-md">
-                                                        Tu navegador no soporta el elemento de video.
-                                                    </video>
+                                                <% if (pregunta.multimedia.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)) { %>
+                                                    <img src="<%= pregunta.multimedia %>" 
+                                                         alt="Imagen de la pregunta" 
+                                                         class="max-w-full h-auto rounded-lg shadow-md"
+                                                         onerror="this.onerror=null; this.src='/img/error-image.png'; console.error('Error al cargar imagen:', this.src);">
+                                                    <div class="mt-2 text-sm text-gray-500">
+                                                        <a href="<%= pregunta.multimedia %>" target="_blank" class="text-indigo-600 hover:text-indigo-500">
+                                                            Ver imagen en tamaño completo
+                                                        </a>
+                                                    </div>
+                                                <% } else if (pregunta.multimedia.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/)) { %>
+                                                    <div class="relative w-full" style="padding-top: 56.25%;">
+                                                        <video controls 
+                                                               class="absolute top-0 left-0 w-full h-full rounded-lg shadow-md"
+                                                               onerror="this.onerror=null; this.innerHTML='Error al cargar el video'; console.error('Error al cargar video:', this.querySelector('source').src);">
+                                                            <source src="<%= pregunta.multimedia %>" type="video/mp4">
+                                                            <source src="<%= pregunta.multimedia %>" type="video/webm">
+                                                            <source src="<%= pregunta.multimedia %>" type="video/ogg">
+                                                            <p class="text-red-500">Tu navegador no soporta la reproducción de videos. 
+                                                                <a href="<%= pregunta.multimedia %>" target="_blank" class="text-indigo-600 hover:text-indigo-500">
+                                                                    Haz clic aquí para ver el video
+                                                                </a>
+                                                            </p>
+                                                        </video>
+                                                    </div>
                                                 <% } %>
                                             </div>
                                         <% } %>
