@@ -7,6 +7,7 @@ const { format } = require('date-fns');
 const { Upload } = require("@aws-sdk/lib-storage");
 const emailService = require('../services/email.service');
 const controllers = {};
+const ExcelJS = require('exceljs');
 
 // Configuración del cliente S3 para Digital Ocean Spaces
 const s3Client = new S3Client({
@@ -512,6 +513,77 @@ controllers.eliminarCapacitacion = async (req, res) => {
     } catch (error) {
         console.error('Error al eliminar capacitación:', error);
         res.status(500).json({ error: 'Error al eliminar la capacitación' });
+    }
+};
+
+// Función para descargar resultados en Excel
+controllers.descargarExcel = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Obtener todos los resultados sin filtros
+        const [resultados] = await connection.query(
+            `SELECT 
+                c.nombre as nombre_capacitacion,
+                col.id as colaborador_id,
+                col.nombre as nombre_colaborador,
+                col.cedula,
+                rc.solicitud_id,
+                rc.puntaje_obtenido,
+                rc.estado,
+                rc.fecha_vencimiento,
+                rc.created_at as fecha_intento
+            FROM capacitaciones c
+            LEFT JOIN resultados_capacitaciones rc ON c.id = rc.capacitacion_id
+            LEFT JOIN colaboradores col ON rc.colaborador_id = col.id
+            WHERE c.id = ?
+            ORDER BY rc.created_at DESC`,
+            [id]
+        );
+
+        // Crear un nuevo libro de Excel
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Resultados Capacitación');
+
+        // Definir las columnas
+        worksheet.columns = [
+            { header: 'Colaborador', key: 'colaborador', width: 30 },
+            { header: 'ID Colaborador', key: 'id_colaborador', width: 15 },
+            { header: 'Cédula', key: 'cedula', width: 15 },
+            { header: 'ID Solicitud', key: 'solicitud', width: 15 },
+            { header: 'Puntaje', key: 'puntaje', width: 10 },
+            { header: 'Estado', key: 'estado', width: 15 },
+            { header: 'Fecha Intento', key: 'fecha_intento', width: 20 },
+            { header: 'Fecha Vencimiento', key: 'fecha_vencimiento', width: 20 }
+        ];
+
+        // Agregar los datos
+        resultados.forEach(resultado => {
+            worksheet.addRow({
+                colaborador: resultado.nombre_colaborador,
+                id_colaborador: resultado.colaborador_id,
+                cedula: resultado.cedula,
+                solicitud: resultado.solicitud_id,
+                puntaje: resultado.puntaje_obtenido,
+                estado: resultado.estado,
+                fecha_intento: new Date(resultado.fecha_intento).toLocaleString('es-ES'),
+                fecha_vencimiento: new Date(resultado.fecha_vencimiento).toLocaleString('es-ES')
+            });
+        });
+
+        // Generar el buffer del archivo
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        // Establecer los headers para la descarga
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=resultados_capacitacion_${id}.xlsx`);
+        res.setHeader('Content-Length', buffer.length);
+
+        // Enviar el buffer
+        res.send(buffer);
+    } catch (error) {
+        console.error('Error al generar Excel:', error);
+        res.status(500).send('Error al generar el archivo Excel');
     }
 };
 

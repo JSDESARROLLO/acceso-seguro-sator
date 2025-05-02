@@ -1,0 +1,459 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen bg-gray-100">
+    <div class="py-10">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 bg-white border-b border-gray-200">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">Detalles de Capacitación: <%= capacitacion %></h2>
+                        <a href="/capacitacion/listado" class="text-indigo-600 hover:text-indigo-900">
+                            Volver al listado
+                        </a>
+                    </div>
+
+                    <!-- Estadísticas -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div class="bg-white overflow-hidden shadow rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <dt class="text-sm font-medium text-gray-500 truncate">Total Intentos</dt>
+                                <dd class="mt-1 text-3xl font-semibold text-gray-900"><%= estadisticas.total_intentos || 0 %></dd>
+                            </div>
+                        </div>
+                        <div class="bg-white overflow-hidden shadow rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <dt class="text-sm font-medium text-gray-500 truncate">Aprobados</dt>
+                                <dd class="mt-1 text-3xl font-semibold text-green-600"><%= estadisticas.total_aprobados || 0 %></dd>
+                            </div>
+                        </div>
+                        <div class="bg-white overflow-hidden shadow rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <dt class="text-sm font-medium text-gray-500 truncate">No Aprobados</dt>
+                                <dd class="mt-1 text-3xl font-semibold text-red-600"><%= estadisticas.total_perdidos || 0 %></dd>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros -->
+                    <div class="bg-white shadow rounded-lg mb-6">
+                        <div class="px-4 py-5 sm:p-6">
+                            <form id="filtrosForm" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                <div>
+                                    <label for="cedula" class="block text-sm font-medium text-gray-700">Cédula</label>
+                                    <input type="text" id="cedula" name="cedula" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="estado" class="block text-sm font-medium text-gray-700">Estado</label>
+                                    <select id="estado" name="estado" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                        <option value="">Todos</option>
+                                        <option value="APROBADO">APROBADO</option>
+                                        <option value="PERDIDO">PERDIDO</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="vigencia" class="block text-sm font-medium text-gray-700">Vigencia</label>
+                                    <select id="vigencia" name="vigencia" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                        <option value="">Todos</option>
+                                        <option value="vigente">Vigentes</option>
+                                        <option value="vencido">Vencidos</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="colaborador_id" class="block text-sm font-medium text-gray-700">ID Colaborador</label>
+                                    <input type="text" id="colaborador_id" name="colaborador_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                </div>
+                                <div class="md:col-span-4 flex justify-end space-x-4">
+                                    <button type="button" onclick="aplicarFiltros()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                        Filtrar
+                                    </button>
+                                    <button type="button" onclick="exportarExcel()" id="btnExcel" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                        Descargar Excel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Resultados -->
+                    <div class="flex flex-col">
+                        <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                            <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
+                                <div class="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
+                                    <table class="min-w-full divide-y divide-gray-200" id="tablaResultados">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Colaborador
+                                                </th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Cédula
+                                                </th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    ID Solicitud
+                                                </th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Puntaje
+                                                </th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Estado
+                                                </th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Fecha Intento
+                                                </th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Vencimiento
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            <% if (resultados && resultados.length > 0) { %>
+                                                <% resultados.forEach(function(resultado) { 
+                                                    const fechaVencimiento = new Date(resultado.fecha_vencimiento);
+                                                    const estaVencido = fechaVencimiento <= new Date();
+                                                %>
+                                                    <tr class="<%= estaVencido ? 'bg-red-50' : '' %>">
+                                                        <td class="px-6 py-4 whitespace-nowrap">
+                                                            <div class="text-sm font-medium text-gray-900">
+                                                                <%= resultado.nombre_colaborador %>
+                                                            </div>
+                                                            <div class="text-sm text-gray-500">
+                                                                ID: <%= resultado.colaborador_id %>
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-6 py-4 whitespace-nowrap">
+                                                            <div class="text-sm text-gray-900"><%= resultado.cedula %></div>
+                                                        </td>
+                                                        <td class="px-6 py-4 whitespace-nowrap">
+                                                            <div class="text-sm text-gray-900"><%= resultado.solicitud_id %></div>
+                                                        </td>
+                                                        <td class="px-6 py-4 whitespace-nowrap">
+                                                            <div class="text-sm text-gray-900"><%= resultado.puntaje_obtenido %></div>
+                                                        </td>
+                                                        <td class="px-6 py-4 whitespace-nowrap">
+                                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                                <%= resultado.estado === 'APROBADO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
+                                                                <%= resultado.estado %>
+                                                            </span>
+                                                        </td>
+                                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            <% if (resultado.fecha_intento) { %>
+                                                                <%= new Date(resultado.fecha_intento).toLocaleString('es-ES', {
+                                                                    year: 'numeric',
+                                                                    month: '2-digit',
+                                                                    day: '2-digit',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                }) %>
+                                                            <% } %>
+                                                        </td>
+                                                        <td class="px-6 py-4 whitespace-nowrap text-sm <%= estaVencido ? 'text-red-600 font-medium' : 'text-gray-500' %>">
+                                                            <% if (resultado.fecha_vencimiento) { %>
+                                                                <%= new Date(resultado.fecha_vencimiento).toLocaleString('es-ES', {
+                                                                    year: 'numeric',
+                                                                    month: '2-digit',
+                                                                    day: '2-digit',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                }) %>
+                                                            <% } %>
+                                                        </td>
+                                                    </tr>
+                                                <% }); %>
+                                            <% } %>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Paginación -->
+                    <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4">
+                        <div class="flex-1 flex justify-between sm:hidden">
+                            <button id="btnAnterior" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                Anterior
+                            </button>
+                            <button id="btnSiguiente" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                Siguiente
+                            </button>
+                        </div>
+                        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                            <div>
+                                <p class="text-sm text-gray-700">
+                                    Mostrando <span id="inicioPagina">1</span> a <span id="finPagina">10</span> de <span id="totalRegistros">0</span> resultados
+                                </p>
+                            </div>
+                            <div>
+                                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                    <button id="btnAnteriorDesktop" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                        <span class="sr-only">Anterior</span>
+                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                    <div id="paginacionNumeros" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                        <!-- Los números de página se generarán dinámicamente -->
+                                    </div>
+                                    <button id="btnSiguienteDesktop" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                        <span class="sr-only">Siguiente</span>
+                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>
+
+<script>
+// Variables globales para paginación
+let paginaActual = 1;
+const registrosPorPagina = 10;
+let resultadosFiltrados = [];
+
+// Función global para exportar Excel
+function exportarExcel() {
+    // Mostrar indicador de carga
+    const btnExcel = document.getElementById('btnExcel');
+    const originalText = btnExcel.innerHTML;
+    btnExcel.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Descargando...';
+    btnExcel.disabled = true;
+
+    // Obtener el ID de la capacitación de la URL actual
+    const capacitacionId = window.location.pathname.split('/').pop();
+    
+    // Realizar la descarga
+    fetch(`/capacitacion/descargar-excel/${capacitacionId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Error en la descarga');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `resultados_capacitacion_${capacitacionId}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(link);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al descargar el archivo');
+        })
+        .finally(() => {
+            // Restaurar el botón
+            btnExcel.innerHTML = originalText;
+            btnExcel.disabled = false;
+        });
+}
+
+// Función global para aplicar filtros
+function aplicarFiltros() {
+    const cedula = document.getElementById('cedula').value;
+    const estado = document.getElementById('estado').value;
+    const vigencia = document.getElementById('vigencia').value;
+    const colaboradorId = document.getElementById('colaborador_id').value;
+    
+    // Mostrar indicador de carga
+    const btnFiltrar = document.querySelector('button[onclick="aplicarFiltros()"]');
+    const originalText = btnFiltrar.innerHTML;
+    btnFiltrar.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Filtrando...';
+    btnFiltrar.disabled = true;
+
+    // Obtener el ID de la capacitación de la URL actual
+    const capacitacionId = window.location.pathname.split('/').pop();
+    
+    // Realizar la petición al backend
+    fetch(`/capacitacion/filtrar/${capacitacionId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            cedula,
+            estado,
+            vigencia,
+            colaborador_id: colaboradorId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Actualizar estadísticas
+        const totalIntentos = document.querySelector('dd:nth-child(1)');
+        const totalAprobados = document.querySelector('dd:nth-child(2)');
+        const totalPerdidos = document.querySelector('dd:nth-child(3)');
+
+        if (totalIntentos) totalIntentos.textContent = data.estadisticas?.total_intentos || 0;
+        if (totalAprobados) totalAprobados.textContent = data.estadisticas?.total_aprobados || 0;
+        if (totalPerdidos) totalPerdidos.textContent = data.estadisticas?.total_perdidos || 0;
+
+        // Actualizar tabla
+        const tbody = document.querySelector('tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+
+            if (data.resultados && data.resultados.length > 0) {
+                data.resultados.forEach(resultado => {
+                    const fechaVencimiento = new Date(resultado.fecha_vencimiento);
+                    const estaVencido = fechaVencimiento <= new Date();
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = estaVencido ? 'bg-red-50' : '';
+                    
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">
+                                ${resultado.nombre_colaborador || ''}
+                            </div>
+                            <div class="text-sm text-gray-500">
+                                ID: ${resultado.colaborador_id || ''}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">${resultado.cedula || ''}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">${resultado.solicitud_id || ''}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">${resultado.puntaje_obtenido || ''}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                ${resultado.estado === 'APROBADO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${resultado.estado || ''}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${resultado.fecha_intento ? new Date(resultado.fecha_intento).toLocaleString('es-ES', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            }) : ''}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm ${estaVencido ? 'text-red-600 font-medium' : 'text-gray-500'}">
+                            ${resultado.fecha_vencimiento ? new Date(resultado.fecha_vencimiento).toLocaleString('es-ES', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            }) : ''}
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+            } else {
+                // Mostrar mensaje cuando no hay resultados
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                        No se encontraron resultados
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        // Actualizar paginación
+        resultadosFiltrados = Array.from(document.querySelectorAll('tbody tr'));
+        paginaActual = 1;
+        actualizarPaginacion();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al aplicar los filtros');
+    })
+    .finally(() => {
+        // Restaurar el botón
+        btnFiltrar.innerHTML = originalText;
+        btnFiltrar.disabled = false;
+    });
+}
+
+function actualizarPaginacion() {
+    const totalRegistros = resultadosFiltrados.length;
+    const totalPaginas = Math.ceil(totalRegistros / registrosPorPagina);
+    
+    // Actualizar información de paginación
+    document.getElementById('totalRegistros').textContent = totalRegistros;
+    document.getElementById('inicioPagina').textContent = totalRegistros > 0 ? ((paginaActual - 1) * registrosPorPagina) + 1 : 0;
+    document.getElementById('finPagina').textContent = Math.min(paginaActual * registrosPorPagina, totalRegistros);
+    
+    // Actualizar números de página
+    const paginacionNumeros = document.getElementById('paginacionNumeros');
+    paginacionNumeros.innerHTML = '';
+    
+    for (let i = 1; i <= totalPaginas; i++) {
+        const boton = document.createElement('button');
+        boton.textContent = i;
+        boton.className = `relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
+            i === paginaActual ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:bg-gray-50'
+        }`;
+        boton.onclick = () => cambiarPagina(i);
+        paginacionNumeros.appendChild(boton);
+    }
+    
+    // Actualizar visibilidad de botones
+    document.getElementById('btnAnterior').disabled = paginaActual === 1;
+    document.getElementById('btnSiguiente').disabled = paginaActual === totalPaginas;
+    document.getElementById('btnAnteriorDesktop').disabled = paginaActual === 1;
+    document.getElementById('btnSiguienteDesktop').disabled = paginaActual === totalPaginas;
+    
+    // Mostrar registros de la página actual
+    const filas = document.querySelectorAll('tbody tr');
+    filas.forEach(fila => fila.style.display = 'none');
+    
+    resultadosFiltrados.forEach((fila, index) => {
+        const inicio = (paginaActual - 1) * registrosPorPagina;
+        const fin = inicio + registrosPorPagina;
+        if (index >= inicio && index < fin) {
+            fila.style.display = '';
+        }
+    });
+}
+
+function cambiarPagina(nuevaPagina) {
+    paginaActual = nuevaPagina;
+    actualizarPaginacion();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar resultados filtrados con todas las filas
+    resultadosFiltrados = Array.from(document.querySelectorAll('tbody tr'));
+    
+    // Configurar event listeners para los botones de paginación
+    document.getElementById('btnAnterior').addEventListener('click', () => {
+        if (paginaActual > 1) cambiarPagina(paginaActual - 1);
+    });
+    
+    document.getElementById('btnSiguiente').addEventListener('click', () => {
+        const totalPaginas = Math.ceil(resultadosFiltrados.length / registrosPorPagina);
+        if (paginaActual < totalPaginas) cambiarPagina(paginaActual + 1);
+    });
+    
+    document.getElementById('btnAnteriorDesktop').addEventListener('click', () => {
+        if (paginaActual > 1) cambiarPagina(paginaActual - 1);
+    });
+    
+    document.getElementById('btnSiguienteDesktop').addEventListener('click', () => {
+        const totalPaginas = Math.ceil(resultadosFiltrados.length / registrosPorPagina);
+        if (paginaActual < totalPaginas) cambiarPagina(paginaActual + 1);
+    });
+
+    // Inicializar paginación
+    actualizarPaginacion();
+});
+</script> 

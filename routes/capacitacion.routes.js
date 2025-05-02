@@ -264,4 +264,165 @@ async function uploadToSpaces(buffer, filename) {
     }
 }
 
+router.get('/detalles/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Construir la consulta base
+        let query = `
+            SELECT 
+                c.nombre as nombre_capacitacion,
+                col.id as colaborador_id,
+                col.nombre as nombre_colaborador,
+                col.cedula,
+                rc.solicitud_id,
+                rc.puntaje_obtenido,
+                rc.estado,
+                rc.fecha_vencimiento,
+                rc.created_at as fecha_intento
+            FROM capacitaciones c
+            LEFT JOIN resultados_capacitaciones rc ON c.id = rc.capacitacion_id
+            LEFT JOIN colaboradores col ON rc.colaborador_id = col.id
+            WHERE c.id = ?
+            ORDER BY rc.created_at DESC
+        `;
+
+        // Obtener detalles de la capacitación y sus participantes
+        const [resultados] = await connection.query(query, [id]);
+
+        // Obtener estadísticas generales
+        const [estadisticas] = await connection.query(
+            `SELECT 
+                COUNT(*) as total_intentos,
+                SUM(CASE WHEN estado = 'APROBADO' THEN 1 ELSE 0 END) as total_aprobados,
+                SUM(CASE WHEN estado = 'PERDIDO' THEN 1 ELSE 0 END) as total_perdidos
+            FROM resultados_capacitaciones
+            WHERE capacitacion_id = ?`,
+            [id]
+        );
+
+        res.render('capacitaciones/detalles', {
+            title: 'Detalles de Capacitación',
+            user: req.user,
+            resultados,
+            estadisticas: estadisticas[0],
+            capacitacion: resultados[0]?.nombre_capacitacion || 'Capacitación no encontrada'
+        });
+    } catch (error) {
+        console.error('Error al obtener detalles:', error);
+        res.status(500).render('error', {
+            title: 'Error',
+            error: 'Error al obtener los detalles de la capacitación',
+            user: req.user
+        });
+    }
+});
+
+// Ruta para descargar resultados en Excel
+router.get('/descargar-excel/:id', authenticateToken, async (req, res) => {
+    try {
+        await capacitacionController.descargarExcel(req, res);
+    } catch (error) {
+        console.error('Error en la ruta de descarga Excel:', error);
+        res.status(500).send('Error al generar el archivo Excel');
+    }
+});
+
+// Ruta para filtrar resultados en tiempo real
+router.post('/filtrar/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { cedula, estado, vigencia, colaborador_id } = req.body;
+        
+        // Construir la consulta base
+        let query = `
+            SELECT 
+                c.nombre as nombre_capacitacion,
+                col.id as colaborador_id,
+                col.nombre as nombre_colaborador,
+                col.cedula,
+                rc.solicitud_id,
+                rc.puntaje_obtenido,
+                rc.estado,
+                rc.fecha_vencimiento,
+                rc.created_at as fecha_intento
+            FROM capacitaciones c
+            LEFT JOIN resultados_capacitaciones rc ON c.id = rc.capacitacion_id
+            LEFT JOIN colaboradores col ON rc.colaborador_id = col.id
+            WHERE c.id = ?
+        `;
+
+        const params = [id];
+
+        // Aplicar filtros
+        if (cedula) {
+            query += ' AND col.cedula LIKE ?';
+            params.push(`%${cedula}%`);
+        }
+
+        if (estado) {
+            query += ' AND rc.estado = ?';
+            params.push(estado);
+        }
+
+        if (vigencia) {
+            if (vigencia === 'vigente') {
+                query += ' AND rc.fecha_vencimiento > NOW()';
+            } else if (vigencia === 'vencido') {
+                query += ' AND rc.fecha_vencimiento <= NOW()';
+            }
+        }
+
+        if (colaborador_id) {
+            query += ' AND col.id LIKE ?';
+            params.push(`%${colaborador_id}%`);
+        }
+
+        query += ' ORDER BY rc.created_at DESC';
+
+        // Obtener resultados filtrados
+        const [resultados] = await connection.query(query, params);
+
+        // Obtener estadísticas de los resultados filtrados
+        const [estadisticas] = await connection.query(
+            `SELECT 
+                COUNT(*) as total_intentos,
+                SUM(CASE WHEN rc.estado = 'APROBADO' THEN 1 ELSE 0 END) as total_aprobados,
+                SUM(CASE WHEN rc.estado = 'PERDIDO' THEN 1 ELSE 0 END) as total_perdidos
+            FROM resultados_capacitaciones rc
+            LEFT JOIN colaboradores col ON rc.colaborador_id = col.id
+            WHERE rc.capacitacion_id = ?
+            ${cedula ? ' AND col.cedula LIKE ?' : ''}
+            ${estado ? ' AND rc.estado = ?' : ''}
+            ${vigencia === 'vigente' ? ' AND rc.fecha_vencimiento > NOW()' : ''}
+            ${vigencia === 'vencido' ? ' AND rc.fecha_vencimiento <= NOW()' : ''}
+            ${colaborador_id ? ' AND col.id LIKE ?' : ''}`,
+            [id, ...params.slice(1)]
+        );
+
+        // Asegurarse de que las estadísticas tengan valores por defecto
+        const estadisticasFormateadas = {
+            total_intentos: estadisticas[0]?.total_intentos || 0,
+            total_aprobados: estadisticas[0]?.total_aprobados || 0,
+            total_perdidos: estadisticas[0]?.total_perdidos || 0
+        };
+
+        res.json({
+            resultados: resultados || [],
+            estadisticas: estadisticasFormateadas
+        });
+    } catch (error) {
+        console.error('Error al filtrar resultados:', error);
+        res.status(500).json({ 
+            error: 'Error al filtrar los resultados',
+            resultados: [],
+            estadisticas: {
+                total_intentos: 0,
+                total_aprobados: 0,
+                total_perdidos: 0
+            }
+        });
+    }
+});
+
 module.exports = router;
