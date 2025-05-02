@@ -50,13 +50,13 @@
 <script>
 let preguntaCount = 0;
 const capacitacionId = window.location.pathname.split('/').pop();
+let archivosTemporales = new Map();
 
 function agregarPregunta(preguntaExistente = null) {
     const preguntasDiv = document.getElementById('preguntas');
     const nuevaPregunta = document.createElement('div');
     nuevaPregunta.className = 'pregunta border p-4 rounded-lg';
     
-    // Determinar el número inicial de opciones
     const opcionesIniciales = preguntaExistente ? preguntaExistente.opciones.length : 2;
     
     nuevaPregunta.innerHTML = `
@@ -73,45 +73,6 @@ function agregarPregunta(preguntaExistente = null) {
                 <input type="text" name="preguntas[${preguntaCount}][texto]" required 
                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" 
                     value="${preguntaExistente ? preguntaExistente.texto : ''}">
-            </div>
-
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Multimedia (opcional)</label>
-                <div class="flex items-center space-x-2">
-                    <input type="file" 
-                           name="preguntas[${preguntaCount}][multimedia]" 
-                           accept="image/*,video/*"
-                           onchange="handleFileUpload(this)"
-                           class="mt-1 block w-full">
-                    <button type="button" 
-                            onclick="eliminarMultimedia(this)" 
-                            class="${preguntaExistente && preguntaExistente.multimedia ? '' : 'hidden'} eliminar-multimedia-btn px-3 py-1 text-sm text-red-600 hover:text-red-800">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="multimedia-preview mt-2">
-                    ${preguntaExistente && preguntaExistente.multimedia ? `
-                        ${preguntaExistente.multimedia.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ? `
-                            <div class="relative">
-                                <img src="${preguntaExistente.multimedia}" 
-                                     alt="Vista previa" 
-                                     class="max-w-xs rounded-lg shadow-md">
-                            </div>
-                        ` : preguntaExistente.multimedia.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/) ? `
-                            <div class="relative">
-                                <video src="${preguntaExistente.multimedia}" 
-                                       controls 
-                                       class="max-w-xs rounded-lg shadow-md"></video>
-                            </div>
-                        ` : ''}
-                    ` : ''}
-                </div>
-                <input type="hidden" name="preguntas[${preguntaCount}][multimedia_url]" value="${preguntaExistente && preguntaExistente.multimedia ? preguntaExistente.multimedia : ''}">
-                <p class="mt-1 text-sm text-gray-500">
-                    Para imágenes: se convertirán automáticamente a formato web. Para videos: máximo 150MB.
-                </p>
             </div>
 
             <div class="opciones space-y-2" data-pregunta-index="${preguntaCount}">
@@ -160,7 +121,6 @@ function agregarOpcion(preguntaIndex) {
     `;
     opcionesDiv.appendChild(nuevaOpcion);
     
-    // Mostrar todos los botones de eliminar si hay más de 2 opciones
     if (numOpciones + 1 > 2) {
         opcionesDiv.querySelectorAll('.opcion-container button').forEach(btn => btn.classList.remove('hidden'));
     }
@@ -173,7 +133,6 @@ function eliminarOpcion(button) {
     
     if (numOpciones > 2) {
         opcionContainer.remove();
-        // Actualizar los valores y placeholders de las opciones restantes
         opcionesDiv.querySelectorAll('.opcion-container').forEach((container, index) => {
             const radio = container.querySelector('input[type="radio"]');
             const input = container.querySelector('input[type="text"]');
@@ -181,7 +140,6 @@ function eliminarOpcion(button) {
             input.placeholder = `Opción ${index + 1}`;
         });
         
-        // Ocultar botones de eliminar si solo quedan 2 opciones
         if (numOpciones - 1 <= 2) {
             opcionesDiv.querySelectorAll('.opcion-container button').forEach(btn => btn.classList.add('hidden'));
         }
@@ -191,6 +149,8 @@ function eliminarOpcion(button) {
 async function eliminarPregunta(button) {
     const pregunta = button.closest('.pregunta');
     const multimediaActual = pregunta.querySelector('input[name$="[multimedia_url]"]');
+    const inputFile = pregunta.querySelector('input[type="file"]');
+    const preguntaIndex = inputFile.name.match(/\[(\d+)\]/)[1];
     
     let mensaje = "Se eliminará la pregunta permanentemente";
     if (multimediaActual && multimediaActual.value) {
@@ -208,13 +168,9 @@ async function eliminarPregunta(button) {
         cancelButtonText: 'Cancelar'
     });
 
-    if (!result.isConfirmed) {
-        return;
-    }
+    if (!result.isConfirmed) return;
 
-    // Si hay multimedia, la marcamos para eliminación posterior
     if (multimediaActual && multimediaActual.value) {
-        // Crear un input hidden para trackear los archivos a eliminar
         const inputEliminar = document.createElement('input');
         inputEliminar.type = 'hidden';
         inputEliminar.name = 'archivos_a_eliminar[]';
@@ -222,6 +178,7 @@ async function eliminarPregunta(button) {
         document.getElementById('capacitacionForm').appendChild(inputEliminar);
     }
 
+    archivosTemporales.delete(preguntaIndex);
     pregunta.remove();
     actualizarNumeracionPreguntas();
 }
@@ -235,21 +192,18 @@ function actualizarNumeracionPreguntas() {
     preguntaCount = preguntas.length;
 }
 
-// Cargar datos de la capacitación
 async function cargarCapacitacion() {
     try {
         const response = await fetch(`/capacitacion/obtener/${capacitacionId}`);
         const capacitacion = await response.json();
 
-        // Llenar campos básicos
         document.getElementById('nombre').value = capacitacion.nombre;
         document.getElementById('vigencia_meses').value = capacitacion.vigencia_meses;
         document.getElementById('puntos_por_pregunta').value = capacitacion.puntos_por_pregunta;
         document.getElementById('puntaje_minimo_aprobacion').value = capacitacion.puntaje_minimo_aprobacion;
 
-        // Cargar preguntas existentes
         const preguntasDiv = document.getElementById('preguntas');
-        preguntasDiv.innerHTML = ''; // Limpiar preguntas existentes
+        preguntasDiv.innerHTML = '';
         
         if (Array.isArray(capacitacion.preguntas)) {
             capacitacion.preguntas.forEach(pregunta => {
@@ -267,99 +221,106 @@ async function cargarCapacitacion() {
     }
 }
 
+async function handleFileUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const preguntaIndex = input.name.match(/\[(\d+)\]/)[1];
+
+    if (file.type.startsWith('video/')) {
+        if (file.size > 150 * 1024 * 1024) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'El video no puede ser mayor a 150MB'
+            });
+            input.value = '';
+            return;
+        }
+    }
+
+    let processedFile = file;
+    if (file.type.startsWith('image/')) {
+        try {
+            processedFile = await convertToWebImage(file);
+        } catch (error) {
+            console.error('Error al convertir imagen:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Error al procesar la imagen'
+            });
+            input.value = '';
+            return;
+        }
+    }
+
+    archivosTemporales.set(preguntaIndex, processedFile);
+
+    const preguntaDiv = input.closest('.pregunta');
+    const eliminarBtn = preguntaDiv.querySelector('.eliminar-multimedia-btn');
+    if (eliminarBtn) {
+        eliminarBtn.classList.remove('hidden');
+    }
+}
+
+async function eliminarMultimedia(button) {
+    const preguntaDiv = button.closest('.pregunta');
+    const inputFile = preguntaDiv.querySelector('input[type="file"]');
+    const inputUrl = preguntaDiv.querySelector('input[name$="[multimedia_url]"]');
+    const preguntaIndex = inputFile.name.match(/\[(\d+)\]/)[1];
+
+    if (inputUrl && inputUrl.value) {
+        const inputEliminar = document.createElement('input');
+        inputEliminar.type = 'hidden';
+        inputEliminar.name = 'archivos_a_eliminar[]';
+        inputEliminar.value = inputUrl.value;
+        document.getElementById('capacitacionForm').appendChild(inputEliminar);
+    }
+
+    archivosTemporales.delete(preguntaIndex);
+    inputFile.value = '';
+    inputUrl.value = '';
+    button.classList.add('hidden');
+
+    await Swal.fire({
+        icon: 'success',
+        title: 'Archivo removido',
+        text: 'El archivo se eliminará completamente al guardar los cambios'
+    });
+}
+
 document.getElementById('capacitacionForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const formData = new FormData(this);
     const preguntas = [];
-    const archivosAEliminar = Array.from(formData.getAll('archivos_a_eliminar[]'));
 
-    // Mostrar indicador de carga
     Swal.fire({
         title: 'Actualizando capacitación...',
-        text: 'Esto puede tomar unos momentos si hay archivos multimedia',
+        text: 'Por favor espere...',
         allowOutsideClick: false,
         didOpen: () => {
             Swal.showLoading();
         }
     });
 
-    // Eliminar archivos marcados para eliminación
-    for (const url of archivosAEliminar) {
-        try {
-            const response = await fetch('/capacitacion/eliminar-multimedia', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ url })
-            });
-
-            if (!response.ok) {
-                throw new Error('Error al eliminar archivo');
-            }
-
-            console.log('Archivo eliminado exitosamente:', url);
-        } catch (error) {
-            console.error('Error al eliminar archivo:', error);
-            await Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'Error al eliminar algunos archivos multimedia'
-            });
-            return;
-        }
-    }
-
-    // Procesar cada pregunta existente
     const preguntaDivs = document.querySelectorAll('.pregunta');
     for (let i = 0; i < preguntaDivs.length; i++) {
         const preguntaDiv = preguntaDivs[i];
         const pregunta = {
             texto: formData.get(`preguntas[${i}][texto]`),
             opciones: [],
-            respuesta_correcta: parseInt(formData.get(`preguntas[${i}][respuesta_correcta]`)),
-            multimedia: formData.get(`preguntas[${i}][multimedia_url]`) || null
+            respuesta_correcta: parseInt(formData.get(`preguntas[${i}][respuesta_correcta]`))
         };
 
-        // Obtener todas las opciones de la pregunta
-        const opcionesInputs = preguntaDiv.querySelectorAll('input[name^="preguntas['+i+'][opciones]"]');
+        const opcionesInputs = preguntaDiv.querySelectorAll(`input[name^="preguntas[${i}][opciones]"]`);
         opcionesInputs.forEach(input => {
             pregunta.opciones.push(input.value);
         });
 
-        // Procesar archivo multimedia nuevo si existe
-        const multimediaFile = formData.get(`preguntas[${i}][multimedia]`);
-        if(multimediaFile && multimediaFile.size > 0) {
-            const formDataMultimedia = new FormData();
-            formDataMultimedia.append('file', multimediaFile);
-            
-            try {
-                const response = await fetch('/capacitacion/upload', {
-                    method: 'POST',
-                    body: formDataMultimedia
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Error al subir el archivo multimedia');
-                }
-                
-                const data = await response.json();
-                pregunta.multimedia = data.url;
-            } catch (error) {
-                console.error('Error al subir archivo multimedia:', error);
-                await Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: `Error al subir archivo multimedia de la pregunta ${i + 1}`,
-                });
-                return;
-            }
-        }
-
         preguntas.push(pregunta);
     }
 
-    // Crear objeto con todos los datos
     const capacitacionData = {
         nombre: formData.get('nombre'),
         vigencia_meses: parseInt(formData.get('vigencia_meses')),
@@ -379,7 +340,7 @@ document.getElementById('capacitacionForm').addEventListener('submit', async fun
         });
 
         const result = await response.json();
-        if(result.message) {
+        if (result.message) {
             await Swal.fire({
                 icon: 'success',
                 title: '¡Capacitación actualizada exitosamente!',
@@ -398,152 +359,6 @@ document.getElementById('capacitacionForm').addEventListener('submit', async fun
     }
 });
 
-async function handleFileUpload(input) {
-    const file = input.files[0];
-    if (!file) return;
-
-    // Verificar si es un video
-    if (file.type.startsWith('video/')) {
-        if (file.size > 150 * 1024 * 1024) { // 150MB en bytes
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'El video no puede ser mayor a 150MB'
-            });
-            input.value = '';
-            return;
-        }
-    }
-
-    // Si es una imagen, convertirla a formato web
-    if (file.type.startsWith('image/')) {
-        try {
-            const webImage = await convertToWebImage(file);
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(webImage);
-            input.files = dataTransfer.files;
-        } catch (error) {
-            console.error('Error al convertir imagen:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'Error al procesar la imagen'
-            });
-            input.value = '';
-            return;
-        }
-    }
-
-    // Obtener el archivo anterior si existe
-    const preguntaDiv = input.closest('.pregunta');
-    const inputUrl = preguntaDiv.querySelector('input[name$="[multimedia_url]"]');
-    const archivoAnterior = inputUrl ? inputUrl.value : null;
-
-    // Crear FormData y agregar archivo y archivo anterior
-    const formData = new FormData();
-    formData.append('file', input.files[0]);
-    if (archivoAnterior) {
-        formData.append('archivoAnterior', archivoAnterior);
-    }
-
-    try {
-        const response = await fetch('/capacitacion/upload', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            throw new Error('Error al subir el archivo');
-        }
-
-        const data = await response.json();
-        
-        // Actualizar el campo oculto con la nueva URL
-        if (inputUrl) {
-            inputUrl.value = data.url;
-        }
-
-        // Mostrar vista previa y botón de eliminar
-        const previewDiv = preguntaDiv.querySelector('.multimedia-preview');
-        const eliminarBtn = preguntaDiv.querySelector('.eliminar-multimedia-btn');
-        
-        if (file.type.startsWith('image/')) {
-            previewDiv.innerHTML = `
-                <div class="relative">
-                    <img src="${data.url}" alt="Vista previa" class="max-w-xs rounded-lg shadow-md">
-                </div>
-            `;
-        } else if (file.type.startsWith('video/')) {
-            previewDiv.innerHTML = `
-                <div class="relative">
-                    <video src="${data.url}" controls class="max-w-xs rounded-lg shadow-md"></video>
-                </div>
-            `;
-        }
-        
-        if (eliminarBtn) {
-            eliminarBtn.classList.remove('hidden');
-        }
-
-    } catch (error) {
-        console.error('Error al subir archivo:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Error al subir el archivo'
-        });
-        input.value = '';
-    }
-}
-
-async function eliminarMultimedia(button) {
-    const preguntaDiv = button.closest('.pregunta');
-    const inputFile = preguntaDiv.querySelector('input[type="file"]');
-    const inputUrl = preguntaDiv.querySelector('input[name$="[multimedia_url]"]');
-    const previewDiv = preguntaDiv.querySelector('.multimedia-preview');
-    
-    if (inputUrl && inputUrl.value) {
-        try {
-            // Agregar la URL a la lista de archivos a eliminar
-            const inputEliminar = document.createElement('input');
-            inputEliminar.type = 'hidden';
-            inputEliminar.name = 'archivos_a_eliminar[]';
-            inputEliminar.value = inputUrl.value;
-            document.getElementById('capacitacionForm').appendChild(inputEliminar);
-
-            // Limpiar el input de archivo
-            inputFile.value = '';
-            
-            // Limpiar la URL del archivo
-            inputUrl.value = '';
-            
-            // Limpiar la vista previa
-            previewDiv.innerHTML = '';
-            
-            // Ocultar el botón de eliminar
-            button.classList.add('hidden');
-
-            await Swal.fire({
-                icon: 'success',
-                title: 'Archivo marcado para eliminación',
-                text: 'El archivo se eliminará cuando guardes los cambios'
-            });
-        } catch (error) {
-            console.error('Error al marcar archivo para eliminación:', error);
-            await Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'No se pudo marcar el archivo para eliminación'
-            });
-        }
-    } else {
-        // Si no hay URL, solo limpiar los campos
-        inputFile.value = '';
-        previewDiv.innerHTML = '';
-        button.classList.add('hidden');
-    }
-}
-
 async function convertToWebImage(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -553,11 +368,9 @@ async function convertToWebImage(file) {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // Mantener la proporción de aspecto
                 let width = img.width;
                 let height = img.height;
                 
-                // Redimensionar si es muy grande
                 const MAX_SIZE = 1920;
                 if (width > MAX_SIZE || height > MAX_SIZE) {
                     if (width > height) {
@@ -572,12 +385,10 @@ async function convertToWebImage(file) {
                 canvas.width = width;
                 canvas.height = height;
                 
-                // Dibujar imagen con fondo blanco
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, width, height);
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Convertir a WebP
                 canvas.toBlob((blob) => {
                     const webImage = new File([blob], file.name.replace(/\.[^/.]+$/, '.webp'), {
                         type: 'image/webp'
@@ -593,8 +404,7 @@ async function convertToWebImage(file) {
     });
 }
 
-// Cargar datos al iniciar
 cargarCapacitacion();
 </script>
 
-<%- include('../partials/footer') %> 
+<%- include('../partials/footer') %>

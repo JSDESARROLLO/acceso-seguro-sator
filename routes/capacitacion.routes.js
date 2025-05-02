@@ -5,11 +5,12 @@ const authenticateToken = require('../middleware/authenticateToken');
 const checkRole = require('../middlewares/checkRole');
 const { generateSurveyToken, verifySurveyToken } = require('../middleware/surveyToken');
 const connection = require('../db/db');
-const crypto = require('crypto'); 
+const crypto = require('crypto');
 const multer = require('multer');
 const path = require('path');
 const { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
+const mime = require('mime-types');
 
 // =========== RUTAS PÚBLICAS ===========
 
@@ -245,35 +246,6 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
             return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
         }
 
-        // Si hay un archivo anterior, eliminarlo
-        if (req.body.archivoAnterior) {
-            try {
-                const s3Client = new S3Client({
-                    endpoint: `https://${process.env.DO_SPACES_ENDPOINT}`,
-                    region: "us-east-1",
-                    credentials: {
-                        accessKeyId: process.env.DO_SPACES_KEY,
-                        secretAccessKey: process.env.DO_SPACES_SECRET
-                    }
-                });
-
-                // Extraer el nombre del archivo de la URL
-                const urlAnterior = new URL(req.body.archivoAnterior);
-                const keyAnterior = urlAnterior.pathname.substring(1); // Eliminar el slash inicial
-
-                // Eliminar el archivo anterior
-                await s3Client.send(new DeleteObjectCommand({
-                    Bucket: process.env.DO_SPACES_BUCKET,
-                    Key: keyAnterior
-                }));
-
-                console.log('Archivo anterior eliminado:', keyAnterior);
-            } catch (error) {
-                console.error('Error al eliminar archivo anterior:', error);
-                // Continuar con la subida aunque falle la eliminación
-            }
-        }
-
         const fileUrl = await uploadToSpaces(req.file, req.body.archivoAnterior);
         res.json({ url: fileUrl });
     } catch (error) {
@@ -295,11 +267,6 @@ function generateUniqueFilename(originalname) {
 
 async function uploadToSpaces(file, archivoAnterior = null) {
     try {
-        // Si hay un archivo anterior, eliminarlo primero
-        if (archivoAnterior) {
-            await deleteFromSpaces(archivoAnterior);
-        }
-
         // Verificar el tipo de archivo
         const isVideo = file.mimetype.startsWith('video/');
         const isImage = file.mimetype.startsWith('image/');
@@ -324,6 +291,16 @@ async function uploadToSpaces(file, archivoAnterior = null) {
 
         // Subir archivo usando PutObjectCommand
         await s3Client.send(new PutObjectCommand(uploadParams));
+
+        // Si la subida fue exitosa y hay un archivo anterior, eliminarlo
+        if (archivoAnterior) {
+            try {
+                await deleteFromSpaces(archivoAnterior);
+            } catch (error) {
+                console.error('Error al eliminar archivo anterior:', error);
+                // Continuar aunque falle la eliminación del archivo anterior
+            }
+        }
 
         // Retornar URL pública
         return `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_ENDPOINT}/${fileName}`;
@@ -513,9 +490,14 @@ router.post('/filtrar/:id', authenticateToken, async (req, res) => {
 // Función para borrar archivo de Spaces
 async function deleteFromSpaces(url) {
     try {
+        if (!url) {
+            throw new Error('URL no proporcionada');
+        }
+
         // Extraer la key del archivo de la URL
         const key = url.split('/').pop();
-        const fullKey = `capacitaciones-img/${key}`; // Agregar el prefijo de la carpeta
+        const fullKey = `capacitaciones-img/${key}`;
+        
         console.log('Intentando eliminar archivo con key completa:', fullKey);
 
         // Crear el comando de eliminación
@@ -524,29 +506,14 @@ async function deleteFromSpaces(url) {
             Key: fullKey
         });
 
-        // Ejecutar el comando y esperar la respuesta
+        // Ejecutar el comando de eliminación
         const response = await s3Client.send(command);
         
-        // Verificar si la eliminación fue exitosa
         if (response.$metadata.httpStatusCode === 204) {
-            // Verificar que el archivo ya no existe
-            try {
-                const headCommand = new HeadObjectCommand({
-                    Bucket: process.env.DO_SPACES_BUCKET,
-                    Key: fullKey
-                });
-                await s3Client.send(headCommand);
-                // Si llegamos aquí, el archivo aún existe
-                throw new Error('El archivo no se eliminó correctamente');
-            } catch (error) {
-                if (error.name === 'NotFound') {
-                    console.log('Archivo eliminado exitosamente:', fullKey);
-                    return { success: true, message: 'Archivo eliminado correctamente' };
-                }
-                throw error;
-            }
+            console.log('Archivo eliminado exitosamente:', key);
+            return { success: true, message: 'Archivo eliminado correctamente' };
         } else {
-            throw new Error('La eliminación no fue exitosa');
+            throw new Error(`Error inesperado al eliminar el archivo: ${response.$metadata.httpStatusCode}`);
         }
     } catch (error) {
         console.error('Error al eliminar archivo:', error);
