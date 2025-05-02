@@ -332,6 +332,13 @@ router.get('/detalles/:id', authenticateToken, async (req, res) => {
         
         // Construir la consulta base
         let query = `
+            WITH ultima_aceptacion AS (
+                SELECT 
+                    colaborador_id,
+                    documento_url,
+                    ROW_NUMBER() OVER (PARTITION BY colaborador_id ORDER BY fecha_aceptacion DESC) as rn
+                FROM politicas_aceptadas_colaboradores
+            )
             SELECT 
                 c.nombre as nombre_capacitacion,
                 col.id as colaborador_id,
@@ -341,10 +348,12 @@ router.get('/detalles/:id', authenticateToken, async (req, res) => {
                 rc.puntaje_obtenido,
                 rc.estado,
                 rc.fecha_vencimiento,
-                rc.created_at as fecha_intento
+                rc.created_at as fecha_intento,
+                ua.documento_url as constancia_url
             FROM capacitaciones c
             LEFT JOIN resultados_capacitaciones rc ON c.id = rc.capacitacion_id
             LEFT JOIN colaboradores col ON rc.colaborador_id = col.id
+            LEFT JOIN ultima_aceptacion ua ON col.id = ua.colaborador_id AND ua.rn = 1
             WHERE c.id = ?
             ORDER BY rc.created_at DESC
         `;
@@ -398,7 +407,14 @@ router.post('/filtrar/:id', authenticateToken, async (req, res) => {
         
         // Construir la consulta base
         let query = `
-            SELECT 
+            WITH ultima_aceptacion AS (
+                SELECT 
+                    colaborador_id,
+                    documento_url,
+                    ROW_NUMBER() OVER (PARTITION BY colaborador_id ORDER BY fecha_aceptacion DESC) as rn
+                FROM politicas_aceptadas_colaboradores
+            )
+            SELECT DISTINCT
                 c.nombre as nombre_capacitacion,
                 col.id as colaborador_id,
                 col.nombre as nombre_colaborador,
@@ -407,10 +423,12 @@ router.post('/filtrar/:id', authenticateToken, async (req, res) => {
                 rc.puntaje_obtenido,
                 rc.estado,
                 rc.fecha_vencimiento,
-                rc.created_at as fecha_intento
+                rc.created_at as fecha_intento,
+                ua.documento_url as constancia_url
             FROM capacitaciones c
-            LEFT JOIN resultados_capacitaciones rc ON c.id = rc.capacitacion_id
-            LEFT JOIN colaboradores col ON rc.colaborador_id = col.id
+            INNER JOIN resultados_capacitaciones rc ON c.id = rc.capacitacion_id
+            INNER JOIN colaboradores col ON rc.colaborador_id = col.id
+            LEFT JOIN ultima_aceptacion ua ON col.id = ua.colaborador_id AND ua.rn = 1
             WHERE c.id = ?
         `;
 
@@ -436,8 +454,8 @@ router.post('/filtrar/:id', authenticateToken, async (req, res) => {
         }
 
         if (colaborador_id) {
-            query += ' AND col.id LIKE ?';
-            params.push(`%${colaborador_id}%`);
+            query += ' AND col.id = ?';
+            params.push(colaborador_id);
         }
 
         query += ' ORDER BY rc.created_at DESC';
@@ -445,28 +463,22 @@ router.post('/filtrar/:id', authenticateToken, async (req, res) => {
         // Obtener resultados filtrados
         const [resultados] = await connection.query(query, params);
 
-        // Obtener estadísticas de los resultados filtrados
-        const [estadisticas] = await connection.query(
+        // Obtener estadísticas generales (sin filtros)
+        const [estadisticasGenerales] = await connection.query(
             `SELECT 
                 COUNT(*) as total_intentos,
-                SUM(CASE WHEN rc.estado = 'APROBADO' THEN 1 ELSE 0 END) as total_aprobados,
-                SUM(CASE WHEN rc.estado = 'PERDIDO' THEN 1 ELSE 0 END) as total_perdidos
-            FROM resultados_capacitaciones rc
-            LEFT JOIN colaboradores col ON rc.colaborador_id = col.id
-            WHERE rc.capacitacion_id = ?
-            ${cedula ? ' AND col.cedula LIKE ?' : ''}
-            ${estado ? ' AND rc.estado = ?' : ''}
-            ${vigencia === 'vigente' ? ' AND rc.fecha_vencimiento > NOW()' : ''}
-            ${vigencia === 'vencido' ? ' AND rc.fecha_vencimiento <= NOW()' : ''}
-            ${colaborador_id ? ' AND col.id LIKE ?' : ''}`,
-            [id, ...params.slice(1)]
+                SUM(CASE WHEN estado = 'APROBADO' THEN 1 ELSE 0 END) as total_aprobados,
+                SUM(CASE WHEN estado = 'PERDIDO' THEN 1 ELSE 0 END) as total_perdidos
+            FROM resultados_capacitaciones
+            WHERE capacitacion_id = ?`,
+            [id]
         );
 
         // Asegurarse de que las estadísticas tengan valores por defecto
         const estadisticasFormateadas = {
-            total_intentos: estadisticas[0]?.total_intentos || 0,
-            total_aprobados: estadisticas[0]?.total_aprobados || 0,
-            total_perdidos: estadisticas[0]?.total_perdidos || 0
+            total_intentos: estadisticasGenerales[0]?.total_intentos || 0,
+            total_aprobados: estadisticasGenerales[0]?.total_aprobados || 0,
+            total_perdidos: estadisticasGenerales[0]?.total_perdidos || 0
         };
 
         res.json({
