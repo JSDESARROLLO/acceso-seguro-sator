@@ -18,15 +18,16 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
+      scriptSrcElem: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
       imgSrc: ["'self'", "data:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
       mediaSrc: ["'self'", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      connectSrc: ["'self'", "https:", "wss:", "ws:"],
+      fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       frameSrc: ["'self'"],
-      workerSrc: ["'self'"]
+      workerSrc: ["'self'", "blob:"]
     }
   },
   crossOriginEmbedderPolicy: { policy: "credentialless" },
