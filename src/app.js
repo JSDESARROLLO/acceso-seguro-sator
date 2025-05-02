@@ -18,20 +18,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com", "https:", "'unsafe-eval'"],
-      scriptSrcAttr: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com", "https:"],
-      imgSrc: ["'self'", "data:", "https:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com"],
-      connectSrc: ["'self'", "https:", "wss:", "ws:"],
-      fontSrc: ["'self'", "https:", "data:"],
-      objectSrc: ["'none'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
       mediaSrc: ["'self'", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
-      frameSrc: ["'none'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-      baseUri: ["'self'"],
-      workerSrc: ["'self'", "blob:"],
-      upgradeInsecureRequests: []
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'self'"],
+      workerSrc: ["'self'"]
     }
   },
   crossOriginEmbedderPolicy: { policy: "credentialless" },
