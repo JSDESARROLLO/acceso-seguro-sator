@@ -18,7 +18,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
+      scriptSrc: [
+        "'self'", "'unsafe-inline'", "'unsafe-eval'",
+        "https://code.jquery.com",
+        "https://cdn.tailwindcss.com",
+        "https://cdn.jsdelivr.net",
+        "https://stackpath.bootstrapcdn.com",
+        "https://cdn.socket.io",
+        "https://cdnjs.cloudflare.com"
+      ],
       scriptSrcAttr: ["'unsafe-inline'"],
       scriptSrcElem: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
       styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
