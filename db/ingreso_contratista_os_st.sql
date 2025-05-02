@@ -359,3 +359,31 @@ INSERT INTO users (username,password,role_id,empresa,nit,email) VALUES
 	 ('PLATAFORMA','$2b$10$ldPWwR6gPxQbpxxGdyjube2kIRjwCcZ.uDTy5hI/iXLf7e.nKe/VK',4,'SATOR','890110985-0',NULL),
 	 ('TALLERES','$2b$10$ddRpSuBzPtjzIyFffmhm0OF/X1Xt8gNBRwr/BeAULR5/i3469/ZLC',4,'SATOR','890110985-0',NULL),
 	 ('soporte','$2b$10$1o7MSnOJbfn/RciWj4IkMOlvw1jeaKgk1i1EdR5K4vVjUZE33Iqpq',6,'FORTOX','860046201-2','jcdesarrollo25@gmail.com');
+
+
+
+-- Desactivar restricciones de clave foránea
+-- SET FOREIGN_KEY_CHECKS = 0;
+
+-- Truncar todas las tablas excepto users, roles y lugares
+-- TRUNCATE TABLE acciones;
+-- TRUNCATE TABLE chat_participantes;
+-- TRUNCATE TABLE mensajes;
+-- TRUNCATE TABLE chats;
+-- TRUNCATE TABLE historial_estados_colaboradores;
+-- TRUNCATE TABLE plantilla_seguridad_social;
+-- TRUNCATE TABLE politicas_aceptadas_colaboradores;
+-- TRUNCATE TABLE registros;
+-- TRUNCATE TABLE registros_vehiculos;
+-- TRUNCATE TABLE resultados_capacitaciones;
+-- TRUNCATE TABLE sst_documentos;
+-- TRUNCATE TABLE colaboradores;
+-- TRUNCATE TABLE vehiculos;
+-- TRUNCATE TABLE capacitaciones;
+-- TRUNCATE TABLE solicitudes;
+-- TRUNCATE TABLE politicas_aceptadas;
+-- TRUNCATE TABLE plantilla_documentos_vehiculos;
+-- TRUNCATE TABLE licencias_vehiculo;
+
+-- Reactivar restricciones de clave foránea
+-- SET FOREIGN_KEY_CHECKS = 1; 
