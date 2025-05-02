@@ -18,8 +18,8 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com"],
       imgSrc: ["'self'", "data:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
       mediaSrc: ["'self'", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
       connectSrc: ["'self'"],
