@@ -2228,25 +2228,44 @@
     if (isVehicle && data.vehiculos && data.vehiculos.length === 1) {
         const vehiculo = data.vehiculos[0];
         const hoy = new Date();
-        if (vehiculo.soat_fin && new Date(vehiculo.soat_fin) < hoy) {
-            mensajeDetallado += `SOAT del vehículo ${vehiculo.matricula} vencido. `;
+        
+        // Si hay mensajes de advertencia, usarlos directamente
+        if (vehiculo.mensajesAdvertencia && vehiculo.mensajesAdvertencia.length > 0) {
+            mensajeDetallado += vehiculo.mensajesAdvertencia.join(' ');
             bloqueoRegistro = true;
-        }
-        if (vehiculo.tecnomecanica_fin && new Date(vehiculo.tecnomecanica_fin) < hoy) {
-            mensajeDetallado += `Tecnomecánica del vehículo ${vehiculo.matricula} vencida. `;
-            bloqueoRegistro = true;
-        }
-        if (!vehiculo.licencia_conduccion) {
-            mensajeDetallado += `Licencia de conducción del vehículo ${vehiculo.matricula} no aprobada. `;
-            bloqueoRegistro = true;
-        }
-        if (!vehiculo.licencia_transito) {
-            mensajeDetallado += `Licencia de tránsito del vehículo ${vehiculo.matricula} no aprobada. `;
-            bloqueoRegistro = true;
-        }
-        if (vehiculo.estado === 0) {
-            mensajeDetallado += 'Este vehículo tiene ingreso cancelado. ';
-            bloqueoRegistro = true;
+        } else {
+            // Si no hay mensajes de advertencia, validar cada documento
+            // Validar SOAT
+            if (!vehiculo.soat_inicio || !vehiculo.soat_fin) {
+                mensajeDetallado += `SOAT del vehículo ${vehiculo.matricula} no definido. `;
+                bloqueoRegistro = true;
+            } else if (new Date(vehiculo.soat_fin) < hoy) {
+                mensajeDetallado += `SOAT del vehículo ${vehiculo.matricula} vencido. `;
+                bloqueoRegistro = true;
+            }
+
+            // Validar Tecnomecánica
+            if (!vehiculo.tecnomecanica_inicio || !vehiculo.tecnomecanica_fin) {
+                mensajeDetallado += `Tecnomecánica del vehículo ${vehiculo.matricula} no definida. `;
+                bloqueoRegistro = true;
+            } else if (new Date(vehiculo.tecnomecanica_fin) < hoy) {
+                mensajeDetallado += `Tecnomecánica del vehículo ${vehiculo.matricula} vencida. `;
+                bloqueoRegistro = true;
+            }
+
+            // Validar Licencias
+            if (!vehiculo.licencia_conduccion) {
+                mensajeDetallado += `Licencia de conducción del vehículo ${vehiculo.matricula} no aprobada. `;
+                bloqueoRegistro = true;
+            }
+            if (!vehiculo.licencia_transito) {
+                mensajeDetallado += `Licencia de tránsito del vehículo ${vehiculo.matricula} no aprobada. `;
+                bloqueoRegistro = true;
+            }
+            if (vehiculo.estado === 0) {
+                mensajeDetallado += 'Este vehículo tiene ingreso cancelado. ';
+                bloqueoRegistro = true;
+            }
         }
     }
 
