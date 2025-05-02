@@ -21,7 +21,26 @@ const getClientIp = (req) => {
     return req.connection.remoteAddress || req.socket.remoteAddress || req.ip;
 };
 
+// Función para validar la contraseña
+const validatePassword = (password) => {
+    // Mínimo 6 caracteres, al menos una letra mayúscula, una minúscula y un número
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{6,}$/;
+    return passwordRegex.test(password);
+};
+
+// Función para validar el formato del NIT
+const validateNIT = (nit) => {
+    // Formato de NIT colombiano: números y guiones, entre 8 y 12 dígitos numéricos en total
+    const nitRegex = /^[\d-]+$/;
+    if (!nitRegex.test(nit)) return false;
+    
+    // Contar solo los dígitos numéricos
+    const digitos = nit.replace(/-/g, '');
+    return digitos.length >= 8 && digitos.length <= 12;
+};
+
 const registroRoles = process.env.REGISTRO_HABILITAR_SI_NO;
+const CODIGO_SEGURIDAD = process.env.CODIGO_SEGURIDAD_REGISTRO;
 
 const s3Client = new S3Client({
     forcePathStyle: false,
@@ -68,20 +87,64 @@ controller.registerForm = async (req, res) => {
 
 console.log('[CONTROLADOR] Verificando controller.register...');
 controller.register = async (req, res) => {
-    const { username, password, role, empresa, nit, email, aceptaPolitica } = req.body;
+    const { username, password, role, empresa, nit, email, aceptaPolitica, codigoSeguridad } = req.body;
     const clientIp = getClientIp(req);
-    console.log('[CONTROLADOR] Formulario recibido:', { username, password, role, empresa, nit, email, aceptaPolitica });
+    console.log('[CONTROLADOR] Formulario recibido:', { 
+        username, 
+        password, 
+        role, 
+        empresa, 
+        nit, 
+        email, 
+        aceptaPolitica, 
+        codigoSeguridad,
+        ip: clientIp 
+    });
 
     try {
-        console.log('[CONTROLADOR] Verificando si el usuario ya existe');
-        const [existingUsers] = await connection.query('SELECT * FROM users WHERE username = ?', [username]);
-        if (existingUsers.length > 0) {
-            console.log('[CONTROLADOR] El usuario ya existe:', username);
+        // Verificar código de seguridad
+        if (!codigoSeguridad || codigoSeguridad !== CODIGO_SEGURIDAD) {
+            console.log('[CONTROLADOR] Código de seguridad inválido');
             const [roles] = await connection.query('SELECT id, role_name FROM roles');
             return res.render('register', { 
                 title: 'Regístrate', 
                 roles,
-                error: 'El usuario ya existe' 
+                error: 'Código de seguridad inválido' 
+            });
+        }
+
+        // Validar contraseña
+        if (!validatePassword(password)) {
+            console.log('[CONTROLADOR] Contraseña no cumple con los requisitos de seguridad');
+            const [roles] = await connection.query('SELECT id, role_name FROM roles');
+            return res.render('register', { 
+                title: 'Regístrate', 
+                roles,
+                error: 'La contraseña debe tener al menos 6 caracteres, una mayúscula, una minúscula y un número.' 
+            });
+        }
+
+        // Validar NIT
+        if (!validateNIT(nit)) {
+            console.log('[CONTROLADOR] NIT inválido');
+            const [roles] = await connection.query('SELECT id, role_name FROM roles');
+            return res.render('register', { 
+                title: 'Regístrate', 
+                roles,
+                error: 'El NIT debe contener entre 8 y 12 dígitos numéricos' 
+            });
+        }
+
+        // Verificar si el usuario ya existe
+        console.log('[CONTROLADOR] Verificando si el usuario ya existe');
+        const [existingUsers] = await connection.query('SELECT * FROM users WHERE username = ? OR email = ?', [username, email]);
+        if (existingUsers.length > 0) {
+            console.log('[CONTROLADOR] El usuario o email ya existe:', username);
+            const [roles] = await connection.query('SELECT id, role_name FROM roles');
+            return res.render('register', { 
+                title: 'Regístrate', 
+                roles,
+                error: 'El usuario o correo electrónico ya está registrado' 
             });
         }
 
@@ -154,7 +217,7 @@ controller.register = async (req, res) => {
             [username, hashedPassword, roleId, empresa, nit, email || null]
         );
         const userId = result.insertId;
-        console.log('[CONTROLADOR] Usuario creado con ID:', userId);
+        console.log('[CONTROLADOR] Usuario creado con ID:', userId, 'IP:', clientIp);
 
         // Para contratistas que aceptaron políticas
         if (isContratista && aceptaPolitica) {
