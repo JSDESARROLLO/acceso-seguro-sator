@@ -213,27 +213,37 @@ controller.getSolicitudDetalles = async (req, res) => {
 // Consultas SQL reutilizables
 const QUERIES = {
     VEHICULO: `
-        SELECT 
-            v.id, v.solicitud_id, v.matricula, v.foto, v.estado,
-            pdv_soat.fecha_inicio AS soat_inicio, pdv_soat.fecha_fin AS soat_fin,
-            pdv_tecno.fecha_inicio AS tecnomecanica_inicio, pdv_tecno.fecha_fin AS tecnomecanica_fin,
-            lv_conduccion.estado AS licencia_conduccion,
-            lv_transito.estado AS licencia_transito
-        FROM vehiculos v
-        LEFT JOIN (
-            SELECT vehiculo_id, fecha_inicio, fecha_fin
-            FROM plantilla_documentos_vehiculos
-            WHERE tipo_documento = 'soat'
-            ORDER BY created_at DESC LIMIT 1
-        ) pdv_soat ON v.id = pdv_soat.vehiculo_id
-        LEFT JOIN (
-            SELECT vehiculo_id, fecha_inicio, fecha_fin
-            FROM plantilla_documentos_vehiculos
-            WHERE tipo_documento = 'tecnomecanica'
-            ORDER BY created_at DESC LIMIT 1
-        ) pdv_tecno ON v.id = pdv_tecno.vehiculo_id
-        LEFT JOIN licencias_vehiculo lv_conduccion ON v.id = lv_conduccion.vehiculo_id AND lv_conduccion.tipo = 'licencia_conduccion'
-        LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id AND lv_transito.tipo = 'licencia_transito'
+         SELECT 
+    v.id, v.solicitud_id, v.matricula, v.foto, v.estado,
+    pdv_soat.fecha_inicio AS soat_inicio, pdv_soat.fecha_fin AS soat_fin,
+    pdv_tecno.fecha_inicio AS tecnomecanica_inicio, pdv_tecno.fecha_fin AS tecnomecanica_fin,
+    lv_conduccion.estado AS licencia_conduccion,
+    lv_transito.estado AS licencia_transito
+FROM vehiculos v
+LEFT JOIN (
+    SELECT vehiculo_id, fecha_inicio, fecha_fin
+    FROM plantilla_documentos_vehiculos pdv1
+    WHERE tipo_documento = 'soat'
+    AND created_at = (
+        SELECT MAX(created_at)
+        FROM plantilla_documentos_vehiculos pdv2
+        WHERE pdv2.vehiculo_id = pdv1.vehiculo_id
+        AND pdv2.tipo_documento = 'soat'
+    )
+) pdv_soat ON v.id = pdv_soat.vehiculo_id
+LEFT JOIN (
+    SELECT vehiculo_id, fecha_inicio, fecha_fin
+    FROM plantilla_documentos_vehiculos pdv1
+    WHERE tipo_documento = 'tecnomecanica'
+    AND created_at = (
+        SELECT MAX(created_at)
+        FROM plantilla_documentos_vehiculos pdv2
+        WHERE pdv2.vehiculo_id = pdv1.vehiculo_id
+        AND pdv2.tipo_documento = 'tecnomecanica'
+    )
+) pdv_tecno ON v.id = pdv_tecno.vehiculo_id
+LEFT JOIN licencias_vehiculo lv_conduccion ON v.id = lv_conduccion.vehiculo_id AND lv_conduccion.tipo = 'licencia_conduccion'
+LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id AND lv_transito.tipo = 'licencia_transito'
     `,
     SOLICITUD: `
         SELECT s.id, s.empresa, s.nit, s.estado, us.username AS interventor,

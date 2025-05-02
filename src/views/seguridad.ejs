@@ -2111,7 +2111,7 @@
                 advertenciaElem.className = '';
                 // mensajeEstado se actualizará en configurarBotones
             }
-            
+
             const colaboradoresContainer = document.getElementById('detalleColaboradores');
             const vehiculosContainer = document.getElementById('detalleVehiculos');
             const colaboradoresTitle = document.querySelectorAll('h5.mt-4')[0];
@@ -2132,14 +2132,27 @@
                         vehiculosContainer.innerHTML = '';
                         const vehDiv = document.createElement('div');
                         vehDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
+                        
+                        // Formatear fechas del SOAT y Tecnomecánica
+                        const soatInicio = vehiculo.soat_inicio ? formatFecha(vehiculo.soat_inicio) : 'No definido';
+                        const soatFin = vehiculo.soat_fin ? formatFecha(vehiculo.soat_fin) : 'No definido';
+                        const tecnoInicio = vehiculo.tecnomecanica_inicio ? formatFecha(vehiculo.tecnomecanica_inicio) : 'No definido';
+                        const tecnoFin = vehiculo.tecnomecanica_fin ? formatFecha(vehiculo.tecnomecanica_fin) : 'No definido';
+                        
+                        // Determinar el estado del SOAT y Tecnomecánica
+                        const soatEstado = vehiculo.soat_inicio && vehiculo.soat_fin ? 
+                            `Vigente desde ${soatInicio} hasta ${soatFin}` : 'No definido';
+                        const tecnoEstado = vehiculo.tecnomecanica_inicio && vehiculo.tecnomecanica_fin ? 
+                            `Vigente desde ${tecnoInicio} hasta ${tecnoFin}` : 'No definida';
+                        
                         vehDiv.innerHTML = `
                             <div class="card">
                                 <img src="${vehiculo.foto || '/default.jpg'}" class="card-img-top" alt="Foto del vehículo ${vehiculo.matricula}">
                                 <div class="card-body">
                                     <h6 class="card-title">Vehículo: ${vehiculo.matricula}</h6>
                                     <p class="card-text">ID Vehículo: VH-${vehiculo.id}</p>
-                                    <p class="card-text">SOAT: ${vehiculo.soat_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.soat_fin) : 'No definido'}</p>
-                                    <p class="card-text">Tecnomecánica: ${vehiculo.tecnomecanica_inicio ? 'Vigente hasta ' + formatFecha(vehiculo.tecnomecanica_fin) : 'No definida'}</p>
+                                    <p class="card-text">SOAT: ${soatEstado}</p>
+                                    <p class="card-text">Tecnomecánica: ${tecnoEstado}</p>
                                     <p class="card-text">Licencia Conducción: ${vehiculo.licencia_conduccion ? 'Aprobada' : 'No aprobada'}</p>
                                     <p class="card-text">Licencia Tránsito: ${vehiculo.licencia_transito ? 'Aprobada' : 'No aprobada'}</p>
                                     ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '" checked>'}
@@ -2227,7 +2240,7 @@
     // Validar documentos de vehículos
     if (isVehicle && data.vehiculos && data.vehiculos.length === 1) {
         const vehiculo = data.vehiculos[0];
-        const hoy = new Date();
+            const hoy = new Date();
         
         // Si hay mensajes de advertencia, usarlos directamente
         if (vehiculo.mensajesAdvertencia && vehiculo.mensajesAdvertencia.length > 0) {
