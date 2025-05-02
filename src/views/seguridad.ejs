@@ -1917,7 +1917,7 @@
                     details.push(`Colaboradores: ${action.data.colaboradores.map(c => c.nombre).join(', ')}`);
                 }
                 if (action.data.vehiculos) {
-                    details.push(`Vehículos: ${action.data.vehiculos.map(v => v.matricula).join(', ')}`);
+                    details.push(`Vehículos: ${action.data.vehiculos.map(v => v.id.startsWith('VH-') ? v.id : `VH-${v.id}`).join(', ')}`);
                 }
                 if (action.type === 'registrarIngreso') {
                     details.push('Ingreso de solicitud completa');
