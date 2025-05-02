@@ -1088,7 +1088,7 @@ controller.filtrarSolicitudesSst = async (req, res) => {
             LEFT JOIN lugares l ON s.lugar = l.id
             LEFT JOIN colaboradores c ON c.solicitud_id = s.id
             LEFT JOIN vehiculos v ON v.solicitud_id = s.id
-            WHERE 1=1
+            WHERE us.username != 'COA'
         `;
         
         const placeholders = [];
