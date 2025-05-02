@@ -8,7 +8,7 @@ const connection = require('../db/db');
 const crypto = require('crypto'); 
 const multer = require('multer');
 const path = require('path');
-const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
 
 // =========== RUTAS PÚBLICAS ===========
@@ -171,20 +171,27 @@ router.post('/crear', authenticateToken,   capacitacionController.crearCapacitac
 router.put('/editar/:id', authenticateToken,   capacitacionController.editarCapacitacion);
 router.get('/obtener/:id', authenticateToken,   capacitacionController.obtenerCapacitacion);
 router.delete('/eliminar/:id', authenticateToken,   capacitacionController.eliminarCapacitacion);
-router.post('/eliminar-multimedia', authenticateToken, async (req, res) => {
+router.post('/eliminar-multimedia', async (req, res) => {
     try {
-        const { fileUrl } = req.body;
-        
-        if (!fileUrl) {
-            return res.status(400).json({ error: 'No se proporcionó URL del archivo' });
+        const { url } = req.body;
+        if (!url) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'URL no proporcionada' 
+            });
         }
 
-        await deleteFromSpaces(fileUrl);
-        
-        res.json({ success: true, message: 'Archivo eliminado exitosamente' });
+        const result = await deleteFromSpaces(url);
+        res.json({ 
+            success: true, 
+            message: result.message 
+        });
     } catch (error) {
-        console.error('Error al eliminar archivo:', error);
-        res.status(500).json({ error: 'Error al eliminar el archivo' });
+        console.error('Error en la ruta de eliminación:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message || 'Error al eliminar el archivo' 
+        });
     }
 });
 
@@ -504,28 +511,46 @@ router.post('/filtrar/:id', authenticateToken, async (req, res) => {
 });
 
 // Función para borrar archivo de Spaces
-async function deleteFromSpaces(fileUrl) {
-    if (!fileUrl) {
-        console.log('No se proporcionó URL de archivo para borrar');
-        return;
-    }
-
+async function deleteFromSpaces(url) {
     try {
-        // Extraer la clave del archivo de la URL completa
-        const urlParts = fileUrl.split('/');
-        const fileKey = urlParts.slice(3).join('/'); // Obtener la ruta después del bucket y endpoint
+        // Extraer la key del archivo de la URL
+        const key = url.split('/').pop();
+        const fullKey = `capacitaciones-img/${key}`; // Agregar el prefijo de la carpeta
+        console.log('Intentando eliminar archivo con key completa:', fullKey);
 
+        // Crear el comando de eliminación
         const command = new DeleteObjectCommand({
             Bucket: process.env.DO_SPACES_BUCKET,
-            Key: fileKey
+            Key: fullKey
         });
 
-        console.log('Intentando borrar archivo de Spaces:', { fileUrl, fileKey });
-        await s3Client.send(command);
-        console.log('Archivo borrado exitosamente de Spaces:', { fileUrl });
+        // Ejecutar el comando y esperar la respuesta
+        const response = await s3Client.send(command);
+        
+        // Verificar si la eliminación fue exitosa
+        if (response.$metadata.httpStatusCode === 204) {
+            // Verificar que el archivo ya no existe
+            try {
+                const headCommand = new HeadObjectCommand({
+                    Bucket: process.env.DO_SPACES_BUCKET,
+                    Key: fullKey
+                });
+                await s3Client.send(headCommand);
+                // Si llegamos aquí, el archivo aún existe
+                throw new Error('El archivo no se eliminó correctamente');
+            } catch (error) {
+                if (error.name === 'NotFound') {
+                    console.log('Archivo eliminado exitosamente:', fullKey);
+                    return { success: true, message: 'Archivo eliminado correctamente' };
+                }
+                throw error;
+            }
+        } else {
+            throw new Error('La eliminación no fue exitosa');
+        }
     } catch (error) {
-        console.error('Error al borrar archivo de Spaces:', error);
-        throw error;
+        console.error('Error al eliminar archivo:', error);
+        throw new Error(`Error al eliminar el archivo: ${error.message}`);
     }
 }
 

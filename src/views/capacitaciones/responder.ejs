@@ -106,14 +106,16 @@
                                         <% if (pregunta.multimedia) { %>
                                             <div class="mb-4">
                                                 <% if (pregunta.multimedia.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)) { %>
-                                                    <img src="<%= pregunta.multimedia %>" 
-                                                         alt="Imagen de la pregunta" 
-                                                         class="max-w-full h-auto rounded-lg shadow-md"
-                                                         onerror="this.onerror=null; this.src='/img/error-image.png'; console.error('Error al cargar imagen:', this.src);">
-                                                    <div class="mt-2 text-sm text-gray-500">
-                                                        <a href="<%= pregunta.multimedia %>" target="_blank" class="text-indigo-600 hover:text-indigo-500">
-                                                            Ver imagen en tamaño completo
-                                                        </a>
+                                                    <div class="relative">
+                                                        <img src="<%= pregunta.multimedia %>" 
+                                                             alt="Imagen de la pregunta" 
+                                                             class="max-w-full h-auto rounded-lg shadow-md"
+                                                             onerror="this.onerror=null; this.src='/img/error-image.png'; console.error('Error al cargar imagen:', this.src);">
+                                                        <div class="mt-2 text-sm text-gray-500">
+                                                            <a href="<%= pregunta.multimedia %>" target="_blank" class="text-indigo-600 hover:text-indigo-500">
+                                                                Ver imagen en tamaño completo
+                                                            </a>
+                                                        </div>
                                                     </div>
                                                 <% } else if (pregunta.multimedia.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/)) { %>
                                                     <div class="relative w-full" style="padding-top: 56.25%;">
