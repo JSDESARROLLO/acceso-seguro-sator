@@ -536,8 +536,8 @@
                     <input type="file" name="foto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
                 </div>
                 <div>
-                    <label class="block text-ga-navy mb-2">Foto de la cédula</label>
-                    <input type="file" name="cedulaFoto[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*" required>
+                    <label class="block text-ga-navy mb-2">Documento ARL</label>
+                    <input type="file" name="documento_arl[]" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
                 </div>
             </div>
         </div>
@@ -850,15 +850,15 @@
                             <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
                         </div>
                         <div>
-                            <label class="block text-ga-navy mb-2">Cédula actual</label>
-                            ${colaborador.cedulaFoto ? `
+                            <label class="block text-ga-navy mb-2">Documento ARL actual</label>
+                            ${colaborador.documento_arl ? `
                                 <div class="mb-2">
-                                    <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
-                                    <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
+                                    <img src="${colaborador.documento_arl}" alt="Documento ARL actual" class="w-32 h-32 object-cover rounded-md">
+                                    <a href="${colaborador.documento_arl}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
                                 </div>
-                            ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
-                            <label class="block text-ga-navy mb-2">Actualizar cédula</label>
-                            <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                            ` : '<p class="text-gray-500 text-sm mb-2">Sin documento ARL</p>'}
+                            <label class="block text-ga-navy mb-2">Actualizar documento ARL</label>
+                            <input type="file" name="documento_arl_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
                         </div>
                     </div>
                 `;
@@ -1130,15 +1130,15 @@
                         <input type="file" name="foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
                     </div>
                     <div>
-                        <label class="block text-ga-navy mb-2">Cédula actual</label>
-                        ${colaborador.cedulaFoto ? `
+                        <label class="block text-ga-navy mb-2">Documento ARL actual</label>
+                        ${colaborador.documento_arl ? `
                             <div class="mb-2">
-                                <img src="${colaborador.cedulaFoto}" alt="Cédula actual" class="w-32 h-32 object-cover rounded-md">
-                                <a href="${colaborador.cedulaFoto}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver cédula</a>
+                                <img src="${colaborador.documento_arl}" alt="Documento ARL actual" class="w-32 h-32 object-cover rounded-md">
+                                <a href="${colaborador.documento_arl}" target="_blank" class="text-blue-500 hover:text-blue-700 text-sm">Ver documento</a>
                             </div>
-                        ` : '<p class="text-gray-500 text-sm mb-2">Sin foto de cédula</p>'}
-                        <label class="block text-ga-navy mb-2">Actualizar cédula</label>
-                        <input type="file" name="cedula_foto_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*">
+                        ` : '<p class="text-gray-500 text-sm mb-2">Sin documento ARL</p>'}
+                        <label class="block text-ga-navy mb-2">Actualizar documento ARL</label>
+                        <input type="file" name="documento_arl_${colaborador.id}" class="p-2 border border-ga-cream rounded-md w-full" accept="image/*,.pdf">
                     </div>
                 </div>
             `;
@@ -1219,16 +1219,16 @@ form.addEventListener('submit', async (e) => {
     document.querySelectorAll('.person-group').forEach((grupo) => {
         const colaboradorId = grupo.dataset.colaboradorId;
         const fotoInput = grupo.querySelector(`input[name="foto_${colaboradorId}"]`);
-        const cedulaFotoInput = grupo.querySelector(`input[name="cedula_foto_${colaboradorId}"]`);
+        const documentoArlInput = grupo.querySelector(`input[name="documento_arl_${colaboradorId}"]`);
         const cedulaInput = grupo.querySelector(`input[name="cedula_${colaboradorId}"]`);
         
         if (colaboradorId) {
-            if (fotoInput?.files.length > 0 || cedulaFotoInput?.files.length > 0 || cedulaInput?.value) {
+            if (fotoInput?.files.length > 0 || documentoArlInput?.files.length > 0 || cedulaInput?.value) {
                 cambios.colaboradores.modificados.push({
                     id: parseInt(colaboradorId),
                     cambios: {
                         foto: fotoInput?.files.length > 0,
-                        cedulaFoto: cedulaFotoInput?.files.length > 0,
+                        documento_arl: documentoArlInput?.files.length > 0,
                         cedula: cedulaInput?.value ? true : false
                     }
                 });

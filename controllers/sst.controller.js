@@ -368,18 +368,28 @@ async function generateInformePDF({ solicitud, colaboradores, contractorName, in
         // Convertir las imágenes de los colaboradores a Base64
         for (const colaborador of colaboradores) {
             // Convertir la foto de perfil
+            let fotoBase64 = null;
             if (colaborador.foto) {
-                colaborador.fotoBase64 = await convertWebPtoJpeg(colaborador.foto);
+                fotoBase64 = await convertWebPtoJpeg(colaborador.foto);
             } else {
-                colaborador.fotoBase64 = null; // Si no hay foto, asignar null
+                fotoBase64 = null; // Si no hay foto, asignar null
             }
 
-            // Convertir la foto de la cédula
-            if (colaborador.cedulaFoto) {
-                colaborador.cedulaFotoBase64 = await convertWebPtoJpeg(colaborador.cedulaFoto);
-            } else {
-                colaborador.cedulaFotoBase64 = null; // Si no hay cédula, asignar null
+            // El documento ARL ahora se maneja como URL directa
+            const documentoArlUrl = colaborador.documento_arl || null;
+            if (!documentoArlUrl) {
+                documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Documento ARL no cargado`);
             }
+
+            const qrData = `${process.env.BASE_URL}/vista-seguridad/${colaborador.id}`;
+            const qrBase64 = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
+
+            return {
+                ...colaborador,
+                fotoBase64,
+                documentoArlUrl,
+                qrBase64
+            };
         }
 
         // Cargar la plantilla HTML
@@ -535,14 +545,10 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
                 documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de perfil no cargada`);
             }
 
-            let cedulaFotoBase64 = null;
-            if (colaborador.cedulaFoto) {
-                cedulaFotoBase64 = await convertWebPtoJpeg(colaborador.cedulaFoto);
-                if (!cedulaFotoBase64) {
-                    documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de cédula no disponible`);
-                }
-            } else {
-                documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Foto de cédula no cargada`);
+            // El documento ARL ahora se maneja como URL directa
+            const documentoArlUrl = colaborador.documento_arl || null;
+            if (!documentoArlUrl) {
+                documentosFaltantes.push(`Colaborador ${colaborador.nombre}: Documento ARL no cargado`);
             }
 
             const qrData = `${process.env.BASE_URL}/vista-seguridad/${colaborador.id}`;
@@ -551,7 +557,7 @@ async function generateInformeHTML({ solicitud, colaboradores, vehiculos, contra
             return {
                 ...colaborador,
                 fotoBase64,
-                cedulaFotoBase64,
+                documentoArlUrl,
                 qrBase64
             };
         }));
@@ -1415,7 +1421,7 @@ controller.generarDocumentos = async (req, res) => {
 
         // Obtener colaboradores
         const [colaboradores] = await connection.execute(
-            'SELECT id, cedula, nombre, estado, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ?',
+            'SELECT id, cedula, nombre, estado, foto, documento_arl FROM colaboradores WHERE solicitud_id = ?',
             [id]
         );
 

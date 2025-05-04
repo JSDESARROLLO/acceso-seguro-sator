@@ -168,10 +168,10 @@
                                     <span class="text-red-500">❌ Sin foto</span>
                                 {{/if}}
                                 <br>
-                                {{#if cedulaFoto}}
-                                    <img src="{{cedulaFotoBase64}}" alt="Foto de la cédula" class="w-24 h-24 object-cover rounded-lg border border-dorado/50 mt-2 foto-img" data-src="{{cedulaFotoBase64}}" data-type="cédula" data-nombre="{{nombre}}">
+                                {{#if documento_arl}}
+                                    <a href="{{documentoArlUrl}}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">DOCUMENTO ARL</a>
                                 {{else}}
-                                    <span class="text-red-500">❌ Sin cédula</span>
+                                    <span class="text-red-500">❌ Sin Documento ARL</span>
                                 {{/if}}
                             </td>
                             <td class="p-3 border-b border-dorado/20">

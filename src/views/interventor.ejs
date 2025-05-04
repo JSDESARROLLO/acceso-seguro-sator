@@ -908,9 +908,9 @@
                         ? `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" data-foto="${colaborador.foto}" data-nombre="${colaborador.nombre}" data-id="${colaborador.id}">` 
                         : '❌ Sin foto'}
                       <br>
-                      ${colaborador.cedulaFoto 
-                        ? `<img src="${colaborador.cedulaFoto}" alt="Foto de la cédula" class="foto-img" data-foto="${colaborador.cedulaFoto}" data-nombre="${colaborador.nombre}" data-id="${colaborador.id}">` 
-                        : '❌ Sin cédula'}
+                      ${colaborador.documento_arl 
+                        ? `<a href="${colaborador.documento_arl}" target="_blank" class="btn btn-info btn-sm">Ver Documento ARL</a>` 
+                        : '❌ Sin documento ARL'}
                     </td>
                   </tr>
                 `).join('')}

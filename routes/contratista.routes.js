@@ -293,7 +293,7 @@ router.post('/generar-solicitud', upload.any(), async (req, res) => {
 
     const fileNames = {
       foto: [],
-      cedulaFoto: [],
+      documento_arl: [],
       arl: null,
       pasocial: null,
       vehiculos: []
@@ -307,15 +307,15 @@ router.post('/generar-solicitud', upload.any(), async (req, res) => {
       fileNames.pasocial = await uploadToSpacesFromDisk(fileMap['pasocial'][0].path, fileMap['pasocial'][0].originalname);
     }
 
-    // Procesar fotos y cédulas
+    // Procesar fotos y documentos ARL
     if (fileMap['foto[]']) {
       for (const file of fileMap['foto[]']) {
         fileNames.foto.push(await uploadToSpacesFromDisk(file.path, file.originalname));
       }
     }
-    if (fileMap['cedulaFoto[]']) {
-      for (const file of fileMap['cedulaFoto[]']) {
-        fileNames.cedulaFoto.push(await uploadToSpacesFromDisk(file.path, file.originalname));
+    if (fileMap['documento_arl[]']) {
+      for (const file of fileMap['documento_arl[]']) {
+        fileNames.documento_arl.push(await uploadToSpacesFromDisk(file.path, file.originalname));
       }
     }
 
@@ -337,8 +337,8 @@ router.post('/generar-solicitud', upload.any(), async (req, res) => {
 
     for (let i = 0; i < cedula.length; i++) {
       await conn.execute(
-        'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, cedulaFoto) VALUES (?, ?, ?, ?, ?)',
-        [result.insertId, cedula[i], nombre[i], fileNames.foto[i] || null, fileNames.cedulaFoto[i] || null]
+        'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, documento_arl) VALUES (?, ?, ?, ?, ?)',
+        [result.insertId, cedula[i], nombre[i], fileNames.foto[i] || null, fileNames.documento_arl[i] || null]
       );
     }
 
@@ -569,19 +569,19 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
         // Procesar colaboradores
         if (cambiosDetectados?.colaboradores?.nuevos?.length > 0) {
           const fotos = uploadedFiles['foto[]'] || [];
-          const cedulaFotos = uploadedFiles['cedulaFoto[]'] || [];
+          const documentosArl = uploadedFiles['documento_arl[]'] || [];
           
           for (let i = 0; i < cambiosDetectados.colaboradores.nuevos.length; i++) {
             const colaborador = cambiosDetectados.colaboradores.nuevos[i];
             const fotoFile = fotos[i];
-            const cedulaFotoFile = cedulaFotos[i];
+            const documentoArlFile = documentosArl[i];
             
             const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
-            const cedulaFotoUrl = cedulaFotoFile ? await uploadToSpacesFromDisk(cedulaFotoFile.path, cedulaFotoFile.originalname) : null;
+            const documentoArlUrl = documentoArlFile ? await uploadToSpacesFromDisk(documentoArlFile.path, documentoArlFile.originalname) : null;
             
             await conn.execute(
-              'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, cedulaFoto, estado) VALUES (?, ?, ?, ?, ?, true)',
-              [solicitudId, colaborador.cedula, colaborador.nombre, fotoUrl, cedulaFotoUrl]
+              'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, documento_arl, estado) VALUES (?, ?, ?, ?, ?, true)',
+              [solicitudId, colaborador.cedula, colaborador.nombre, fotoUrl, documentoArlUrl]
             );
           }
         }
@@ -723,20 +723,30 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
           for (const colaborador of cambiosDetectados.colaboradores.modificados) {
             const id = colaborador.id;
             const fotoField = `foto_${id}`;
-            const cedulaFotoField = `cedula_foto_${id}`;
+            const documentoArlField = `documento_arl_${id}`;
             
-            for (const field of [fotoField, cedulaFotoField]) {
-              if (fileMap[field]?.[0]) {
-                const file = fileMap[field][0];
-                const campo = field.startsWith('foto_') ? 'foto' : 'cedulaFoto';
-                const [rows] = await conn.execute(`SELECT ${campo} FROM colaboradores WHERE id = ?`, [id]);
-                if (rows[0]?.[campo]) await deleteFromSpaces(rows[0][campo]);
-                const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
-                await conn.execute(
-                  `UPDATE colaboradores SET ${campo} = ? WHERE id = ?`,
-                  [newPath, id]
-                );
-              }
+            // Verificar si hay cambios en la foto
+            if (fileMap[fotoField]?.[0]) {
+              const file = fileMap[fotoField][0];
+              const [rows] = await conn.execute('SELECT foto FROM colaboradores WHERE id = ?', [id]);
+              if (rows[0]?.foto) await deleteFromSpaces(rows[0].foto);
+              const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
+              await conn.execute(
+                'UPDATE colaboradores SET foto = ? WHERE id = ?',
+                [newPath, id]
+              );
+            }
+
+            // Verificar si hay cambios en el documento ARL
+            if (fileMap[documentoArlField]?.[0]) {
+              const file = fileMap[documentoArlField][0];
+              const [rows] = await conn.execute('SELECT documento_arl FROM colaboradores WHERE id = ?', [id]);
+              if (rows[0]?.documento_arl) await deleteFromSpaces(rows[0].documento_arl);
+              const newPath = await uploadToSpacesFromDisk(file.path, file.originalname);
+              await conn.execute(
+                'UPDATE colaboradores SET documento_arl = ? WHERE id = ?',
+                [newPath, id]
+              );
             }
           }
         }
@@ -744,7 +754,7 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
         // Agregar nuevos colaboradores
         if (cambiosDetectados?.colaboradores.nuevos.length > 0) {
           const fotos = fileMap['foto[]'] || [];
-          const cedulaFotos = fileMap['cedulaFoto[]'] || [];
+          const documentosArl = fileMap['documento_arl[]'] || [];
           
           for (const nuevoColaborador of cambiosDetectados.colaboradores.nuevos) {
             const [existingColaborador] = await conn.execute(
@@ -754,12 +764,12 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
   
             if (!existingColaborador.length) {
               const fotoFile = fotos.shift();
-              const cedulaFotoFile = cedulaFotos.shift();
+              const documentoArlFile = documentosArl.shift();
               const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
-              const cedulaFotoUrl = cedulaFotoFile ? await uploadToSpacesFromDisk(cedulaFotoFile.path, cedulaFotoFile.originalname) : null;
+              const documentoArlUrl = documentoArlFile ? await uploadToSpacesFromDisk(documentoArlFile.path, documentoArlFile.originalname) : null;
               await conn.execute(
-                'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, cedulaFoto, estado) VALUES (?, ?, ?, ?, ?, true)',
-                [solicitudId, nuevoColaborador.cedula, nuevoColaborador.nombre, fotoUrl, cedulaFotoUrl]
+                'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, documento_arl, estado) VALUES (?, ?, ?, ?, ?, true)',
+                [solicitudId, nuevoColaborador.cedula, nuevoColaborador.nombre, fotoUrl, documentoArlUrl]
               );
             }
           }
@@ -850,7 +860,7 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
               detallesCambiosHtml += '<h4>Colaboradores Modificados:</h4><ul>';
               for (const col of cambiosDetectados.colaboradores.modificados) {
                 const [colaboradorData] = await conn.execute(
-                  'SELECT nombre, cedula, foto, cedulaFoto FROM colaboradores WHERE id = ?',
+                  'SELECT nombre, cedula, foto, documento_arl FROM colaboradores WHERE id = ?',
                   [col.id]
                 );
                 if (colaboradorData.length > 0) {
@@ -859,7 +869,7 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
                   const cambiosList = [];
                   
                   if (cambios.foto) cambiosList.push('Foto actualizada');
-                  if (cambios.cedulaFoto) cambiosList.push('Foto de cédula actualizada');
+                  if (cambios.documento_arl) cambiosList.push('Documento ARL actualizado');
                   if (cambios.cedula) cambiosList.push('Cédula actualizada');
                   
                   detallesCambiosHtml += `
@@ -1102,7 +1112,7 @@ router.get('/obtener-datos-solicitud/:id', async (req, res) => {
         c.cedula, 
         c.nombre, 
         c.foto, 
-        c.cedulaFoto, 
+        c.documento_arl, 
         c.estado,
         COALESCE(
           (
@@ -1256,7 +1266,7 @@ router.put('/actualizar-estado-colaborador/:id', async (req, res) => {
     );
 
     const [updatedColaborador] = await connection.execute(
-      'SELECT id, cedula, nombre, foto, cedulaFoto, estado FROM colaboradores WHERE id = ?',
+      'SELECT id, cedula, nombre, foto, documento_arl, estado FROM colaboradores WHERE id = ?',
       [colaboradorId]
     );
 
@@ -1276,7 +1286,7 @@ router.get('/obtener-colaboradores-inactivos/:solicitudId', async (req, res) => 
   try {
     const { solicitudId } = req.params;
     const [colaboradores] = await connection.execute(
-      'SELECT id, cedula, nombre, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ? AND estado = false',
+      'SELECT id, cedula, nombre, foto, documento_arl FROM colaboradores WHERE solicitud_id = ? AND estado = false',
       [solicitudId]
     );
     res.json({ success: true, colaboradores });
@@ -1303,7 +1313,7 @@ router.get('/obtener-colaboradores-todos/:solicitudId', async (req, res) => {
         c.cedula, 
         c.nombre, 
         c.foto, 
-        c.cedulaFoto, 
+        c.documento_arl, 
         c.estado,
         COALESCE(
           (
@@ -1393,7 +1403,7 @@ router.get('/obtener-colaborador/:colaboradorId', async (req, res) => {
   try {
     const { colaboradorId } = req.params;
     const [colaboradores] = await connection.execute(
-      'SELECT id, cedula, nombre, foto, cedulaFoto, estado, solicitud_id FROM colaboradores WHERE id = ?',
+      'SELECT id, cedula, nombre, foto, documento_arl, estado, solicitud_id FROM colaboradores WHERE id = ?',
       [colaboradorId]
     );
 
