@@ -478,12 +478,13 @@
             <table class="table table-striped table-hover">
               <thead class="sticky-top bg-white">
                 <tr>
-                  <th>Colaborador</th>
-                  <th>Empresa</th>
-                  <th>NIT</th>
                   <th>Tipo</th>
+                  <th>Nombre/Placa</th>
+                  <th>Cédula/Matrícula</th>
+                  <th>Empresa</th>
                   <th>Lugar</th>
-                  <th>Usuario</th>
+                  <th>Usuario Registro</th>
+                  <th>Movimiento</th>
                   <th>H. Registro</th>
                   <th>Fecha/Hora</th>
                   <th>Estado</th>
@@ -1082,42 +1083,50 @@
      * Muestra el historial de una solicitud en un modal.
      * @param {HTMLElement} btn - Botón que desencadena la acción.
      */
-    function manejarVerHistorial(btn) {
-      const solicitudId = btn.getAttribute('data-solicitud-id');
-      fetch(`/obtener-historial/${solicitudId}`)
-        .then(response => response.json())
-        .then(data => {
-          const tableBody = document.getElementById('historialTableBody');
-          tableBody.innerHTML = '';
-          data.forEach(registro => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-              <td>${registro.nombre_colaborador}</td>
-              <td>${registro.empresa}</td>
-              <td>${registro.nit}</td>
-              <td>${registro.tipo}</td>
-              <td>${registro.lugar}</td>
-              <td>${registro.usuario_registro}</td>
-              <td>${registro.registro_hecho}</td>
-              <td>${registro.fecha_hora}</td>
-              <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual}</span></td>
-            `;
-            tableBody.appendChild(row);
-          });
-          const modal = document.getElementById('historialModal');
-          modal.dataset.solicitudId = solicitudId;
-          modal.removeAttribute('aria-hidden');
-          $('#historialModal').modal('show');
-  
-          $('#historialModal').on('hidden.bs.modal', () => {
-            modal.setAttribute('aria-hidden', 'true');
-            btn.focus();
-          });
-        })
-        .catch(error => console.error('[ERROR] Error al obtener el historial:', error));
-    }
-  
-    /**
+     function manejarVerHistorial(btn) {
+  const solicitudId = btn.getAttribute('data-solicitud-id');
+  fetch(`/obtener-historial/${solicitudId}`)
+    .then(response => response.json())
+    .then(data => {
+      console.log('Historial Data:', data); // Debug the response
+      const tableBody = document.getElementById('historialTableBody');
+      tableBody.innerHTML = '';
+      if (data.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="10" class="text-center">No hay registros para mostrar.</td></tr>';
+        return;
+      }
+      data.forEach(registro => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${registro.tipo_registro || 'N/A'}</td>
+          <td>${registro.nombre || 'N/A'}</td>
+          <td>${registro.identificacion || 'N/A'}</td>
+          <td>${registro.empresa || 'N/A'}</td>
+          <td>${registro.lugar || 'N/A'}</td>
+          <td>${registro.usuario_registro || 'N/A'}</td>
+          <td>${registro.tipo || 'N/A'}</td>
+          <td>${registro.registro_hecho || 'N/A'}</td>
+          <td>${registro.fecha_hora || 'N/A'}</td>
+          <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual || 'N/A'}</span></td>
+        `;
+        tableBody.appendChild(row);
+      });
+      const modal = document.getElementById('historialModal');
+      modal.dataset.solicitudId = solicitudId;
+      modal.removeAttribute('aria-hidden');
+      $('#historialModal').modal('show');
+
+      $('#historialModal').on('hidden.bs.modal', () => {
+        modal.setAttribute('aria-hidden', 'true');
+        btn.focus();
+      });
+    })
+    .catch(error => {
+      console.error('[ERROR] Error al obtener el historial:', error);
+      Swal.fire('Error', 'No se pudo obtener el historial.', 'error');
+    });
+}
+     /**
      * Actualiza la tabla de solicitudes con los datos filtrados o iniciales.
      * @param {Array} acciones - Lista de solicitudes a mostrar.
      */

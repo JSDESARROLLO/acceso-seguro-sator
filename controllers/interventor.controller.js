@@ -582,7 +582,9 @@ controller.obtenerHistorialRegistros = async (req, res) => {
 
   const query = `
     SELECT 
-      c.nombre AS nombre_colaborador,
+      'Colaborador' AS tipo_registro,
+      c.nombre AS nombre,
+      c.cedula AS identificacion,
       u.empresa,
       u.nit,
       r.tipo,
@@ -598,11 +600,34 @@ controller.obtenerHistorialRegistros = async (req, res) => {
     JOIN users us ON r.usuario_id = us.id
     JOIN lugares l ON s.lugar = l.id
     WHERE r.solicitud_id = ?
-    ORDER BY r.fecha_hora DESC;
+
+    UNION ALL
+
+    SELECT 
+      'Vehículo' AS tipo_registro,
+      v.matricula AS nombre,
+      v.matricula AS identificacion,
+      u.empresa,
+      u.nit,
+      rv.tipo,
+      DATE_FORMAT(rv.fecha_hora, '%Y-%m-%d %H:%i:%s') AS fecha_hora,
+      rv.estado_actual,
+      l.nombre_lugar AS lugar,
+      DATE_FORMAT(rv.created_at, '%Y-%m-%d %H:%i:%s') AS registro_hecho,
+      us.username AS usuario_registro
+    FROM registros_vehiculos rv
+    JOIN vehiculos v ON rv.vehiculo_id = v.id
+    JOIN solicitudes s ON rv.solicitud_id = s.id
+    JOIN users u ON s.usuario_id = u.id
+    JOIN users us ON rv.usuario_id = us.id
+    JOIN lugares l ON s.lugar = l.id
+    WHERE rv.solicitud_id = ?
+
+    ORDER BY fecha_hora DESC;
   `;
 
   try {
-    const [rows] = await connection.execute(query, [solicitudId]);
+    const [rows] = await connection.query(query, [solicitudId, solicitudId]);
     res.status(200).json(rows);
   } catch (error) {
     console.error('[CONTROLADOR] Error al obtener el historial:', error);
@@ -772,6 +797,7 @@ controller.filtrarSolicitudes = async (req, res) => {
 
 // Descargar historial único
 
+
 controller.descargarExcelUnico = async (req, res) => {
   const { solicitudId } = req.params;
 
@@ -781,32 +807,37 @@ controller.descargarExcelUnico = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Historial Único');
 
+    // Define the new column headers
     worksheet.columns = [
-      { header: 'Colaborador', key: 'colaborador', width: 30 },
+      { header: 'Tipo', key: 'tipo_registro', width: 15 },
+      { header: 'Nombre/Placa', key: 'nombre', width: 30 },
+      { header: 'Cédula/Matrícula', key: 'identificacion', width: 20 },
       { header: 'Empresa', key: 'empresa', width: 30 },
-      { header: 'NIT', key: 'nit', width: 20 },
-      { header: 'Tipo', key: 'tipo', width: 15 },
       { header: 'Lugar', key: 'lugar', width: 20 },
-      { header: 'Usuario Registro', key: 'usuario_registro', width: 20 }, // Nueva columna
+      { header: 'Usuario Registro', key: 'usuario_registro', width: 20 },
+      { header: 'Movimiento', key: 'tipo', width: 15 },
       { header: 'H. Registro', key: 'registro_hecho', width: 20 },
-      { header: 'Fecha y Hora', key: 'fecha_hora', width: 20 },
-      { header: 'Estado', key: 'estado', width: 20 },
+      { header: 'Fecha/Hora', key: 'fecha_hora', width: 20 },
+      { header: 'Estado', key: 'estado', width: 15 },
     ];
 
+    // Add rows with correct field mapping
     historial.forEach(registro => {
       worksheet.addRow({
-        colaborador: registro.nombre_colaborador,
-        empresa: registro.empresa,
-        nit: registro.nit,
-        tipo: registro.tipo,
-        lugar: registro.lugar,
-        usuario_registro: registro.usuario_registro, // Nuevo campo
+        tipo_registro: registro.tipo_registro || 'N/A',
+        nombre: registro.nombre || 'N/A',
+        identificacion: registro.identificacion || 'N/A',
+        empresa: registro.empresa || 'N/A',
+        lugar: registro.lugar || 'N/A',
+        usuario_registro: registro.usuario_registro || 'N/A',
+        tipo: registro.tipo || 'N/A',
         registro_hecho: new Date(registro.registro_hecho).toLocaleString(),
         fecha_hora: new Date(registro.fecha_hora).toLocaleString(),
-        estado: registro.estado_actual,
+        estado: registro.tipo === 'entrada' ? 'Ingreso' : 'Salida', // Temporary workaround
       });
     });
 
+    // Set headers for file download
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=historial_unico_${solicitudId}.xlsx`);
 
@@ -817,6 +848,7 @@ controller.descargarExcelUnico = async (req, res) => {
     res.status(500).send('Error al generar el archivo Excel');
   }
 };
+
 // Descargar historial global
 controller.descargarExcelGlobal = async (req, res) => {
   try {
@@ -825,32 +857,37 @@ controller.descargarExcelGlobal = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Historial Global');
 
+    // Define the new column headers
     worksheet.columns = [
-      { header: 'Colaborador', key: 'colaborador', width: 30 },
+      { header: 'Tipo', key: 'tipo_registro', width: 15 },
+      { header: 'Nombre/Placa', key: 'nombre', width: 30 },
+      { header: 'Cédula/Matrícula', key: 'identificacion', width: 20 },
       { header: 'Empresa', key: 'empresa', width: 30 },
-      { header: 'NIT', key: 'nit', width: 20 },
-      { header: 'Tipo', key: 'tipo', width: 15 },
       { header: 'Lugar', key: 'lugar', width: 20 },
-      { header: 'Usuario Registro', key: 'usuario_registro', width: 20 }, // Nueva columna
+      { header: 'Usuario Registro', key: 'usuario_registro', width: 20 },
+      { header: 'Movimiento', key: 'tipo', width: 15 },
       { header: 'H. Registro', key: 'registro_hecho', width: 20 },
-      { header: 'Fecha y Hora', key: 'fecha_hora', width: 20 },
-      { header: 'Estado', key: 'estado', width: 20 },
+      { header: 'Fecha/Hora', key: 'fecha_hora', width: 20 },
+      { header: 'Estado', key: 'estado', width: 15 },
     ];
 
+    // Add rows with correct field mapping
     historial.forEach(registro => {
       worksheet.addRow({
-        colaborador: registro.nombre_colaborador,
-        empresa: registro.empresa,
-        nit: registro.nit,
-        tipo: registro.tipo,
-        lugar: registro.lugar,
-        usuario_registro: registro.usuario_registro, // Nuevo campo
+        tipo_registro: registro.tipo_registro || 'N/A',
+        nombre: registro.nombre || 'N/A',
+        identificacion: registro.identificacion || 'N/A',
+        empresa: registro.empresa || 'N/A',
+        lugar: registro.lugar || 'N/A',
+        usuario_registro: registro.usuario_registro || 'N/A',
+        tipo: registro.tipo || 'N/A',
         registro_hecho: new Date(registro.registro_hecho).toLocaleString(),
         fecha_hora: new Date(registro.fecha_hora).toLocaleString(),
-        estado: registro.estado_actual,
+        estado: registro.tipo === 'entrada' ? 'Ingreso' : 'Salida', // Temporary workaround
       });
     });
 
+    // Set headers for file download
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=historial_global.xlsx');
 
@@ -861,19 +898,22 @@ controller.descargarExcelGlobal = async (req, res) => {
     res.status(500).send('Error al generar el archivo Excel');
   }
 };
+
 // Función auxiliar para historial único
 const obtenerHistorialRegistros = async (solicitudId) => {
   const query = `
     SELECT 
-      c.nombre AS nombre_colaborador,
+      'Colaborador' AS tipo_registro,
+      c.nombre AS nombre,
+      c.cedula AS identificacion,
       u.empresa,
       u.nit,
       r.tipo,
-      r.fecha_hora,
+      DATE_FORMAT(r.fecha_hora, '%Y-%m-%d %H:%i:%s') AS fecha_hora,
       r.estado_actual,
       l.nombre_lugar AS lugar,
-      r.created_at AS registro_hecho,
-      us.username AS usuario_registro 
+      DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i:%s') AS registro_hecho,
+      us.username AS usuario_registro
     FROM registros r
     JOIN colaboradores c ON r.colaborador_id = c.id
     JOIN solicitudes s ON r.solicitud_id = s.id
@@ -881,9 +921,32 @@ const obtenerHistorialRegistros = async (solicitudId) => {
     JOIN users us ON r.usuario_id = us.id
     JOIN lugares l ON s.lugar = l.id
     WHERE r.solicitud_id = ?
-    ORDER BY r.created_at DESC
+
+    UNION ALL
+
+    SELECT 
+      'Vehículo' AS tipo_registro,
+      v.matricula AS nombre,
+      v.matricula AS identificacion,
+      u.empresa,
+      u.nit,
+      rv.tipo,
+      DATE_FORMAT(rv.fecha_hora, '%Y-%m-%d %H:%i:%s') AS fecha_hora,
+      rv.estado_actual,
+      l.nombre_lugar AS lugar,
+      DATE_FORMAT(rv.created_at, '%Y-%m-%d %H:%i:%s') AS registro_hecho,
+      us.username AS usuario_registro
+    FROM registros_vehiculos rv
+    JOIN vehiculos v ON rv.vehiculo_id = v.id
+    JOIN solicitudes s ON rv.solicitud_id = s.id
+    JOIN users u ON s.usuario_id = u.id
+    JOIN users us ON rv.usuario_id = us.id
+    JOIN lugares l ON s.lugar = l.id
+    WHERE rv.solicitud_id = ?
+
+    ORDER BY fecha_hora DESC;
   `;
-  const [rows] = await connection.execute(query, [solicitudId]);
+  const [rows] = await connection.query(query, [solicitudId, solicitudId]);
   return rows;
 };
 
@@ -891,22 +954,46 @@ const obtenerHistorialRegistros = async (solicitudId) => {
 const obtenerHistorialGlobal = async () => {
   const query = `
     SELECT 
-      c.nombre AS nombre_colaborador,
+      'Colaborador' AS tipo_registro,
+      c.nombre AS nombre,
+      c.cedula AS identificacion,
       u.empresa,
       u.nit,
       r.tipo,
-      r.fecha_hora,
+      DATE_FORMAT(r.fecha_hora, '%Y-%m-%d %H:%i:%s') AS fecha_hora,
       r.estado_actual,
       l.nombre_lugar AS lugar,
-      r.created_at AS registro_hecho,
-      us.username AS usuario_registro   
+      DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i:%s') AS registro_hecho,
+      us.username AS usuario_registro
     FROM registros r
     JOIN colaboradores c ON r.colaborador_id = c.id
     JOIN solicitudes s ON r.solicitud_id = s.id
     JOIN users u ON s.usuario_id = u.id
     JOIN users us ON r.usuario_id = us.id
     JOIN lugares l ON s.lugar = l.id
-    ORDER BY r.fecha_hora DESC
+
+    UNION ALL
+
+    SELECT 
+      'Vehículo' AS tipo_registro,
+      v.matricula AS nombre,
+      v.matricula AS identificacion,
+      u.empresa,
+      u.nit,
+      rv.tipo,
+      DATE_FORMAT(rv.fecha_hora, '%Y-%m-%d %H:%i:%s') AS fecha_hora,
+      rv.estado_actual,
+      l.nombre_lugar AS lugar,
+      DATE_FORMAT(rv.created_at, '%Y-%m-%d %H:%i:%s') AS registro_hecho,
+      us.username AS usuario_registro
+    FROM registros_vehiculos rv
+    JOIN vehiculos v ON rv.vehiculo_id = v.id
+    JOIN solicitudes s ON rv.solicitud_id = s.id
+    JOIN users u ON s.usuario_id = u.id
+    JOIN users us ON rv.usuario_id = us.id
+    JOIN lugares l ON s.lugar = l.id
+
+    ORDER BY fecha_hora DESC;
   `;
   const [rows] = await connection.execute(query);
   return rows;
