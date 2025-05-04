@@ -376,10 +376,8 @@
               <% if (username === "COA") { %>
                 <th>Eliminar</th>
               <% } %>
-              <th>Detalles</th>
-              <% if (username === "COA") { %>
-                <th>H. de Ingresos</th>
-              <% } %>
+              <th>Detalles</th> 
+                <th>H. de Ingresos</th> 
               <th>Chat</th>
             </tr>
           </thead>
@@ -447,11 +445,9 @@
                     <button class="btn btn-info btn-sm" id="verDETALLES-<%= accion.solicitud_id %>">Ver</button>
                     <button class="btn btn-primary btn-sm ver-colaboradores" data-solicitud-id="<%= accion.solicitud_id %>">Colaboradores</button>
                   </td>
-                  <% if (username === "COA") { %>
-                    <td>
-                      <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="<%= accion.solicitud_id %>">Ver Historial</button>
-                    </td>
-                  <% } %>
+                  <td>
+                    <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="<%= accion.solicitud_id %>">Ver Historial</button>
+                  </td>
                   <td>
                     <button class="btn btn-primary btn-sm ml-2 open-chat-btn-interventor" data-solicitud-id="<%= accion.solicitud_id %>">
                       Conversar  
@@ -1188,10 +1184,9 @@
               <button class="btn btn-info btn-sm" id="verDETALLES-${accion.solicitud_id}">Ver</button>
               <button class="btn btn-primary btn-sm ver-colaboradores" data-solicitud-id="${accion.solicitud_id}">Colaboradores</button>
             </td>
-            ${USERNAME === 'COA' ? `
-              <td>
-                <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="${accion.solicitud_id}">Ver Historial</button>
-              </td>` : ''}
+            <td>
+              <button class="btn btn-info btn-sm ver-historial" data-solicitud-id="${accion.solicitud_id}">Ver Historial</button>
+            </td>
             <td>
               <button class="btn btn-primary btn-sm ml-2 open-chat-btn-interventor" data-solicitud-id="${accion.solicitud_id}">
                 Conversar <span class="badge bg-danger text-white unread-count" data-solicitud-id="${accion.solicitud_id}">0</span>
@@ -1363,10 +1358,15 @@
                     <td>${capacitacion}</td>
                     <td>${plantillaSS}</td>
                     <td class="acciones-colaborador">${accionBtn}</td>
+                    <td>
+                      <button class="btn btn-info btn-sm ver-historial-colab" data-colaborador-id="${col.id}">
+                        <i class="fas fa-history"></i> Ver Historial
+                      </button>
+                    </td>
                   </tr>
                 `;
               }).join('')
-            : '<tr><td colspan="7" class="text-center">No hay colaboradores para mostrar</td></tr>';
+            : '<tr><td colspan="8" class="text-center">No hay colaboradores para mostrar</td></tr>';
   
           $('#modalColaboradores').modal('show');
   
