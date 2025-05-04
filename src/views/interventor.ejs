@@ -1091,26 +1091,30 @@
       console.log('Historial Data:', data); // Debug the response
       const tableBody = document.getElementById('historialTableBody');
       tableBody.innerHTML = '';
-      if (data.length === 0) {
+      
+      // Mostrar mensaje cuando no hay datos
+      if (!data || data.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="10" class="text-center">No hay registros para mostrar.</td></tr>';
-        return;
+      } else {
+        data.forEach(registro => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${registro.tipo_registro || 'N/A'}</td>
+            <td>${registro.nombre || 'N/A'}</td>
+            <td>${registro.identificacion || 'N/A'}</td>
+            <td>${registro.empresa || 'N/A'}</td>
+            <td>${registro.lugar || 'N/A'}</td>
+            <td>${registro.usuario_registro || 'N/A'}</td>
+            <td>${registro.tipo || 'N/A'}</td>
+            <td>${registro.registro_hecho || 'N/A'}</td>
+            <td>${registro.fecha_hora || 'N/A'}</td>
+            <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual || 'N/A'}</span></td>
+          `;
+          tableBody.appendChild(row);
+        });
       }
-      data.forEach(registro => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${registro.tipo_registro || 'N/A'}</td>
-          <td>${registro.nombre || 'N/A'}</td>
-          <td>${registro.identificacion || 'N/A'}</td>
-          <td>${registro.empresa || 'N/A'}</td>
-          <td>${registro.lugar || 'N/A'}</td>
-          <td>${registro.usuario_registro || 'N/A'}</td>
-          <td>${registro.tipo || 'N/A'}</td>
-          <td>${registro.registro_hecho || 'N/A'}</td>
-          <td>${registro.fecha_hora || 'N/A'}</td>
-          <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual || 'N/A'}</span></td>
-        `;
-        tableBody.appendChild(row);
-      });
+
+      // Mostrar el modal independientemente de si hay datos o no
       const modal = document.getElementById('historialModal');
       modal.dataset.solicitudId = solicitudId;
       modal.removeAttribute('aria-hidden');
