@@ -1019,8 +1019,10 @@ controller.obtenerTodosColaboradores = async (req, res) => {
          ORDER BY pss.fecha_fin DESC LIMIT 1) as plantillaSS,
         (SELECT rc.estado 
          FROM resultados_capacitaciones rc 
+         JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
          WHERE rc.colaborador_id = c.id 
-         ORDER BY rc.fecha_vencimiento DESC LIMIT 1) as cursoSiso
+         AND cap.nombre LIKE '%Capacitación SATOR%'
+         ORDER BY rc.created_at DESC LIMIT 1) as capacitacion
       FROM colaboradores c
       WHERE c.solicitud_id = ?
     `, [solicitudId]);
@@ -1042,7 +1044,9 @@ controller.obtenerTodosColaboradores = async (req, res) => {
       return {
         ...col,
         estado: Boolean(col.estado),
-        plantillaSS: plantillaSS
+        plantillaSS: plantillaSS,
+        capacitacion: col.capacitacion,
+        mensajeCapacitacion: col.mensajeCapacitacion,
       };
     });
 

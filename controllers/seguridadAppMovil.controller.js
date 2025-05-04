@@ -127,8 +127,8 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
     const colaboradoresQuery = `
       SELECT 
         c.id, c.nombre, c.cedula, c.foto, c.estado,
-        rc.estado AS curso_siso_estado,
-        DATE_FORMAT(rc.fecha_vencimiento, '%Y-%m-%d') AS curso_siso_vencimiento,
+        rc.estado AS capacitacion_estado,
+        DATE_FORMAT(rc.fecha_vencimiento, '%Y-%m-%d') AS capacitacion_vencimiento,
         DATE_FORMAT(pss.fecha_inicio, '%Y-%m-%d') AS plantilla_ss_inicio,
         DATE_FORMAT(pss.fecha_fin, '%Y-%m-%d') AS plantilla_ss_fin
       FROM colaboradores c
@@ -136,7 +136,7 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
         SELECT rc.colaborador_id, rc.estado, rc.fecha_vencimiento
         FROM resultados_capacitaciones rc
         JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
-        WHERE cap.nombre = 'Curso SISO'
+        WHERE cap.nombre = 'Capacitación SATOR'
         ORDER BY rc.created_at DESC LIMIT 1
       ) rc ON c.id = rc.colaborador_id
       LEFT JOIN (

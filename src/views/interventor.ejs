@@ -224,10 +224,9 @@
       position: relative;
     }
 
-    // Agregar estos estilos al bloque de estilos existente
     .filters-content {
       transition: max-height 0.3s ease-out;
-      max-height: 1000px; /* Ajusta este valor según el alto máximo de tus filtros */
+      max-height: 1000px;
       overflow: hidden;
     }
 
@@ -702,7 +701,7 @@
                   <th>Nombre</th>
                   <th>Cédula</th>
                   <th>Estado</th>
-                  <th>Curso SISO</th>
+                  <th>Capacitación SATOR</th>
                   <th>Plantilla SS</th>
                   <th>Acciones</th>
                   <th>Historial</th>
@@ -1348,30 +1347,30 @@
           document.getElementById('modalEmpresa').textContent = data.solicitud?.empresa || '';
   
           const tbody = document.getElementById('tablaModalColaboradores');
-          tbody.innerHTML = data.colaboradores && data.colaboradores.length > 0 ? data.colaboradores.map(col => {
-            const cursoSiso = col.cursoSiso || 'No definido';
-            const plantillaSS = col.plantillaSS ? (new Date(col.plantillaSS.fecha_fin) > new Date() ? 'Vigente' : 'Vencido') : 'No definida';
-            const accionBtn = col.estado ?
-              `<button class="btn btn-danger btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="false">Deshabilitar</button>` :
-              `<button class="btn btn-success btn-sm accion-int-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="true">Habilitar</button>`;
-  
-            return `
-              <tr data-colaborador-id="${col.id}" data-estado="${col.estado ? 'habilitado' : 'inhabilitado'}">
-                <td>${col.id}</td>
-                <td>${col.nombre}</td>
-                <td>${col.cedula}</td>
-                <td class="estado-colaborador">${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
-                <td>${cursoSiso}</td>
-                <td>${plantillaSS}</td>
-                <td class="acciones-colaborador">${accionBtn}</td>
-                <td><button class="btn btn-info btn-sm ver-historial-colab" data-colaborador-id="${col.id}">Ver</button></td>
-              </tr>
-            `;
-          }).join('') : '<tr><td colspan="8" class="text-center">No hay colaboradores para mostrar</td></tr>';
+          tbody.innerHTML = (data.colaboradores && data.colaboradores.length > 0)
+            ? data.colaboradores.map(function(col) {
+                var capacitacion = col.capacitacion || 'No definido';
+                var plantillaSS = col.plantillaSS ? (new Date(col.plantillaSS.fecha_fin) > new Date() ? 'Vigente' : 'Vencido') : 'No definida';
+                var accionBtn = col.estado ?
+                  `<button class="btn btn-danger btn-sm accion-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="false">Deshabilitar</button>` :
+                  `<button class="btn btn-success btn-sm accion-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="true">Restaurar</button>`;
+                return `
+                  <tr data-colaborador-id="${col.id}" data-estado="${col.estado ? 'habilitado' : 'inhabilitado'}">
+                    <td>${col.id}</td>
+                    <td>${col.nombre}</td>
+                    <td>${col.cedula}</td>
+                    <td class="estado-colaborador">${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
+                    <td>${capacitacion}</td>
+                    <td>${plantillaSS}</td>
+                    <td class="acciones-colaborador">${accionBtn}</td>
+                  </tr>
+                `;
+              }).join('')
+            : '<tr><td colspan="7" class="text-center">No hay colaboradores para mostrar</td></tr>';
   
           $('#modalColaboradores').modal('show');
   
-          document.querySelectorAll('.accion-int-colaborador').forEach(btn => {
+          document.querySelectorAll('.accion-colaborador').forEach(btn => {
             btn.addEventListener('click', e => {
               e.preventDefault();
               const colaboradorId = btn.getAttribute('data-colaborador-id');
@@ -1435,10 +1434,10 @@
           fila.querySelector('.estado-colaborador').textContent = nuevoEstado ? 'Habilitado' : 'Inhabilitado';
           fila.setAttribute('data-estado', nuevoEstado ? 'habilitado' : 'inhabilitado');
           fila.querySelector('.acciones-colaborador').innerHTML = nuevoEstado ?
-            `<button class="btn btn-danger btn-sm accion-int-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="false">Deshabilitar</button>` :
-            `<button class="btn btn-success btn-sm accion-int-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="true">Habilitar</button>`;
+            `<button class="btn btn-danger btn-sm accion-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="false">Deshabilitar</button>` :
+            `<button class="btn btn-success btn-sm accion-colaborador" data-colaborador-id="${colaboradorId}" data-nuevo-estado="true">Restaurar</button>`;
   
-          fila.querySelector('.accion-int-colaborador').addEventListener('click', e => {
+          fila.querySelector('.accion-colaborador').addEventListener('click', e => {
             e.preventDefault();
             const colId = e.target.getAttribute('data-colaborador-id');
             const newState = e.target.getAttribute('data-nuevo-estado') === 'true';
@@ -1454,7 +1453,7 @@
         Swal.fire('Error', error.message, 'error');
       } finally {
         boton.disabled = false;
-        boton.textContent = nuevoEstado ? 'Habilitar' : 'Deshabilitar';
+        boton.textContent = nuevoEstado ? 'Restaurar' : 'Deshabilitar';
       }
     }
   

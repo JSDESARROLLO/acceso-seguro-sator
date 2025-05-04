@@ -87,14 +87,14 @@ function verColaboradores(solicitudId) {
                 plantillaClase = fechaFin > new Date() ? 'vigente' : 'vencido';
               }
               
-              // Determinar clase para curso SISO
-              let cursoSisoClase = '';
-              if (col.cursoSiso === 'Vencido') {
-                cursoSisoClase = 'vencido';
-              } else if (col.cursoSiso === 'Aprobado') {
-                cursoSisoClase = 'vigente';
+              // Determinar clase para capacitación
+              let capacitacionClase = '';
+              if (col.capacitacion === 'Vencido') {
+                capacitacionClase = 'vencido';
+              } else if (col.capacitacion === 'Aprobado') {
+                capacitacionClase = 'vigente';
               } else {
-                cursoSisoClase = 'no-definido';
+                capacitacionClase = 'no-definido';
               }
               
               // Determinar clase para la fila según estado del colaborador
@@ -106,7 +106,7 @@ function verColaboradores(solicitudId) {
                   <td>${col.nombre}</td>
                   <td>${col.cedula}</td>
                   <td>${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
-                  <td class="${cursoSisoClase}">${col.cursoSiso || 'No definido'}</td>
+                  <td class="${capacitacionClase}">${col.capacitacion || 'No definido'}</td>
                   <td class="${plantillaClase}">${plantillaSS}</td>
                   <td>
                     <button class="btn btn-sm btn-primary" 
@@ -190,14 +190,14 @@ function mostrarColaboradores(solicitudId) {
             plantillaClase = fechaFin > new Date() ? 'vigente' : 'vencido';
           }
           
-          // Determinar clase para curso SISO
-          let cursoSisoClase = '';
-          if (col.cursoSiso === 'Vencido') {
-            cursoSisoClase = 'vencido';
-          } else if (col.cursoSiso === 'Aprobado') {
-            cursoSisoClase = 'vigente';
+          // Determinar clase para capacitación
+          let capacitacionClase = '';
+          if (col.capacitacion === 'Vencido') {
+            capacitacionClase = 'vencido';
+          } else if (col.capacitacion === 'Aprobado') {
+            capacitacionClase = 'vigente';
           } else {
-            cursoSisoClase = 'no-definido';
+            capacitacionClase = 'no-definido';
           }
           
           // Determinar clase para la fila según estado del colaborador
@@ -209,7 +209,7 @@ function mostrarColaboradores(solicitudId) {
               <td>${col.nombre}</td>
               <td>${col.cedula}</td>
               <td>${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
-              <td class="${cursoSisoClase}">${col.cursoSiso}</td>
+              <td class="${capacitacionClase}">${col.capacitacion || 'No definido'}</td>
               <td class="${plantillaClase}">${plantillaSS}</td>
               <td>
                 <button class="btn btn-sm btn-primary" 

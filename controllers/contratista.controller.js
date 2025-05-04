@@ -219,9 +219,9 @@ controller.getSolicitudData = async (req, res) => {
                  FROM resultados_capacitaciones rc 
                  JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
                  WHERE rc.colaborador_id = c.id 
-                 AND cap.nombre LIKE '%Curso siso%'
+                 AND cap.nombre LIKE '%Capacitación SATOR%'
                  ORDER BY rc.created_at DESC LIMIT 1
-                ) as cursoSiso
+                ) as capacitacion
             FROM colaboradores c
             WHERE c.solicitud_id = ? 
         `, [id]);

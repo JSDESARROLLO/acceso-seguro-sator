@@ -226,7 +226,7 @@
                         <th>Nombre</th>
                         <th>Cédula</th>
                         <th>Estado</th>
-                        <th>Curso SISO</th>
+                        <th>Capacitación SATOR</th>
                         <th>Plantilla SS</th>
                         <th>Acciones</th>
                         <th>Historial</th>
@@ -919,12 +919,12 @@
                     }
                 }
 
-                // Determinar la clase para el curso SISO
-                let cursoSisoClass = 'text-red-500 font-semibold';
-                if (col.curso_siso === 'Aprobado') {
-                    cursoSisoClass = 'text-green-500 font-semibold';
-                } else if (col.curso_siso === 'Vencido' || col.curso_siso === 'Perdido') {
-                    cursoSisoClass = 'text-red-500 font-semibold';
+                // Determinar la clase para la Capacitación SATOR
+                let capacitacionClass = 'text-red-500 font-semibold';
+                if (col.capacitacion === 'Aprobado') {
+                    capacitacionClass = 'text-green-500 font-semibold';
+                } else if (col.capacitacion === 'Vencido' || col.capacitacion === 'Perdido') {
+                    capacitacionClass = 'text-red-500 font-semibold';
                 }
  
 
@@ -934,7 +934,7 @@
                     <td>${col.nombre}</td>
                     <td>${col.cedula}</td>
                     <td class="estado-colaborador">${col.estado ? 'Habilitado' : 'Inhabilitado'}</td>
-                    <td class="${cursoSisoClass}">${col.curso_siso || 'No definido'}</td>
+                    <td class="${capacitacionClass}">${col.capacitacion || 'No definido'}</td>
                     <td class="${plantillaClass}">${col.plantilla_ss}</td>
                     <td class="acciones-colaborador">
                         <button class="btn btn-${col.estado ? 'danger' : 'success'} btn-sm accion-colaborador" data-colaborador-id="${col.id}" data-nuevo-estado="${!col.estado}">
@@ -946,7 +946,7 @@
                 `;
             }).join('');
 
-            // Cargar estados de curso SISO para cada colaborador
+            // Cargar estados de Capacitación SATOR para cada colaborador
             data.colaboradores.forEach(col => {
                 console.log('Datos del colaborador:', col);
             });

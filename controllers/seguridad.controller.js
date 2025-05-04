@@ -130,7 +130,7 @@ controller.getSolicitudDetalles = async (req, res) => {
                 colaboradores: [], // No incluir colaboradores
                 advertencia: mensajeAdvertencia,
                 mensajeVehiculos: mensajesAdvertencia.length > 0 ? mensajesAdvertencia.join(' ') : null,
-                mensajeCursoSiso: null, // No incluir advertencias de colaboradores
+                mensajeCapacitacion: null, // No incluir advertencias de colaboradores
                 mensajePlantillaSS: null // No incluir advertencias de colaboradores
             });
 
@@ -157,21 +157,21 @@ controller.getSolicitudDetalles = async (req, res) => {
                 return res.status(404).json({ message: 'Solicitud no encontrada' });
             }
 
-            // Determinar estado del Curso SISO
-            let cursoSisoEstado = 'No';
-            let mensajeCursoSiso = null;
-            if (colaborador[0].curso_siso_estado) {
-                if (colaborador[0].curso_siso_estado === 'APROBADO') {
-                    const fechaVencimiento = new Date(colaborador[0].curso_siso_vencimiento);
+            // Determinar estado de la Capacitación SATOR
+            let capacitacionEstado = 'No';
+            let mensajeCapacitacion = null;
+            if (colaborador[0].capacitacion_estado) {
+                if (colaborador[0].capacitacion_estado === 'APROBADO') {
+                    const fechaVencimiento = new Date(colaborador[0].capacitacion_vencimiento);
                     const hoy = new Date();
-                    cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
-                    mensajeCursoSiso = cursoSisoEstado === 'Vencido' ? 'Curso SISO vencido.' : null;
+                    capacitacionEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
+                    mensajeCapacitacion = capacitacionEstado === 'Vencido' ? 'Capacitación SATOR vencida.' : null;
                 } else {
-                    cursoSisoEstado = 'Perdido';
-                    mensajeCursoSiso = 'Curso SISO perdido.';
+                    capacitacionEstado = 'Perdido';
+                    mensajeCapacitacion = 'Capacitación SATOR perdida.';
                 }
             } else {
-                mensajeCursoSiso = 'No ha realizado el Curso SISO.';
+                mensajeCapacitacion = 'No ha realizado la Capacitación SATOR.';
             }
 
             // Determinar estado de la Plantilla SS
@@ -194,12 +194,13 @@ controller.getSolicitudDetalles = async (req, res) => {
                 ...solicitudDetails[0],
                 colaboradores: [{
                     ...colaborador[0],
-                    cursoSiso: cursoSisoEstado,
+                    capacitacion: capacitacionEstado,
+                    mensajeCapacitacion: mensajeCapacitacion,
                     plantillaSS: plantillaSSEstado
                 }],
                 vehiculos: [], // No incluir vehículos
                 advertencia: mensajeAdvertencia,
-                mensajeCursoSiso,
+                mensajeCapacitacion: null,
                 mensajePlantillaSS,
                 mensajeVehiculos: null // No incluir advertencias de vehículos
             });
@@ -269,14 +270,14 @@ LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id AND l
     COLABORADOR: `
         SELECT 
             c.id, c.solicitud_id, c.cedula, c.nombre, c.foto, c.cedulaFoto, c.estado,
-            rc.estado AS curso_siso_estado, rc.fecha_vencimiento AS curso_siso_vencimiento,
+            rc.estado AS capacitacion_estado, rc.fecha_vencimiento AS capacitacion_vencimiento,
             pss.fecha_inicio AS plantilla_ss_inicio, pss.fecha_fin AS plantilla_ss_fin
         FROM colaboradores c
         LEFT JOIN (
             SELECT rc.colaborador_id, rc.estado, rc.fecha_vencimiento
             FROM resultados_capacitaciones rc
             JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
-            WHERE cap.nombre = 'Curso SISO' AND rc.colaborador_id = ?
+            WHERE cap.nombre = 'Capacitación SATOR' AND rc.colaborador_id = ?
             ORDER BY rc.created_at DESC LIMIT 1
         ) rc ON c.id = rc.colaborador_id
         LEFT JOIN (
@@ -436,15 +437,15 @@ controller.qrAccesosModal = async (req, res) => {
                 });
             }
 
-            // Determinar estado del Curso SISO
-            let cursoSisoEstado = 'No';
-            if (colaborador[0].curso_siso_estado) {
-                if (colaborador[0].curso_siso_estado === 'APROBADO') {
-                    const fechaVencimiento = new Date(colaborador[0].curso_siso_vencimiento);
+            // Determinar estado de la Capacitación SATOR
+            let capacitacionEstado = 'No';
+            if (colaborador[0].capacitacion_estado) {
+                if (colaborador[0].capacitacion_estado === 'APROBADO') {
+                    const fechaVencimiento = new Date(colaborador[0].capacitacion_vencimiento);
                     const hoy = new Date();
-                    cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
+                    capacitacionEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
                 } else {
-                    cursoSisoEstado = 'Perdido';
+                    capacitacionEstado = 'Perdido';
                 }
             }
 
@@ -464,7 +465,8 @@ controller.qrAccesosModal = async (req, res) => {
                     ...solicitudDetails[0],
                     colaboradores: [{
                         ...colaborador[0],
-                        cursoSiso: cursoSisoEstado,
+                        capacitacion: capacitacionEstado,
+                        mensajeCapacitacion: mensajeCapacitacion,
                         plantillaSS: plantillaSSEstado
                     }],
                     advertencia: mensajeAdvertencia
@@ -1033,8 +1035,8 @@ controller.obtenerSolicitudesActivasConColaboradoresYVehiculos = async (req, res
                     c.foto,
                     c.cedulaFoto,
                     c.estado,
-                    rc.estado AS curso_siso_estado,
-                    rc.fecha_vencimiento AS curso_siso_vencimiento,
+                    rc.estado AS capacitacion_estado,
+                    rc.fecha_vencimiento AS capacitacion_vencimiento,
                     pss.fecha_inicio AS plantilla_ss_inicio,
                     pss.fecha_fin AS plantilla_ss_fin,
                     CASE WHEN pss.id IS NOT NULL THEN 1 ELSE 0 END AS has_plantilla_ss
@@ -1044,7 +1046,7 @@ controller.obtenerSolicitudesActivasConColaboradoresYVehiculos = async (req, res
                     SELECT rc.colaborador_id, rc.estado, rc.fecha_vencimiento
                     FROM resultados_capacitaciones rc
                     JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
-                    WHERE cap.nombre = 'Curso SISO'
+                    WHERE cap.nombre = 'Capacitación SATOR'
                         AND (rc.colaborador_id, rc.created_at) IN (
                             SELECT colaborador_id, MAX(created_at)
                             FROM resultados_capacitaciones
@@ -1068,31 +1070,31 @@ controller.obtenerSolicitudesActivasConColaboradoresYVehiculos = async (req, res
                 id: c.id,
                 nombre: c.nombre,
                 estado: c.estado,
-                curso_siso_estado: c.curso_siso_estado,
-                curso_siso_vencimiento: c.curso_siso_vencimiento
+                capacitacion_estado: c.capacitacion_estado,
+                capacitacion_vencimiento: c.capacitacion_vencimiento
             })));
 
             // Procesar estado de colaboradores
             colaboradores.forEach(col => {
-                // Curso SISO
-                let cursoSisoEstado = 'No';
-                let mensajeCursoSiso = null;
-                if (col.curso_siso_estado) {
-                    if (col.curso_siso_estado === 'APROBADO') {
-                        const fechaVencimiento = new Date(col.curso_siso_vencimiento);
+                // Capacitación SATOR
+                let capacitacionEstado = 'No';
+                let mensajeCapacitacion = null;
+                if (col.capacitacion_estado) {
+                    if (col.capacitacion_estado === 'APROBADO') {
+                        const fechaVencimiento = new Date(col.capacitacion_vencimiento);
                         const hoy = new Date();
-                        cursoSisoEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
-                        mensajeCursoSiso = cursoSisoEstado === 'Vencido' ? 'Curso SISO vencido.' : null;
+                        capacitacionEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
+                        mensajeCapacitacion = capacitacionEstado === 'Vencido' ? 'Capacitación SATOR vencida.' : null;
                     } else {
-                        cursoSisoEstado = 'Perdido';
-                        mensajeCursoSiso = 'Curso SISO perdido.';
+                        capacitacionEstado = 'Perdido';
+                        mensajeCapacitacion = 'Capacitación SATOR perdida.';
                     }
                 } else {
-                    console.log(`Colaborador ${col.id} (${col.nombre}) no tiene Curso SISO:`, {
-                        curso_siso_estado: col.curso_siso_estado,
-                        curso_siso_vencimiento: col.curso_siso_vencimiento
+                    console.log(`Colaborador ${col.id} (${col.nombre}) no tiene Capacitación SATOR:`, {
+                        capacitacion_estado: col.capacitacion_estado,
+                        capacitacion_vencimiento: col.capacitacion_vencimiento
                     });
-                    mensajeCursoSiso = 'No ha realizado el Curso SISO.';
+                    mensajeCapacitacion = 'No ha realizado la Capacitación SATOR.';
                 }
 
                 // Plantilla SS
@@ -1115,10 +1117,9 @@ controller.obtenerSolicitudesActivasConColaboradoresYVehiculos = async (req, res
                 // Indicador de permiso de ingreso
                 col.permisoIngreso = col.estado === 1 ? 'Permitido' : 'No permitido';
 
-                col.cursoSiso = cursoSisoEstado;
+                col.capacitacion = capacitacionEstado;
+                col.mensajeCapacitacion = mensajeCapacitacion;
                 col.plantillaSS = plantillaSSEstado;
-                col.mensajeCursoSiso = mensajeCursoSiso;
-                col.mensajePlantillaSS = mensajePlantillaSS;
                 delete col.has_plantilla_ss; // Eliminar campo auxiliar
             });
 
@@ -1199,7 +1200,7 @@ controller.obtenerSolicitudesActivasConColaboradoresYVehiculos = async (req, res
             solicitud.vehiculos = vehiculos;
 
             // Eliminar mensajes generales de restricción
-            solicitud.mensajeCursoSiso = null;
+            solicitud.mensajeCapacitacion = null;
             solicitud.mensajePlantillaSS = null;
             solicitud.mensajeVehiculos = null;
         }

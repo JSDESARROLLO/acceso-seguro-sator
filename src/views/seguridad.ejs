@@ -2178,7 +2178,7 @@
                                 <div class="card-body">
                                     <h6 class="card-title">${colaborador.nombre}</h6>
                                     <p class="card-text">Cédula: ${colaborador.cedula}</p>
-                                    <p class="card-text">Curso SISO: ${colaborador.cursoSiso || 'No definido'}</p>
+                                    <p class="card-text">Capacitación SATOR: ${colaborador.capacitacion || 'No definido'}</p>
                                     <p class="card-text">Plantilla SS: ${colaborador.plantillaSS || 'No definida'}</p>
                                     ${colaborador.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="colaborador-checkbox" value="' + colaborador.id + '" checked>'}
                                 </div>
@@ -2223,8 +2223,8 @@
     // Validar documentos de colaboradores
     if (!isVehicle && data.colaboradores && data.colaboradores.length === 1) {
         const colaborador = data.colaboradores[0];
-        if (colaborador.cursoSiso === 'Vencido' || colaborador.cursoSiso === 'Perdido' || colaborador.cursoSiso === 'No') {
-            mensajeDetallado += `Curso SISO ${colaborador.cursoSiso.toLowerCase()} para ${colaborador.nombre}. `;
+        if (colaborador.capacitacion === 'Vencido' || colaborador.capacitacion === 'Perdido' || colaborador.capacitacion === 'No') {
+            mensajeDetallado += `Capacitación SATOR ${colaborador.capacitacion.toLowerCase()} para ${colaborador.nombre}. `;
             bloqueoRegistro = true;
         }
         if (colaborador.plantillaSS === 'Vencida' || colaborador.plantillaSS === 'No definida') {
@@ -2879,7 +2879,7 @@
                         labor: solicitud.labor,
                         estado_actual: solicitud.estado_actual,
                         advertencia: solicitud.advertencia,
-                        mensajeCursoSiso: solicitud.mensajeCursoSiso,
+                        mensajeCapacitacion: solicitud.mensajeCapacitacion,
                         mensajePlantillaSS: solicitud.mensajePlantillaSS,
                         mensajeVehiculos: solicitud.mensajeVehiculos,
                         timestamp: new Date().toISOString()
@@ -2896,13 +2896,13 @@
                                 foto: colaborador.foto,
                                 cedulaFoto: colaborador.cedulaFoto,
                                 estado: colaborador.estado,
-                                cursoSiso: colaborador.cursoSiso,
-                                curso_siso_estado: colaborador.curso_siso_estado,
-                                curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
+                                capacitacion: colaborador.capacitacion,
+                                capacitacion_estado: colaborador.capacitacion_estado,
+                                capacitacion_vencimiento: colaborador.capacitacion_vencimiento,
                                 plantillaSS: colaborador.plantillaSS,
                                 plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
                                 plantilla_ss_fin: colaborador.plantilla_ss_fin,
-                                mensajeCursoSiso: colaborador.mensajeCursoSiso,
+                                mensajeCapacitacion: colaborador.mensajeCapacitacion,
                                 mensajePlantillaSS: colaborador.mensajePlantillaSS,
                                 solicitudId: solicitud.id,
                                 timestamp: new Date().toISOString()
@@ -3029,7 +3029,7 @@
                         labor: data.labor,
                         estado_actual: data.estado_actual,
                         advertencia: data.advertencia,
-                        mensajeCursoSiso: data.mensajeCursoSiso,
+                        mensajeCapacitacion: data.mensajeCapacitacion,
                         mensajePlantillaSS: data.mensajePlantillaSS,
                         mensajeVehiculos: data.mensajeVehiculos,
                         timestamp: new Date().toISOString()
@@ -3045,13 +3045,13 @@
                                 foto: colaborador.foto,
                                 cedulaFoto: colaborador.cedulaFoto,
                                 estado: colaborador.estado,
-                                cursoSiso: colaborador.cursoSiso,
-                                curso_siso_estado: colaborador.curso_siso_estado,
-                                curso_siso_vencimiento: colaborador.curso_siso_vencimiento,
+                                capacitacion: colaborador.capacitacion,
+                                capacitacion_estado: colaborador.capacitacion_estado,
+                                capacitacion_vencimiento: colaborador.capacitacion_vencimiento,
                                 plantillaSS: colaborador.plantillaSS,
                                 plantilla_ss_inicio: colaborador.plantilla_ss_inicio,
                                 plantilla_ss_fin: colaborador.plantilla_ss_fin,
-                                mensajeCursoSiso: colaborador.mensajeCursoSiso,
+                                mensajeCapacitacion: colaborador.mensajeCapacitacion,
                                 mensajePlantillaSS: colaborador.mensajePlantillaSS,
                                 solicitudId: data.id,
                                 timestamp: new Date().toISOString()
