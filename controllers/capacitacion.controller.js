@@ -230,6 +230,10 @@ controllers.responderCapacitacion = async (req, res) => {
         console.log('[CONTROLADOR] Faltan IDs requeridos');
         return res.status(400).json({ error: 'Se requiere el ID del colaborador y de la solicitud' });
     }
+    if (!email || !email.trim()) {
+        console.log('[CONTROLADOR] Falta el correo electrónico');
+        return res.status(400).json({ error: 'El correo electrónico es obligatorio' });
+    }
 
     if (!aceptaPolitica) {
         console.log('[CONTROLADOR] Políticas no aceptadas');
