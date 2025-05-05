@@ -165,6 +165,11 @@ function reasignarEventos() {
     const solicitudId = $(this).data('solicitud-id');
     openChatModalSST(solicitudId);
   });
+
+  // Reasignar el evento para los botones Ver
+  $('[id^="verDETALLES-"]').off('click').on('click', function() {
+    manejarVerDetalles(this);
+  });
 }
 
 // Inicialización cuando el DOM está listo
