@@ -385,21 +385,19 @@ controller.qrAccesosModal = async (req, res) => {
             const mensajesAdvertencia = verificarDocumentosVehiculo(vehiculo[0]);
             const mensajeAdvertencia = verificarLugarSolicitud(solicitudDetails[0].nombre_lugar, username);
 
-            // Obtener lista de vehículos
-            const [vehiculos] = await connection.execute(`
-                ${QUERIES.VEHICULO}
-                WHERE v.solicitud_id = ?
-            `, [solicitudId]);
-
             return res.render('seguridad', {
-                solicitud: vehiculos,
+                solicitud: [],
                 modalData: {
                     ...solicitudDetails[0],
                     vehiculos: [{
                         ...vehiculo[0],
                         mensajesAdvertencia: mensajesAdvertencia.length > 0 ? mensajesAdvertencia : null
                     }],
-                    advertencia: mensajeAdvertencia
+                    colaboradores: [],
+                    advertencia: mensajeAdvertencia,
+                    mensajeVehiculos: mensajesAdvertencia.length > 0 ? mensajesAdvertencia.join(' ') : null,
+                    mensajeCapacitacion: null,
+                    mensajePlantillaSS: null
                 },
                 title: 'Control de Seguridad - Grupo Argos',
                 username
@@ -439,22 +437,31 @@ controller.qrAccesosModal = async (req, res) => {
 
             // Determinar estado de la Capacitación SATOR
             let capacitacionEstado = 'No';
+            let mensajeCapacitacion = null;
             if (colaborador[0].capacitacion_estado) {
                 if (colaborador[0].capacitacion_estado === 'APROBADO') {
                     const fechaVencimiento = new Date(colaborador[0].capacitacion_vencimiento);
                     const hoy = new Date();
                     capacitacionEstado = fechaVencimiento > hoy ? 'Aprobado' : 'Vencido';
+                    mensajeCapacitacion = capacitacionEstado === 'Vencido' ? 'Capacitación SATOR vencida.' : null;
                 } else {
                     capacitacionEstado = 'Perdido';
+                    mensajeCapacitacion = 'Capacitación SATOR perdida.';
                 }
+            } else {
+                mensajeCapacitacion = 'No ha realizado la Capacitación SATOR.';
             }
 
             // Determinar estado de la Plantilla SS
             let plantillaSSEstado = 'No definida';
+            let mensajePlantillaSS = null;
             if (colaborador[0].plantilla_ss_fin) {
                 const fechaFin = new Date(colaborador[0].plantilla_ss_fin);
                 const hoy = new Date();
                 plantillaSSEstado = fechaFin > hoy ? 'Vigente' : 'Vencida';
+                mensajePlantillaSS = plantillaSSEstado === 'Vencida' ? 'Plantilla de Seguridad Social vencida.' : null;
+            } else {
+                mensajePlantillaSS = 'No se ha definido la Plantilla de Seguridad Social.';
             }
 
             const mensajeAdvertencia = verificarLugarSolicitud(solicitudDetails[0].nombre_lugar, username);
@@ -469,7 +476,11 @@ controller.qrAccesosModal = async (req, res) => {
                         mensajeCapacitacion: mensajeCapacitacion,
                         plantillaSS: plantillaSSEstado
                     }],
-                    advertencia: mensajeAdvertencia
+                    vehiculos: [],
+                    advertencia: mensajeAdvertencia,
+                    mensajeCapacitacion: mensajeCapacitacion,
+                    mensajePlantillaSS: mensajePlantillaSS,
+                    mensajeVehiculos: null
                 },
                 title: 'Control de Seguridad - Grupo Argos',
                 username
