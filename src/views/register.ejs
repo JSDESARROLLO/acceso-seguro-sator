@@ -171,6 +171,47 @@
           font-size: 1.3em;
         }
       }
+      /* Estilos para el loader */
+      .loader-container {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.8);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+      .loader {
+        width: 48px;
+        height: 48px;
+        border: 5px solid #CC9000;
+        border-bottom-color: transparent;
+        border-radius: 50%;
+        animation: rotation 1s linear infinite;
+      }
+      @keyframes rotation {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      .loader-text {
+        margin-top: 16px;
+        color: #333;
+        font-size: 16px;
+        font-weight: 500;
+      }
+      /* Estilos para el botón deshabilitado */
+      button[type="submit"]:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+        transform: none;
+      }
     </style>
   </head>
   <body>
@@ -190,11 +231,11 @@
             </div>
             <div class="form-group">
               <label for="password">Contraseña</label>
-              <input type="password" name="password" placeholder="Ingresa tu contraseña" required>
+              <input type="password" name="password" id="password" placeholder="Ingresa tu contraseña" required autocomplete="new-password">
             </div>
             <div class="form-group">
               <label for="confirm-password">Confirmar Contraseña</label>
-              <input type="password" name="confirm-password" placeholder="Confirma tu contraseña" required>
+              <input type="password" name="confirm-password" id="confirm-password" placeholder="Confirma tu contraseña" required autocomplete="new-password">
             </div>
             <div class="form-group">
               <label for="empresa">Empresa</label>
@@ -251,6 +292,12 @@
         </p>
       </div>
     </div>
+    <div class="loader-container" id="loaderContainer">
+      <div style="text-align: center;">
+        <div class="loader"></div>
+        <div class="loader-text">Registrando usuario...</div>
+      </div>
+    </div>
     <script>
       document.addEventListener('DOMContentLoaded', function() {
         const form = document.querySelector('form');
@@ -260,7 +307,21 @@
         const aceptaPolitica = document.getElementById('aceptaPolitica');
         const passwordInput = document.querySelector('input[name="password"]');
         const nitInput = document.querySelector('input[name="nit"]');
+        const submitBtn = document.getElementById('submitBtn');
+        const loaderContainer = document.getElementById('loaderContainer');
         
+        // Función para mostrar el loader
+        function showLoader() {
+          loaderContainer.style.display = 'flex';
+          submitBtn.disabled = true;
+        }
+
+        // Función para ocultar el loader
+        function hideLoader() {
+          loaderContainer.style.display = 'none';
+          submitBtn.disabled = false;
+        }
+
         // Función para validar el correo electrónico
         function validateEmail(email) {
           const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
@@ -269,7 +330,7 @@
 
         // Función para validar la contraseña
         function validatePassword(password) {
-          const re = /^(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{6,}$/;
+          const re = /^(?=.*[A-Z])(?=.*\d)[A-Za-z\d\W]{6,}$/;
           return re.test(password);
         }
 
@@ -348,6 +409,9 @@
               title: 'Política de datos no aceptada',
               text: 'Debes aceptar la Política de Tratamiento de Datos Personales para continuar.',
             });
+          } else {
+            // Si todas las validaciones pasan, mostrar el loader
+            showLoader();
           }
         });
 

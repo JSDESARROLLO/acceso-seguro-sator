@@ -23,8 +23,8 @@ const getClientIp = (req) => {
 
 // Función para validar la contraseña
 const validatePassword = (password) => {
-    // Mínimo 6 caracteres, al menos una letra mayúscula, una minúscula y un número
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{6,}$/;
+    // Mínimo 6 caracteres, al menos una letra mayúscula y un número
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)[A-Za-z\d\W]{6,}$/;
     return passwordRegex.test(password);
 };
 
