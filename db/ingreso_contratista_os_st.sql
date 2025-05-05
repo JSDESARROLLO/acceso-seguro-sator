@@ -157,6 +157,9 @@ CREATE TABLE colaboradores (
     KEY idx_colaboradores_cedula (cedula)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+ALTER TABLE colaboradores 
+CHANGE COLUMN cedulaFoto documento_arl VARCHAR(255) DEFAULT NULL;
+
 CREATE TABLE vehiculos (
     id INT NOT NULL AUTO_INCREMENT,
     solicitud_id INT NOT NULL,

@@ -113,11 +113,12 @@ controller.vistaInterventor = async (req, res) => {
     // Pasar las acciones, lugares y otros datos a la vista
     res.render('interventor', {
       acciones,
-      lugares: lugares.map(l => l.nombre_lugar), // Pasar solo los nombres de los lugares
+      lugares, // Pasar el array completo de lugares con id y nombre_lugar
       title: 'Interventor - Grupo Argos',
       username,
       userId: id,
-      format
+      format,
+      detalles: { colaboradores: [] } // Inicializar detalles con un array vacío de colaboradores
     });
   } catch (err) {
     console.error('[ERROR] Error al verificar el token o al obtener acciones:', err);
@@ -166,7 +167,7 @@ controller.eliminarSolicitud = async (req, res) => {
 
           // Get all files that need to be deleted
           const [colaboradores] = await connection2.execute(
-              'SELECT id, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ?',
+              'SELECT id, foto, documento_arl FROM colaboradores WHERE solicitud_id = ?',
               [solicitud_id]
           );
 
@@ -259,7 +260,7 @@ controller.eliminarSolicitud = async (req, res) => {
           // Delete collaborator files
           for (const colaborador of colaboradores) {
               if (colaborador.foto) await deleteFromSpaces(colaborador.foto);
-              if (colaborador.cedulaFoto) await deleteFromSpaces(colaborador.cedulaFoto);
+              if (colaborador.documento_arl) await deleteFromSpaces(colaborador.documento_arl);
           }
 
           // Delete vehicle files
@@ -325,10 +326,52 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
       return res.status(404).send('Solicitud no encontrada');
     }
 
-    const [colaboradores] = await connection.execute(
-      'SELECT id, cedula, nombre, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ? and estado = true',
-      [id]
-    );
+    // Obtener vehículos con sus documentos
+    const [vehiculos] = await connection.execute(`
+      SELECT 
+        v.id,
+        v.foto,
+        v.matricula,
+        v.soat,
+        v.tecnomecanica,
+        v.licencia_conduccion,
+        v.licencia_transito,
+        pdv_soat.estado as estado_soat,
+        pdv_tec.estado as estado_tecnicomecanica
+      FROM vehiculos v
+      LEFT JOIN plantilla_documentos_vehiculos pdv_soat ON v.id = pdv_soat.vehiculo_id AND pdv_soat.tipo_documento = 'soat'
+      LEFT JOIN plantilla_documentos_vehiculos pdv_tec ON v.id = pdv_tec.vehiculo_id AND pdv_tec.tipo_documento = 'tecnomecanica'
+      WHERE v.solicitud_id = ?
+    `, [id]);
+
+    // Obtener colaboradores con su estado y capacitaciones
+    const [colaboradores] = await connection.execute(`
+      SELECT 
+        c.id, 
+        c.cedula, 
+        c.nombre, 
+        c.foto, 
+        c.documento_arl,
+        c.estado,
+        (SELECT 
+          JSON_OBJECT(
+            'id', pss.id,
+            'fecha_inicio', pss.fecha_inicio,
+            'fecha_fin', pss.fecha_fin
+          )
+         FROM plantilla_seguridad_social pss 
+         WHERE pss.colaborador_id = c.id 
+         ORDER BY pss.fecha_fin DESC LIMIT 1) as plantillaSS,
+        (SELECT rc.estado 
+         FROM resultados_capacitaciones rc 
+         JOIN capacitaciones cap ON rc.capacitacion_id = cap.id
+         WHERE rc.colaborador_id = c.id 
+         AND cap.nombre LIKE '%Capacitación SATOR%'
+         ORDER BY rc.created_at DESC LIMIT 1) as capacitacion
+      FROM colaboradores c
+      WHERE c.solicitud_id = ?
+    `, [id]);
+
     const [contratista] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].usuario_id]);
     const [interventor] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].interventor_id]);
 
@@ -336,6 +379,49 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
     solicitud.forEach((solici) => {
       solici.inicio_obra = format(new Date(solici.inicio_obra), 'dd/MM/yyyy');
       solici.fin_obra = format(new Date(solici.fin_obra), 'dd/MM/yyyy');
+    });
+
+    // Procesar colaboradores para determinar su estado
+    const colaboradoresProcesados = colaboradores.map(col => {
+      // Convertir plantillaSS de string a objeto si es necesario
+      let plantillaSS = null;
+      if (col.plantillaSS && typeof col.plantillaSS === 'string') {
+        try {
+          plantillaSS = JSON.parse(col.plantillaSS);
+        } catch (e) {
+          console.error('Error al parsear plantillaSS:', e);
+        }
+      } else {
+        plantillaSS = col.plantillaSS;
+      }
+
+      // Determinar el estado según ARL y seguridad social
+      let estadoColor = '⚫'; // Por defecto gris (no definido)
+      let estadoTexto = 'No definido';
+
+      // Verificar si tiene documento ARL
+      const tieneARL = col.documento_arl !== null && col.documento_arl !== '';
+      
+      // Verificar si tiene seguridad social vigente
+      const tieneSSVigente = plantillaSS && 
+        new Date(plantillaSS.fecha_fin) >= new Date();
+
+      if (tieneARL && tieneSSVigente) {
+        estadoColor = '🟢';
+        estadoTexto = 'Vigente';
+      } else if (tieneARL && !tieneSSVigente) {
+        estadoColor = '🔴';
+        estadoTexto = 'Vencido';
+      }
+
+      return {
+        ...col,
+        estado: Boolean(col.estado),
+        plantillaSS: plantillaSS,
+        capacitacion: col.capacitacion,
+        estadoColor,
+        estadoTexto
+      };
     });
 
     const logoPath = path.join(__dirname, '../public', 'img', 'TSM-Sator-Logo.webp');
@@ -347,7 +433,8 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
       solicitud: solicitud[0],
       contractorName: contratista[0].username,
       interventorName: interventor[0].username,
-      colaboradores,
+      colaboradores: colaboradoresProcesados,
+      vehiculos: vehiculos
     };
 
     res.json(data);
@@ -757,9 +844,9 @@ controller.filtrarSolicitudes = async (req, res) => {
       console.log('[DEBUG] Añadido filtro empresa:', empresa);
     }
     if (lugar) {
-      query += ' AND l.nombre_lugar = ?';
+      query += ' AND s.lugar = ?';
       params.push(lugar);
-      console.log('[DEBUG] Añadido filtro lugar:', lugar);
+      console.log('[DEBUG] Añadido filtro lugar ID:', lugar);
     }
     if (vigencia) {
       query += ' AND (CASE WHEN DATE(s.fin_obra) < CURDATE() THEN "Vencida" ELSE "Vigente" END) = ?';
@@ -1093,7 +1180,7 @@ controller.obtenerTodosColaboradores = async (req, res) => {
         c.cedula, 
         c.nombre, 
         c.foto, 
-        c.cedulaFoto, 
+        c.documento_arl, 
         c.estado,
         (SELECT 
           JSON_OBJECT(
@@ -1114,7 +1201,7 @@ controller.obtenerTodosColaboradores = async (req, res) => {
       WHERE c.solicitud_id = ?
     `, [solicitudId]);
 
-    // Convertir formato de los datos
+    // Convertir formato de los datos y determinar estado
     const colaboradoresFormateados = colaboradores.map(col => {
       // Convertir plantillaSS de string a objeto si es necesario
       let plantillaSS = null;
@@ -1128,12 +1215,33 @@ controller.obtenerTodosColaboradores = async (req, res) => {
         plantillaSS = col.plantillaSS;
       }
 
+      // Determinar el estado según ARL y seguridad social
+      let estadoColor = '⚫'; // Por defecto gris (no definido)
+      let estadoTexto = 'No definido';
+
+      // Verificar si tiene documento ARL
+      const tieneARL = col.documento_arl !== null && col.documento_arl !== '';
+      
+      // Verificar si tiene seguridad social vigente
+      const tieneSSVigente = plantillaSS && 
+        new Date(plantillaSS.fecha_fin) >= new Date();
+
+      if (tieneARL && tieneSSVigente) {
+        estadoColor = '🟢';
+        estadoTexto = 'Vigente';
+      } else if (tieneARL && !tieneSSVigente) {
+        estadoColor = '🔴';
+        estadoTexto = 'Vencido';
+      }
+
       return {
         ...col,
         estado: Boolean(col.estado),
         plantillaSS: plantillaSS,
         capacitacion: col.capacitacion,
         mensajeCapacitacion: col.mensajeCapacitacion,
+        estadoColor,
+        estadoTexto
       };
     });
 

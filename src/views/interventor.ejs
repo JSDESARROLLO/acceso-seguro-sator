@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
  
   <style>
@@ -450,7 +450,8 @@
                   </td>
                   <td>
                     <button class="btn btn-primary btn-sm ml-2 open-chat-btn-interventor" data-solicitud-id="<%= accion.solicitud_id %>">
-                      Conversar  
+                      Conversar
+                      <span class="badge bg-danger text-white unread-count" data-solicitud-id="<%= accion.solicitud_id %>" style="display: none;">0</span>
                     </button>
                   </td>
                 </tr>
@@ -641,13 +642,13 @@
   </div>
 
   <div class="modal fade" id="modalVerDetalles" tabindex="-1" role="dialog" aria-labelledby="modalVerDetallesLabel">
-    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-dialog modal-dialog-centered modal-xl" role="document" style="max-width: 90%; width: 90%;">
       <div class="modal-content shadow-lg rounded">
         <div class="modal-header">
           <h5 class="modal-title" id="modalVerDetallesLabel">Detalles de la Solicitud</h5>
           <button type="button" class="close" data-bs-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">×</span></button>
         </div>
-        <div class="modal-body" id="detalles-container"></div>
+        <div class="modal-body" id="detalles-container" style="max-height: 80vh; overflow-y: auto;"></div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
         </div>
@@ -866,6 +867,11 @@
             .modal-content-custom h3 { font-size: 24px; margin: 10px 0; }
             .modal-content-custom p { font-size: 18px; margin: 5px 0; }
             .close-btn-custom { position: absolute; top: 10px; right: 20px; font-size: 30px; cursor: pointer; color: #333; }
+            .badge { padding: 5px 10px; border-radius: 4px; font-size: 12px; }
+            .badge-success { background-color: #28a745; color: white; }
+            .badge-danger { background-color: #dc3545; color: white; }
+            .badge-warning { background-color: #ffc107; color: black; }
+            .badge-secondary { background-color: #6c757d; color: white; }
           </style>
           <div class="header">
             <img src="${detalles.logoBase64}" alt="Logo">
@@ -883,8 +889,6 @@
             <p><strong>Contratista:</strong> ${detalles.contractorName || '❌'}</p>
             <p><strong>Interventor:</strong> ${detalles.interventorName || '❌'}</p>
             <p><strong>Fechas:</strong> ${detalles.solicitud.inicio_obra || '❌'} - ${detalles.solicitud.fin_obra || '❌'}</p>
-            <p><strong>ARL:</strong> ${detalles.solicitud.arl_documento ? '✅' : '❌'}</p>
-            <p><strong>Planilla de Pago Seguridad Social:</strong> ${detalles.solicitud.pasocial_documento ? '✅' : '❌'}</p>
           </div>
           <div class="section">
             <h2>Colaboradores</h2>
@@ -895,25 +899,103 @@
                   <th>Cédula</th>
                   <th>Nombre</th>
                   <th>Fotos</th>
+                  <th>Estado</th>
+                  <th>ARL</th>
+                  <th>Planilla SS</th>
+                  <th>Capacitación SATOR</th>
                 </tr>
               </thead>
               <tbody>
-                ${detalles.colaboradores.map(colaborador => `
-                  <tr>
-                    <td>${colaborador.id || '❌'}</td>
-                    <td>${colaborador.cedula || '❌'}</td>
-                    <td>${colaborador.nombre || '❌'}</td>
-                    <td>
-                      ${colaborador.foto 
-                        ? `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" data-foto="${colaborador.foto}" data-nombre="${colaborador.nombre}" data-id="${colaborador.id}">` 
-                        : '❌ Sin foto'}
-                      <br>
-                      ${colaborador.documento_arl 
-                        ? `<a href="${colaborador.documento_arl}" target="_blank" class="btn btn-info btn-sm">Ver Documento ARL</a>` 
-                        : '❌ Sin documento ARL'}
-                    </td>
-                  </tr>
-                `).join('')}
+                ${detalles.colaboradores && detalles.colaboradores.length > 0 ? 
+                  detalles.colaboradores.map(colaborador => `
+                    <tr>
+                      <td>${colaborador.id || '❌'}</td>
+                      <td>${colaborador.cedula || '❌'}</td>
+                      <td>${colaborador.nombre || '❌'}</td>
+                      <td>
+                        ${colaborador.foto ? 
+                          `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" 
+                               onclick="openModalCustom('${colaborador.foto}', '${colaborador.nombre}', '${colaborador.id}')">` : 
+                          '❌ Sin foto'}
+                      </td>
+                      <td>
+                        <span class="badge ${colaborador.estadoColor === '🟢' ? 'badge-success' : 'badge-danger'}">
+                          ${colaborador.estadoTexto}
+                        </span>
+                      </td>
+                      <td>
+                        ${colaborador.documento_arl ? 
+                          `<a href="${colaborador.documento_arl}" target="_blank" class="btn btn-info btn-sm">Ver ARL</a>
+                           <span class="badge badge-success">Vigente</span>` : 
+                          '<span class="badge badge-danger">No definido</span>'}
+                      </td>
+                      <td>
+                        ${colaborador.plantillaSS && new Date(colaborador.plantillaSS.fecha_fin) > new Date() ? 
+                          '<span class="badge badge-success">Vigente</span>' : 
+                          '<span class="badge badge-danger">Vencido</span>'}
+                      </td>
+                      <td>
+                        <span class="badge ${colaborador.capacitacion === 'APROBADO' ? 'badge-success' : 'badge-danger'}">
+                          ${colaborador.capacitacion || 'No definido'}
+                        </span>
+                      </td>
+                    </tr>
+                  `).join('') : 
+                  '<tr><td colspan="8" class="text-center">No hay colaboradores registrados</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+          <div class="section">
+            <h2>Vehículos</h2>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Matrícula</th>
+                  <th>Foto</th>
+                  <th>SOAT</th>
+                  <th>Técnico Mecánica</th>
+                  <th>Licencia de Conducción</th>
+                  <th>Licencia de Tránsito</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${detalles.vehiculos && detalles.vehiculos.length > 0 ? 
+                  detalles.vehiculos.map(vehiculo => `
+                    <tr>
+                      <td>${vehiculo.matricula || '❌'}</td>
+                      <td>
+                        ${vehiculo.foto ? 
+                          `<img src="${vehiculo.foto}" alt="Foto del vehículo" class="foto-img" 
+                               onclick="openModalCustom('${vehiculo.foto}', 'Vehículo ${vehiculo.matricula}', '${vehiculo.matricula}')">` : 
+                          '❌ Sin foto'}
+                      </td>
+                      <td>
+                        ${vehiculo.soat ? 
+                          `<a href="${vehiculo.soat}" target="_blank" class="btn btn-info btn-sm">Ver SOAT</a>
+                           <span class="badge ${vehiculo.estado_soat === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_soat || 'No definido'}</span>` : 
+                          '<span class="badge badge-danger">No definido</span>'}
+                      </td>
+                      <td>
+                        ${vehiculo.tecnomecanica ? 
+                          `<a href="${vehiculo.tecnomecanica}" target="_blank" class="btn btn-info btn-sm">Ver Técnico</a>
+                           <span class="badge ${vehiculo.estado_tecnicomecanica === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_tecnicomecanica || 'No definido'}</span>` : 
+                          '<span class="badge badge-danger">No definido</span>'}
+                      </td>
+                      <td>
+                        ${vehiculo.licencia_conduccion ? 
+                          `<a href="${vehiculo.licencia_conduccion}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
+                           <span class="badge ${vehiculo.estado_licencia_conduccion === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_licencia_conduccion || 'No definido'}</span>` : 
+                          '<span class="badge badge-danger">No definido</span>'}
+                      </td>
+                      <td>
+                        ${vehiculo.licencia_transito ? 
+                          `<a href="${vehiculo.licencia_transito}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
+                           <span class="badge ${vehiculo.estado_licencia_transito === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_licencia_transito || 'No definido'}</span>` : 
+                          '<span class="badge badge-danger">No definido</span>'}
+                      </td>
+                    </tr>
+                  `).join('') : 
+                  '<tr><td colspan="6" class="text-center">No hay vehículos registrados</td></tr>'}
               </tbody>
             </table>
           </div>
@@ -935,18 +1017,9 @@
           modal.setAttribute('aria-hidden', 'true');
           btn.focus();
         });
-  
-        document.querySelectorAll('.foto-img').forEach(img => {
-          img.addEventListener('click', () => {
-            const fotoSrc = img.getAttribute('data-foto');
-            const nombre = img.getAttribute('data-nombre');
-            const id = img.getAttribute('data-id');
-            openModalCustom(fotoSrc, nombre, id);
-          });
-        });
       } catch (error) {
-        console.error('[ERROR] Error al obtener los detalles:', error);
-        Swal.fire('Error', 'Hubo un error al obtener los detalles de la solicitud.', 'error');
+        console.error('[ERROR] Error al obtener detalles:', error);
+        Swal.fire('Error', 'No se pudieron cargar los detalles de la solicitud.', 'error');
       }
     }
   
@@ -1202,7 +1275,8 @@
             </td>
             <td>
               <button class="btn btn-primary btn-sm ml-2 open-chat-btn-interventor" data-solicitud-id="${accion.solicitud_id}">
-                Conversar <span class="badge bg-danger text-white unread-count" data-solicitud-id="${accion.solicitud_id}">0</span>
+                Conversar
+                <span class="badge bg-danger text-white unread-count" data-solicitud-id="${accion.solicitud_id}" style="display: none;">0</span>
               </button>
             </td>
           `;
@@ -1881,17 +1955,24 @@
         const interventorUserId = getInterventorUserId();
         const response = await fetch(`/api/chat/${solicitudId}/interventor/unread?userId=${interventorUserId}`);
         if (!response.ok) throw new Error('Error al obtener contador');
-  
+
         const data = await response.json();
         const button = document.querySelector(`.open-chat-btn-interventor[data-solicitud-id="${solicitudId}"]`);
+        
         if (button) {
-          const unreadBadge = button.querySelector('.unread-count');
-          if (unreadBadge) {
-            unreadBadge.textContent = data.unreadCount || 0;
-            unreadBadge.style.display = data.unreadCount > 0 ? 'inline-block' : 'none';
-          } else {
-            console.warn(`[Interventor] Badge no encontrado para solicitud ${solicitudId}`);
+          let unreadBadge = button.querySelector('.unread-count');
+          
+          // Si no existe el badge, lo creamos
+          if (!unreadBadge) {
+            unreadBadge = document.createElement('span');
+            unreadBadge.className = 'badge bg-danger text-white unread-count';
+            unreadBadge.setAttribute('data-solicitud-id', solicitudId);
+            button.appendChild(unreadBadge);
           }
+
+          // Actualizamos el contador
+          unreadBadge.textContent = data.unreadCount || 0;
+          unreadBadge.style.display = data.unreadCount > 0 ? 'inline-block' : 'none';
         }
       } catch (error) {
         console.error('[ERROR] Error al actualizar contador:', error);
@@ -2000,17 +2081,19 @@
       const toggleText = document.getElementById('toggleText');
       let filtrosVisible = true;
 
-      toggleButton.addEventListener('click', function() {
-        filtrosVisible = !filtrosVisible;
-        
-        if (filtrosVisible) {
-          filtrosContent.classList.remove('hidden');
-          toggleText.textContent = 'Ocultar Filtros';
-        } else {
-          filtrosContent.classList.add('hidden');
-          toggleText.textContent = 'Mostrar Filtros';
-        }
-      });
+      if (toggleButton) {
+        toggleButton.addEventListener('click', function() {
+          filtrosVisible = !filtrosVisible;
+          
+          if (filtrosVisible) {
+            filtrosContent.classList.remove('hidden');
+            toggleText.textContent = 'Ocultar Filtros';
+          } else {
+            filtrosContent.classList.add('hidden');
+            toggleText.textContent = 'Mostrar Filtros';
+          }
+        });
+      }
     });
   </script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
