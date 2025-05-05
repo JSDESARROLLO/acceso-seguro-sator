@@ -756,7 +756,231 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+  <script>
+    $(document).ready(function() {
+      // Manejar el clic en el botón "Ver" de detalles
+      $(document).on('click', '[id^="verDETALLES-"]', async function() {
+        const solicitudId = this.id.replace('verDETALLES-', '');
+        console.log('ID de solicitud:', solicitudId);
+        
+        try {
+          console.log('Iniciando petición a /obtener-detalles-solicitud/' + solicitudId);
+          const response = await fetch(`/obtener-detalles-solicitud/${solicitudId}`);
+          
+          if (!response.ok) {
+            console.error('Error en la respuesta:', response.status, response.statusText);
+            throw new Error('No se pudieron obtener los detalles');
+          }
+          
+          const detalles = await response.json();
+          console.log('Datos recibidos:', detalles);
+          
+          // Validar estructura de datos
+          if (!detalles) {
+            console.error('Los detalles están vacíos');
+            throw new Error('No se recibieron datos de la solicitud');
+          }
 
+          // Validar datos de colaboradores
+          if (detalles.colaboradores) {
+            console.log('Número de colaboradores:', detalles.colaboradores.length);
+            detalles.colaboradores.forEach((colab, index) => {
+              console.log(`Colaborador ${index + 1}:`, {
+                id: colab.id,
+                nombre: colab.nombre,
+                cedula: colab.cedula,
+                estado: colab.estado,
+                tieneFoto: !!colab.foto,
+                tieneARL: !!colab.documento_arl
+              });
+            });
+          } else {
+            console.warn('No hay datos de colaboradores');
+          }
+
+          // Validar datos de vehículos
+          if (detalles.vehiculos) {
+            console.log('Número de vehículos:', detalles.vehiculos.length);
+            detalles.vehiculos.forEach((vehiculo, index) => {
+              console.log(`Vehículo ${index + 1}:`, {
+                matricula: vehiculo.matricula,
+                tieneFoto: !!vehiculo.foto,
+                estado_soat: vehiculo.estado_soat,
+                estado_tecnicomecanica: vehiculo.estado_tecnicomecanica,
+                estado_licencia_conduccion: vehiculo.licencia_conduccion,
+                estado_licencia_transito: vehiculo.licencia_transito
+              });
+            });
+          } else {
+            console.warn('No hay datos de vehículos');
+          }
+          
+          const detallesContainer = document.getElementById('detalles-container');
+          
+          // Usar el mismo formato de visualización que en interventor.ejs
+          detallesContainer.innerHTML = `
+            <style>
+              .modal-body { font-family: Arial, sans-serif; padding: 20px; }
+              .header { text-align: center; margin-bottom: 20px; }
+              .header img { width: 100px; }
+              .header h1 { margin: 0; font-size: 24px; }
+              .header p { margin: 0; font-size: 14px; color: #666; }
+              .section { margin-bottom: 20px; }
+              .section h2 { font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+              .section p { margin: 5px 0; }
+              .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              .table th, .table td { border: 1px solid #000; padding: 8px; text-align: left; }
+              .table th { background-color: #f2f2f2; }
+              .table img { width: 100px; height: 100px; object-fit: cover; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
+              .badge { padding: 5px 10px; border-radius: 4px; font-size: 12px; }
+              .badge-success { background-color: #28a745; color: white; }
+              .badge-danger { background-color: #dc3545; color: white; }
+              .badge-warning { background-color: #ffc107; color: black; }
+            </style>
+            <div class="header">
+              <img src="${detalles.logoBase64 || '/img/logo.png'}" alt="Logo">
+              <h1>Informe de Solicitud</h1>
+              <p>Sistema Gestor de Ingreso Contratistas</p>
+              <p>Documento generado el día: ${detalles.fecha || new Date().toLocaleDateString()}</p>
+            </div>
+            <div class="section">
+              <h2>Información General</h2>
+              <p><strong>ID de Solicitud:</strong> ${detalles.id || solicitudId}</p>
+              <p><strong>Empresa:</strong> ${detalles.empresa || 'No especificada'}</p>
+              <p><strong>NIT:</strong> ${detalles.nit || 'No especificado'}</p>
+              <p><strong>Lugar:</strong> ${detalles.lugar || 'No especificado'}</p>
+              <p><strong>Labor:</strong> ${detalles.labor || 'No especificada'}</p>
+              <p><strong>Inicio de Obra:</strong> ${detalles.inicio_obra || 'No especificado'}</p>
+              <p><strong>Fin de Obra:</strong> ${detalles.fin_obra || 'No especificado'}</p>
+              <p><strong>Interventor:</strong> ${detalles.interventor || 'No especificado'}</p>
+              <p><strong>Estado de la Solicitud:</strong> <span class="badge ${detalles.estado === 'aprobada' ? 'badge-success' : 
+                                                                        detalles.estado === 'en labor' ? 'badge-info' :
+                                                                        detalles.estado === 'labor detenida' ? 'badge-warning' :
+                                                                        'badge-danger'}">${detalles.estado || 'No especificado'}</span></p>
+            </div>
+            <div class="section">
+              <h2>Colaboradores</h2>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>ID Colaborador</th>
+                    <th>Cédula</th>
+                    <th>Nombre</th>
+                    <th>Fotos</th>
+                    <th>Capacitación SATOR</th>
+                    <th>Planilla SS</th>
+                    <th>ARL</th>
+                    <th>Historial</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${detalles.colaboradores && detalles.colaboradores.length > 0 ? 
+                    detalles.colaboradores.map(colaborador => `
+                      <tr>
+                        <td>${colaborador.id || '❌'}</td>
+                        <td>${colaborador.cedula || '❌'}</td>
+                        <td>${colaborador.nombre || '❌'}</td>
+                        <td>
+                          ${colaborador.foto ? 
+                            `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" 
+                                 onclick="openModalCustom('${colaborador.foto}', '${colaborador.nombre}', '${colaborador.id}')">` : 
+                            '❌ Sin foto'}
+                        </td>
+                        <td>
+                          ${colaborador.capacitacion ? 
+                            `<span class="badge badge-success">Completada</span>` : 
+                            '<span class="badge badge-danger">Pendiente</span>'}
+                        </td>
+                        <td>
+                          ${colaborador.plantillaSS ? 
+                            `<span class="badge ${new Date(colaborador.plantillaSS.fecha_fin.split('/').reverse().join('-')) >= new Date() ? 'badge-success' : 'badge-danger'}">
+                              ${new Date(colaborador.plantillaSS.fecha_fin.split('/').reverse().join('-')) >= new Date() ? 'Vigente' : 'Vencido'}
+                            </span>` : 
+                            '<span class="badge badge-warning">No definido</span>'}
+                        </td>
+                        <td>
+                          ${colaborador.documento_arl ? 
+                            `<a href="${colaborador.documento_arl}" target="_blank" class="btn btn-info btn-sm">Ver ARL</a>
+                             <span class="badge badge-success">Vigente</span>` : 
+                            '<span class="badge badge-danger">No definido</span>'}
+                        </td>
+                        <td>
+                          <button class="btn btn-info btn-sm" onclick="verHistorialColaborador(${colaborador.id})">Ver</button>
+                        </td>
+                      </tr>
+                    `).join('') : 
+                    '<tr><td colspan="8" class="text-center">No hay colaboradores registrados</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+            <div class="section">
+              <h2>Vehículos</h2>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Matrícula</th>
+                    <th>Foto</th>
+                    <th>SOAT</th>
+                    <th>Técnico Mecánica</th>
+                    <th>Licencia de Conducción</th>
+                    <th>Licencia de Tránsito</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${detalles.vehiculos && detalles.vehiculos.length > 0 ? 
+                    detalles.vehiculos.map(vehiculo => `
+                      <tr>
+                        <td>${vehiculo.matricula || '❌'}</td>
+                        <td>
+                          ${vehiculo.foto ? 
+                            `<img src="${vehiculo.foto}" alt="Foto del vehículo" class="foto-img" 
+                                 onclick="openModalCustom('${vehiculo.foto}', 'Vehículo ${vehiculo.matricula}', '${vehiculo.matricula}')">` : 
+                            '❌ Sin foto'}
+                        </td>
+                        <td>
+                          ${vehiculo.soat ? 
+                            `<a href="${vehiculo.soat}" target="_blank" class="btn btn-info btn-sm">Ver SOAT</a>
+                             <span class="badge ${vehiculo.estado_soat === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_soat || 'No definido'}</span>` : 
+                            '<span class="badge badge-danger">No definido</span>'}
+                        </td>
+                        <td>
+                          ${vehiculo.tecnomecanica ? 
+                            `<a href="${vehiculo.tecnomecanica}" target="_blank" class="btn btn-info btn-sm">Ver Técnico</a>
+                             <span class="badge ${vehiculo.estado_tecnicomecanica === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_tecnicomecanica || 'No definido'}</span>` : 
+                            '<span class="badge badge-danger">No definido</span>'}
+                        </td>
+                        <td>
+                          ${vehiculo.licencia_conduccion ? 
+                            `<a href="${vehiculo.licencia_conduccion}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
+                             <span class="badge ${vehiculo.estado_licencia_conduccion === 'Vigente' ? 'badge-success' : 
+                                               vehiculo.estado_licencia_conduccion === 'Vencido' ? 'badge-danger' : 
+                                               'badge-warning'}">${vehiculo.estado_licencia_conduccion}</span>` : 
+                            '<span class="badge badge-warning">No definido</span>'}
+                        </td>
+                        <td>
+                          ${vehiculo.licencia_transito ? 
+                            `<a href="${vehiculo.licencia_transito}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
+                             <span class="badge ${vehiculo.estado_licencia_transito === 'Vigente' ? 'badge-success' : 
+                                               vehiculo.estado_licencia_transito === 'Vencido' ? 'badge-danger' : 
+                                               'badge-warning'}">${vehiculo.estado_licencia_transito}</span>` : 
+                            '<span class="badge badge-warning">No definido</span>'}
+                        </td>
+                      </tr>
+                    `).join('') : 
+                    '<tr><td colspan="6" class="text-center">No hay vehículos registrados</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+          
+          $('#modalVerDetalles').modal('show');
+        } catch (error) {
+          console.error('[ERROR] Error al obtener detalles:', error);
+          Swal.fire('Error', 'No se pudieron cargar los detalles de la solicitud.', 'error');
+        }
+      });
+    });
+  </script>
   <script>
     // ===== Configuración inicial y permisos de notificaciones =====
     document.addEventListener('DOMContentLoaded', () => {
@@ -839,190 +1063,7 @@
      * Muestra los detalles de una solicitud en un modal con formato personalizado.
      * @param {HTMLElement} btn - Botón que desencadena la acción.
      */
-    async function manejarVerDetalles(btn) {
-      const solicitudId = btn.id.replace('verDETALLES-', '');
-      try {
-        const response = await fetch(`/obtener-detalles-solicitud/${solicitudId}`);
-        if (!response.ok) throw new Error('No se pudieron obtener los detalles');
-  
-        const detalles = await response.json();
-        const detallesContainer = document.getElementById('detalles-container');
-        detallesContainer.innerHTML = `
-          <style>
-            .modal-body { font-family: Arial, sans-serif; padding: 20px; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .header img { width: 100px; }
-            .header h1 { margin: 0; font-size: 24px; }
-            .header p { margin: 0; font-size: 14px; color: #666; }
-            .section { margin-bottom: 20px; }
-            .section h2 { font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-            .section p { margin: 5px 0; }
-            .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            .table th, .table td { border: 1px solid #000; padding: 8px; text-align: left; }
-            .table th { background-color: #f2f2f2; }
-            .table img { width: 100px; height: 100px; object-fit: cover; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
-            .modal-custom { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); justify-content: center; align-items: center; }
-            .modal-content-custom { background-color: #fff; padding: 20px; border-radius: 10px; text-align: center; max-width: 600px; width: 90%; }
-            .modal-content-custom img.foto-large { width: 400px; height: 400px; object-fit: contain; margin-bottom: 20px; }
-            .modal-content-custom h3 { font-size: 24px; margin: 10px 0; }
-            .modal-content-custom p { font-size: 18px; margin: 5px 0; }
-            .close-btn-custom { position: absolute; top: 10px; right: 20px; font-size: 30px; cursor: pointer; color: #333; }
-            .badge { padding: 5px 10px; border-radius: 4px; font-size: 12px; }
-            .badge-success { background-color: #28a745; color: white; }
-            .badge-danger { background-color: #dc3545; color: white; }
-            .badge-warning { background-color: #ffc107; color: black; }
-            .badge-secondary { background-color: #6c757d; color: white; }
-          </style>
-          <div class="header">
-            <img src="${detalles.logoBase64}" alt="Logo">
-            <h1>Informe de Solicitud</h1>
-            <p>Sistema Gestor de Ingreso Contratistas</p>
-            <p>Documento generado el día: ${detalles.fecha}</p>
-          </div>
-          <div class="section">
-            <h2>Detalles de la Solicitud</h2>
-            <p><strong>ID de la Solicitud:</strong> ${detalles.solicitud.id || '❌'}</p>
-            <p><strong>Empresa:</strong> ${detalles.solicitud.empresa || '❌'}</p>
-            <p><strong>NIT:</strong> ${detalles.solicitud.nit || '❌'}</p>
-            <p><strong>Lugar:</strong> ${detalles.solicitud.lugar || '❌'}</p>
-            <p><strong>Labor:</strong> ${detalles.solicitud.labor || '❌'}</p>
-            <p><strong>Contratista:</strong> ${detalles.contractorName || '❌'}</p>
-            <p><strong>Interventor:</strong> ${detalles.interventorName || '❌'}</p>
-            <p><strong>Fechas:</strong> ${detalles.solicitud.inicio_obra || '❌'} - ${detalles.solicitud.fin_obra || '❌'}</p>
-          </div>
-          <div class="section">
-            <h2>Colaboradores</h2>
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>ID Colaborador</th>
-                  <th>Cédula</th>
-                  <th>Nombre</th>
-                  <th>Fotos</th>
-                  <th>Estado</th>
-                  <th>ARL</th>
-                  <th>Planilla SS</th>
-                  <th>Capacitación SATOR</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${detalles.colaboradores && detalles.colaboradores.length > 0 ? 
-                  detalles.colaboradores.map(colaborador => `
-                    <tr>
-                      <td>${colaborador.id || '❌'}</td>
-                      <td>${colaborador.cedula || '❌'}</td>
-                      <td>${colaborador.nombre || '❌'}</td>
-                      <td>
-                        ${colaborador.foto ? 
-                          `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" 
-                               onclick="openModalCustom('${colaborador.foto}', '${colaborador.nombre}', '${colaborador.id}')">` : 
-                          '❌ Sin foto'}
-                      </td>
-                      <td>
-                        <span class="badge ${colaborador.estadoColor === '🟢' ? 'badge-success' : 'badge-danger'}">
-                          ${colaborador.estadoTexto}
-                        </span>
-                      </td>
-                      <td>
-                        ${colaborador.documento_arl ? 
-                          `<a href="${colaborador.documento_arl}" target="_blank" class="btn btn-info btn-sm">Ver ARL</a>
-                           <span class="badge badge-success">Vigente</span>` : 
-                          '<span class="badge badge-danger">No definido</span>'}
-                      </td>
-                      <td>
-                        ${colaborador.plantillaSS && new Date(colaborador.plantillaSS.fecha_fin) > new Date() ? 
-                          '<span class="badge badge-success">Vigente</span>' : 
-                          '<span class="badge badge-danger">Vencido</span>'}
-                      </td>
-                      <td>
-                        <span class="badge ${colaborador.capacitacion === 'APROBADO' ? 'badge-success' : 'badge-danger'}">
-                          ${colaborador.capacitacion || 'No definido'}
-                        </span>
-                      </td>
-                    </tr>
-                  `).join('') : 
-                  '<tr><td colspan="8" class="text-center">No hay colaboradores registrados</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-          <div class="section">
-            <h2>Vehículos</h2>
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Matrícula</th>
-                  <th>Foto</th>
-                  <th>SOAT</th>
-                  <th>Técnico Mecánica</th>
-                  <th>Licencia de Conducción</th>
-                  <th>Licencia de Tránsito</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${detalles.vehiculos && detalles.vehiculos.length > 0 ? 
-                  detalles.vehiculos.map(vehiculo => `
-                    <tr>
-                      <td>${vehiculo.matricula || '❌'}</td>
-                      <td>
-                        ${vehiculo.foto ? 
-                          `<img src="${vehiculo.foto}" alt="Foto del vehículo" class="foto-img" 
-                               onclick="openModalCustom('${vehiculo.foto}', 'Vehículo ${vehiculo.matricula}', '${vehiculo.matricula}')">` : 
-                          '❌ Sin foto'}
-                      </td>
-                      <td>
-                        ${vehiculo.soat ? 
-                          `<a href="${vehiculo.soat}" target="_blank" class="btn btn-info btn-sm">Ver SOAT</a>
-                           <span class="badge ${vehiculo.estado_soat === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_soat || 'No definido'}</span>` : 
-                          '<span class="badge badge-danger">No definido</span>'}
-                      </td>
-                      <td>
-                        ${vehiculo.tecnomecanica ? 
-                          `<a href="${vehiculo.tecnomecanica}" target="_blank" class="btn btn-info btn-sm">Ver Técnico</a>
-                           <span class="badge ${vehiculo.estado_tecnicomecanica === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_tecnicomecanica || 'No definido'}</span>` : 
-                          '<span class="badge badge-danger">No definido</span>'}
-                      </td>
-                      <td>
-                        ${vehiculo.licencia_conduccion ? 
-                          `<a href="${vehiculo.licencia_conduccion}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
-                           <span class="badge ${vehiculo.estado_licencia_conduccion === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_licencia_conduccion || 'No definido'}</span>` : 
-                          '<span class="badge badge-danger">No definido</span>'}
-                      </td>
-                      <td>
-                        ${vehiculo.licencia_transito ? 
-                          `<a href="${vehiculo.licencia_transito}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
-                           <span class="badge ${vehiculo.estado_licencia_transito === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_licencia_transito || 'No definido'}</span>` : 
-                          '<span class="badge badge-danger">No definido</span>'}
-                      </td>
-                    </tr>
-                  `).join('') : 
-                  '<tr><td colspan="6" class="text-center">No hay vehículos registrados</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-          <div id="fotoModalCustom" class="modal-custom">
-            <div class="modal-content-custom">
-              <span class="close-btn-custom" onclick="closeModalCustom()">×</span>
-              <img id="modalFotoCustom" class="foto-large" src="" alt="Foto ampliada">
-              <h3 id="modalNombreCustom"></h3>
-              <p><strong>ID Colaborador:</strong> <span id="modalIdCustom"></span></p>
-            </div>
-          </div>
-        `;
-  
-        const modal = document.getElementById('modalVerDetalles');
-        modal.removeAttribute('aria-hidden');
-        $('#modalVerDetalles').modal('show');
-  
-        $('#modalVerDetalles').on('hidden.bs.modal', () => {
-          modal.setAttribute('aria-hidden', 'true');
-          btn.focus();
-        });
-      } catch (error) {
-        console.error('[ERROR] Error al obtener detalles:', error);
-        Swal.fire('Error', 'No se pudieron cargar los detalles de la solicitud.', 'error');
-      }
-    }
-  
+ 
     /**
      * Abre un modal personalizado para mostrar una foto ampliada.
      * @param {string} fotoSrc - URL de la foto.
