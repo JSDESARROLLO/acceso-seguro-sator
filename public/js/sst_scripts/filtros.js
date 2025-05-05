@@ -104,6 +104,9 @@ function actualizarTablaSolicitudes(solicitudes) {
           <button class="btn btn-info btn-sm" onclick="verColaboradores('${solicitud.solicitud_id}')">Ver Colaboradores</button>
         </td>
         <td>
+          <button class="btn btn-info btn-sm" id="verDETALLES-${solicitud.solicitud_id}" onclick="manejarVerDetalles(this)">Ver</button>
+        </td>
+        <td>
           ${solicitud.solicitud_estado === 'pendiente' ? `
             <form action="/aprobar-solicitud/${solicitud.solicitud_id}" method="POST" style="display:inline;">
               <button type="submit" class="btn btn-success btn-sm" id="aprobarBtn-${solicitud.solicitud_id}">Aprobar</button>
@@ -198,4 +201,4 @@ $(document).ready(function() {
 
 // Exportar funciones para que estén disponibles globalmente
 window.filtrarSolicitudes = filtrarSolicitudes;
-window.actualizarTablaSolicitudes = actualizarTablaSolicitudes; 
+window.actualizarTablaSolicitudes = actualizarTablaSolicitudes;
