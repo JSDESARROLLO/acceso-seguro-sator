@@ -399,10 +399,8 @@
                 Conversar
                 <span class="badge badge-light unread-count hidden" data-solicitud-id="<%= solicitud.id %>" data-type="all">0</span>
               </button>
-              <button type="button" class="ver-qr-button" data-solicitud-id="<%= solicitud.id %>">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-                </svg>
+              <button type="button" onclick="manejarVerDetalles(this)" id="verDETALLES-<%= solicitud.id %>" class="bg-ga-gold text-ga-white py-2 px-4 rounded-md hover:bg-ga-navy text-xs">
+                Ver
               </button>
             </div>
           </div>
@@ -2711,4 +2709,224 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
+</script>
+
+<!-- Modal de Detalles -->
+<div class="modal fade" id="modalVerDetalles" tabindex="-1" role="dialog" aria-labelledby="modalVerDetallesLabel">
+  <div class="modal-dialog modal-dialog-centered modal-xl" role="document" style="max-width: 90%; width: 90%;">
+    <div class="modal-content shadow-lg rounded">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalVerDetallesLabel">Detalles de la Solicitud</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">×</span></button>
+      </div>
+      <div class="modal-body" id="detalles-container" style="max-height: 80vh; overflow-y: auto;"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para ver fotos ampliadas -->
+<div class="modal fade" id="modalVerFoto" tabindex="-1" role="dialog" aria-labelledby="modalVerFotoLabel">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content shadow-lg rounded">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalVerFotoLabel">Foto Ampliada</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">×</span></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="fotoAmpliada" src="" alt="Foto Ampliada" class="img-fluid">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ... existing code ...
+
+/**
+ * Muestra los detalles de una solicitud en un modal con formato personalizado.
+ * @param {HTMLElement} btn - Botón que desencadena la acción.
+ */
+async function manejarVerDetalles(btn) {
+  const solicitudId = btn.id.replace('verDETALLES-', '');
+  try {
+    const response = await fetch(`/obtener-detalles-solicitud/${solicitudId}`);
+    if (!response.ok) throw new Error('No se pudieron obtener los detalles');
+
+    const detalles = await response.json();
+    const detallesContainer = document.getElementById('detalles-container');
+    detallesContainer.innerHTML = `
+      <style>
+        .modal-body { font-family: Arial, sans-serif; padding: 20px; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header img { width: 100px; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .header p { margin: 0; font-size: 14px; color: #666; }
+        .section { margin-bottom: 20px; }
+        .section h2 { font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+        .section p { margin: 5px 0; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .table th, .table td { border: 1px solid #000; padding: 8px; text-align: left; }
+        .table th { background-color: #f2f2f2; }
+        .table img { width: 100px; height: 100px; object-fit: cover; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
+        .badge { padding: 5px 10px; border-radius: 4px; font-size: 12px; }
+        .badge-success { background-color: #28a745; color: white; }
+        .badge-danger { background-color: #dc3545; color: white; }
+        .badge-warning { background-color: #ffc107; color: black; }
+      </style>
+      <div class="header">
+        <img src="${detalles.logoBase64}" alt="Logo">
+        <h1>Informe de Solicitud</h1>
+        <p>Sistema Gestor de Ingreso Contratistas</p>
+        <p>Documento generado el día: ${detalles.fecha}</p>
+      </div>
+      <div class="section">
+        <h2>Detalles de la Solicitud</h2>
+        <p><strong>ID de la Solicitud:</strong> ${detalles.solicitud.id || '❌'}</p>
+        <p><strong>Empresa:</strong> ${detalles.solicitud.empresa || '❌'}</p>
+        <p><strong>NIT:</strong> ${detalles.solicitud.nit || '❌'}</p>
+        <p><strong>Lugar:</strong> ${detalles.solicitud.lugar || '❌'}</p>
+        <p><strong>Labor:</strong> ${detalles.solicitud.labor || '❌'}</p>
+        <p><strong>Contratista:</strong> ${detalles.contractorName || '❌'}</p>
+        <p><strong>Interventor:</strong> ${detalles.interventorName || '❌'}</p>
+        <p><strong>Fechas:</strong> ${detalles.solicitud.inicio_obra || '❌'} - ${detalles.solicitud.fin_obra || '❌'}</p>
+      </div>
+      <div class="section">
+        <h2>Colaboradores</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>ID Colaborador</th>
+              <th>Cédula</th>
+              <th>Nombre</th>
+              <th>Fotos</th>
+              <th>Estado</th>
+              <th>ARL</th>
+              <th>Planilla SS</th>
+              <th>Capacitación SATOR</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${detalles.colaboradores && detalles.colaboradores.length > 0 ? 
+              detalles.colaboradores.map(colaborador => `
+                <tr>
+                  <td>${colaborador.id || '❌'}</td>
+                  <td>${colaborador.cedula || '❌'}</td>
+                  <td>${colaborador.nombre || '❌'}</td>
+                  <td>
+                    ${colaborador.foto ? 
+                      `<img src="${colaborador.foto}" alt="Foto del colaborador" class="foto-img" 
+                           onclick="openModalCustom('${colaborador.foto}', '${colaborador.nombre}', '${colaborador.id}')">` : 
+                      '❌ Sin foto'}
+                  </td>
+                  <td>
+                    <span class="badge ${colaborador.estadoColor === '🟢' ? 'badge-success' : 'badge-danger'}">
+                      ${colaborador.estadoTexto}
+                    </span>
+                  </td>
+                  <td>
+                    ${colaborador.documento_arl ? 
+                      `<a href="${colaborador.documento_arl}" target="_blank" class="btn btn-info btn-sm">Ver ARL</a>
+                       <span class="badge badge-success">Vigente</span>` : 
+                      '<span class="badge badge-danger">No definido</span>'}
+                  </td>
+                  <td>
+                    ${colaborador.plantilla_ss ? 
+                      `<a href="${colaborador.plantilla_ss}" target="_blank" class="btn btn-info btn-sm">Ver Plantilla</a>
+                       <span class="badge badge-success">Vigente</span>` : 
+                      '<span class="badge badge-danger">No definido</span>'}
+                  </td>
+                  <td>
+                    ${colaborador.capacitacion_sator ? 
+                      `<span class="badge badge-success">Completada</span>` : 
+                      '<span class="badge badge-danger">Pendiente</span>'}
+                  </td>
+                </tr>
+              `).join('') : 
+              '<tr><td colspan="8" class="text-center">No hay colaboradores registrados</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <div class="section">
+        <h2>Vehículos</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Matrícula</th>
+              <th>Foto</th>
+              <th>SOAT</th>
+              <th>Técnico Mecánica</th>
+              <th>Licencia de Conducción</th>
+              <th>Licencia de Tránsito</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${detalles.vehiculos && detalles.vehiculos.length > 0 ? 
+              detalles.vehiculos.map(vehiculo => `
+                <tr>
+                  <td>${vehiculo.matricula || '❌'}</td>
+                  <td>
+                    ${vehiculo.foto ? 
+                      `<img src="${vehiculo.foto}" alt="Foto del vehículo" class="foto-img" 
+                           onclick="openModalCustom('${vehiculo.foto}', 'Vehículo ${vehiculo.matricula}', '${vehiculo.matricula}')">` : 
+                      '❌ Sin foto'}
+                  </td>
+                  <td>
+                    ${vehiculo.soat ? 
+                      `<a href="${vehiculo.soat}" target="_blank" class="btn btn-info btn-sm">Ver SOAT</a>
+                       <span class="badge ${vehiculo.estado_soat === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_soat || 'No definido'}</span>` : 
+                      '<span class="badge badge-danger">No definido</span>'}
+                  </td>
+                  <td>
+                    ${vehiculo.tecnico_mecanica ? 
+                      `<a href="${vehiculo.tecnico_mecanica}" target="_blank" class="btn btn-info btn-sm">Ver Técnico</a>
+                       <span class="badge ${vehiculo.estado_tecnico === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_tecnico || 'No definido'}</span>` : 
+                      '<span class="badge badge-danger">No definido</span>'}
+                  </td>
+                  <td>
+                    ${vehiculo.licencia_conduccion ? 
+                      `<a href="${vehiculo.licencia_conduccion}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
+                       <span class="badge ${vehiculo.estado_licencia === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_licencia || 'No definido'}</span>` : 
+                      '<span class="badge badge-danger">No definido</span>'}
+                  </td>
+                  <td>
+                    ${vehiculo.licencia_transito ? 
+                      `<a href="${vehiculo.licencia_transito}" target="_blank" class="btn btn-info btn-sm">Ver Licencia</a>
+                       <span class="badge ${vehiculo.estado_transito === 'vigente' ? 'badge-success' : 'badge-danger'}">${vehiculo.estado_transito || 'No definido'}</span>` : 
+                      '<span class="badge badge-danger">No definido</span>'}
+                  </td>
+                </tr>
+              `).join('') : 
+              '<tr><td colspan="6" class="text-center">No hay vehículos registrados</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    $('#modalVerDetalles').modal('show');
+  } catch (error) {
+    console.error('[ERROR] Error al obtener detalles:', error);
+    Swal.fire('Error', 'No se pudieron cargar los detalles de la solicitud.', 'error');
+  }
+}
+
+/**
+ * Abre un modal personalizado para mostrar una foto ampliada.
+ * @param {string} fotoSrc - URL de la foto.
+ * @param {string} nombre - Nombre del colaborador o vehículo.
+ * @param {string} id - ID del colaborador o matrícula del vehículo.
+ */
+function openModalCustom(fotoSrc, nombre, id) {
+  const modal = document.getElementById('modalVerFoto');
+  document.getElementById('fotoAmpliada').src = fotoSrc;
+  document.getElementById('modalVerFotoLabel').textContent = nombre || 'Sin nombre';
+  $(modal).modal('show');
+}
+
+// ... existing code ...
 </script>
