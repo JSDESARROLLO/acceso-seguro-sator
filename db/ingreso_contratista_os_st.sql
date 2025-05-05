@@ -364,11 +364,16 @@ INSERT INTO users (username,password,role_id,empresa,nit,email) VALUES
 	 ('soporte','$2b$10$1o7MSnOJbfn/RciWj4IkMOlvw1jeaKgk1i1EdR5K4vVjUZE33Iqpq',6,'FORTOX','860046201-2','jcdesarrollo25@gmail.com');
 
 
+-- =============================================
+-- IMPORTANTE: Este script borrará todos los datos
+-- de las tablas excepto users, roles y lugares
+-- =============================================
 
--- Desactivar restricciones de clave foránea
+-- Desactivar restricciones de clave foránea para permitir el truncado
 -- SET FOREIGN_KEY_CHECKS = 0;
 
 -- Truncar todas las tablas excepto users, roles y lugares
+-- Se mantienen los datos de configuración inicial
 -- TRUNCATE TABLE acciones;
 -- TRUNCATE TABLE chat_participantes;
 -- TRUNCATE TABLE mensajes;
@@ -389,4 +394,4 @@ INSERT INTO users (username,password,role_id,empresa,nit,email) VALUES
 -- TRUNCATE TABLE licencias_vehiculo;
 
 -- Reactivar restricciones de clave foránea
--- SET FOREIGN_KEY_CHECKS = 1; 
+-- SET FOREIGN_KEY_CHECKS = 1;
