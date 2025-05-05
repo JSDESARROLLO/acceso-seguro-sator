@@ -269,7 +269,7 @@ LEFT JOIN licencias_vehiculo lv_transito ON v.id = lv_transito.vehiculo_id AND l
     `,
     COLABORADOR: `
         SELECT 
-            c.id, c.solicitud_id, c.cedula, c.nombre, c.foto, c.cedulaFoto, c.estado,
+            c.id, c.solicitud_id, c.cedula, c.nombre, c.foto, c.documento_arl, c.estado,
             rc.estado AS capacitacion_estado, rc.fecha_vencimiento AS capacitacion_vencimiento,
             pss.fecha_inicio AS plantilla_ss_inicio, pss.fecha_fin AS plantilla_ss_fin
         FROM colaboradores c
@@ -1033,7 +1033,7 @@ controller.obtenerSolicitudesActivasConColaboradoresYVehiculos = async (req, res
                     c.nombre,
                     c.cedula,
                     c.foto,
-                    c.cedulaFoto,
+                    c.documento_arl,
                     c.estado,
                     rc.estado AS capacitacion_estado,
                     rc.fecha_vencimiento AS capacitacion_vencimiento,

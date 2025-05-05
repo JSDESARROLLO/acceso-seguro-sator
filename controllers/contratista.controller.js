@@ -173,7 +173,7 @@ controller.getSolicitudData = async (req, res) => {
         [id]
       );
       const [colaboradores] = await connection.execute(
-        'SELECT id, nombre, cedula, foto, cedulaFoto FROM colaboradores WHERE solicitud_id = ? AND estado = true',
+        'SELECT id, nombre, cedula, foto, documento_arl FROM colaboradores WHERE solicitud_id = ? AND estado = true',
         [id]
       );
       res.json({ solicitud: solicitud[0], colaboradores });

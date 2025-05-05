@@ -655,7 +655,7 @@ async function cargarTodosLosRegistros() {
             nombre: colaborador.nombre,
             cedula: colaborador.cedula,
             foto: colaborador.foto,
-            cedulaFoto: colaborador.cedulaFoto,
+            documento_arl: colaborador.documento_arl,
             estado: colaborador.estado,
             capacitacion: colaborador.capacitacion,
             capacitacionEstado: colaborador.capacitacionEstado,
