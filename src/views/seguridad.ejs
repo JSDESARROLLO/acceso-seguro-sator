@@ -3188,6 +3188,12 @@
                 });
                 return;
             }
+
+            // Resetear todos los checkboxes antes de buscar
+            document.querySelectorAll('.colaborador-checkbox:checked, .vehiculo-checkbox:checked').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+
             verDetalles(id);
         }
 
