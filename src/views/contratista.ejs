@@ -2967,11 +2967,7 @@ document.addEventListener('DOMContentLoaded', function() {
           Swal.fire('Error', 'No se pudieron cargar los detalles de la solicitud.', 'error');
         }
       });
-    });
-  </script>
-<script>
-// ... existing code ...
-
+    }); 
 /**
  * Muestra los detalles de una solicitud en un modal con formato personalizado.
  * @param {HTMLElement} btn - Botón que desencadena la acción.
@@ -2989,6 +2985,80 @@ function openModalCustom(fotoSrc, nombre, id) {
   document.getElementById('modalVerFotoLabel').textContent = nombre || 'Sin nombre';
   $(modal).modal('show');
 }
+ 
 
-// ... existing code ...
+function verHistorialColaborador(colaboradorId) {
+      fetch(`/obtener-historial-colaborador/${colaboradorId}`)
+        .then(response => response.json())
+        .then(data => {
+          // Primero nos aseguramos de que el modal exista
+          let historialModal = document.getElementById('historialModal');
+          if (!historialModal) {
+            document.body.insertAdjacentHTML('beforeend', `
+              <div class="modal fade" id="historialModal" tabindex="-1" role="dialog" aria-labelledby="historialModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="historialModalLabel">Historial de Ingresos y Salidas</h5>
+                      <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                      </button>
+                    </div>
+                    <div class="modal-body">
+                      <table class="table table-bordered">
+                        <thead>
+                          <tr>
+                            <th>Nombre</th>
+                            <th>Empresa</th>
+                            <th>NIT</th>
+                            <th>Tipo</th>
+                            <th>Lugar</th>
+                            <th>Usuario</th>
+                            <th>Registro</th>
+                            <th>Fecha/Hora</th>
+                            <th>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody id="historialTableBody"></tbody>
+                      </table>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `);
+          }
+
+          const tableBody = document.getElementById('historialTableBody');
+          if (tableBody) {
+            tableBody.innerHTML = data.length > 0 ? data.map(registro => `
+              <tr>
+                <td>${registro.nombre_colaborador || 'N/A'}</td>
+                <td>${registro.empresa || 'N/A'}</td>
+                <td>${registro.nit || 'N/A'}</td>
+                <td>${registro.tipo || 'N/A'}</td>
+                <td>${registro.lugar || 'N/A'}</td>
+                <td>${registro.usuario_registro || 'N/A'}</td>
+                <td>${registro.registro_hecho || 'N/A'}</td>
+                <td>${registro.fecha_hora || 'N/A'}</td>
+                <td><span class="badge ${registro.estado_actual === 'Ingreso' ? 'bg-success' : 'bg-danger'}">${registro.estado_actual || 'N/A'}</span></td>
+              </tr>
+            `).join('') : '<tr><td colspan="9" class="text-center">No hay registros de ingresos o salidas para este colaborador</td></tr>';
+          }
+
+          $('#modalColaboradores').modal('hide');
+          $('#historialModal').modal('show');
+
+          $('#historialModal').on('hidden.bs.modal', () => $('#modalColaboradores').modal('show'));
+        })
+        .catch(error => {
+          console.error('[ERROR] Error al obtener historial:', error);
+          Swal.fire('Error', 'No se pudo obtener el historial del colaborador', 'error');
+        });
+    }
+  
+
+
 </script>
