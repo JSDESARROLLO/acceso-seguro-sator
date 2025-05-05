@@ -315,18 +315,28 @@ async function getImageBase64(imagePath) {
 
 controller.obtenerDetallesSolicitud = async (req, res) => {
   const { id } = req.params;
+  console.log('[DEBUG] Obteniendo detalles para solicitud ID:', id);
 
   try {
+    // 1. Obtener información básica de la solicitud
     const [solicitud] = await connection.execute(`
-      SELECT s.*, l.nombre_lugar as lugar 
+      SELECT 
+        s.*,
+        l.nombre_lugar as lugar,
+        DATE_FORMAT(s.inicio_obra, '%d/%m/%Y') as inicio_obra,
+        DATE_FORMAT(s.fin_obra, '%d/%m/%Y') as fin_obra,
+        u.username as interventor
       FROM solicitudes s
-      JOIN lugares l ON s.lugar = l.id 
+      LEFT JOIN lugares l ON s.lugar = l.id   
+      LEFT JOIN users u ON s.interventor_id = u.id
       WHERE s.id = ?`, [id]);
+
     if (!solicitud || solicitud.length === 0) {
-      return res.status(404).send('Solicitud no encontrada');
+      console.log('[ERROR] Solicitud no encontrada:', id);
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
     }
 
-    // Obtener vehículos con sus documentos
+    // 2. Obtener vehículos con sus documentos
     const [vehiculos] = await connection.execute(`
       SELECT 
         v.id,
@@ -337,14 +347,30 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
         v.licencia_conduccion,
         v.licencia_transito,
         pdv_soat.estado as estado_soat,
-        pdv_tec.estado as estado_tecnicomecanica
+        pdv_tec.estado as estado_tecnicomecanica,
+        CASE 
+          WHEN lv_conduccion.estado IS NULL THEN 'No definido'
+          WHEN lv_conduccion.estado = 1 THEN 'Vigente'
+          ELSE 'Vencido'
+        END as estado_licencia_conduccion,
+        CASE 
+          WHEN lv_transito.estado IS NULL THEN 'No definido'
+          WHEN lv_transito.estado = 1 THEN 'Vigente'
+          ELSE 'Vencido'
+        END as estado_licencia_transito
       FROM vehiculos v
-      LEFT JOIN plantilla_documentos_vehiculos pdv_soat ON v.id = pdv_soat.vehiculo_id AND pdv_soat.tipo_documento = 'soat'
-      LEFT JOIN plantilla_documentos_vehiculos pdv_tec ON v.id = pdv_tec.vehiculo_id AND pdv_tec.tipo_documento = 'tecnomecanica'
+      LEFT JOIN plantilla_documentos_vehiculos pdv_soat 
+        ON v.id = pdv_soat.vehiculo_id AND pdv_soat.tipo_documento = 'soat'
+      LEFT JOIN plantilla_documentos_vehiculos pdv_tec 
+        ON v.id = pdv_tec.vehiculo_id AND pdv_tec.tipo_documento = 'tecnomecanica'
+      LEFT JOIN licencias_vehiculo lv_conduccion
+        ON v.id = lv_conduccion.vehiculo_id AND lv_conduccion.tipo = 'licencia_conduccion'
+      LEFT JOIN licencias_vehiculo lv_transito
+        ON v.id = lv_transito.vehiculo_id AND lv_transito.tipo = 'licencia_transito'
       WHERE v.solicitud_id = ?
     `, [id]);
 
-    // Obtener colaboradores con su estado y capacitaciones
+    // 3. Obtener colaboradores con su estado y capacitaciones
     const [colaboradores] = await connection.execute(`
       SELECT 
         c.id, 
@@ -356,8 +382,8 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
         (SELECT 
           JSON_OBJECT(
             'id', pss.id,
-            'fecha_inicio', pss.fecha_inicio,
-            'fecha_fin', pss.fecha_fin
+            'fecha_inicio', DATE_FORMAT(pss.fecha_inicio, '%d/%m/%Y'),
+            'fecha_fin', DATE_FORMAT(pss.fecha_fin, '%d/%m/%Y')
           )
          FROM plantilla_seguridad_social pss 
          WHERE pss.colaborador_id = c.id 
@@ -372,75 +398,81 @@ controller.obtenerDetallesSolicitud = async (req, res) => {
       WHERE c.solicitud_id = ?
     `, [id]);
 
-    const [contratista] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].usuario_id]);
-    const [interventor] = await connection.execute('SELECT username FROM users WHERE id = ?', [solicitud[0].interventor_id]);
-
-    // Formatear fechas
-    solicitud.forEach((solici) => {
-      solici.inicio_obra = format(new Date(solici.inicio_obra), 'dd/MM/yyyy');
-      solici.fin_obra = format(new Date(solici.fin_obra), 'dd/MM/yyyy');
-    });
-
-    // Procesar colaboradores para determinar su estado
-    const colaboradoresProcesados = colaboradores.map(col => {
-      // Convertir plantillaSS de string a objeto si es necesario
-      let plantillaSS = null;
-      if (col.plantillaSS && typeof col.plantillaSS === 'string') {
-        try {
-          plantillaSS = JSON.parse(col.plantillaSS);
-        } catch (e) {
-          console.error('Error al parsear plantillaSS:', e);
-        }
-      } else {
-        plantillaSS = col.plantillaSS;
-      }
-
-      // Determinar el estado según ARL y seguridad social
-      let estadoColor = '⚫'; // Por defecto gris (no definido)
-      let estadoTexto = 'No definido';
-
-      // Verificar si tiene documento ARL
-      const tieneARL = col.documento_arl !== null && col.documento_arl !== '';
-      
-      // Verificar si tiene seguridad social vigente
-      const tieneSSVigente = plantillaSS && 
-        new Date(plantillaSS.fecha_fin) >= new Date();
-
-      if (tieneARL && tieneSSVigente) {
-        estadoColor = '🟢';
-        estadoTexto = 'Vigente';
-      } else if (tieneARL && !tieneSSVigente) {
-        estadoColor = '🔴';
-        estadoTexto = 'Vencido';
-      }
-
-      return {
-        ...col,
-        estado: Boolean(col.estado),
-        plantillaSS: plantillaSS,
-        capacitacion: col.capacitacion,
-        estadoColor,
-        estadoTexto
-      };
-    });
-
+    // 4. Cargar el logo
     const logoPath = path.join(__dirname, '../public', 'img', 'TSM-Sator-Logo.webp');
-    const logoBase64 = fs.readFileSync(logoPath, 'base64');
+    let logoBase64 = null;
+    try {
+      logoBase64 = fs.readFileSync(logoPath, 'base64');
+    } catch (error) {
+      console.error('[ERROR] Error al cargar el logo:', error);
+    }
 
+    // 5. Construir la respuesta
     const data = {
-      logoBase64: `data:image/png;base64,${logoBase64}`,
+      logoBase64: logoBase64 ? `data:image/png;base64,${logoBase64}` : null,
       fecha: new Date().toLocaleDateString(),
-      solicitud: solicitud[0],
-      contractorName: contratista[0].username,
-      interventorName: interventor[0].username,
-      colaboradores: colaboradoresProcesados,
-      vehiculos: vehiculos
+      id: solicitud[0].id,
+      empresa: solicitud[0].empresa,
+      nit: solicitud[0].nit,
+      lugar: solicitud[0].lugar,
+      labor: solicitud[0].labor,
+      inicio_obra: solicitud[0].inicio_obra,
+      fin_obra: solicitud[0].fin_obra,
+      interventor: solicitud[0].interventor,
+      estado: solicitud[0].estado,
+      colaboradores: colaboradores.map(col => {
+        let plantillaSS = null;
+        if (col.plantillaSS && typeof col.plantillaSS === 'string') {
+          try {
+            plantillaSS = JSON.parse(col.plantillaSS);
+          } catch (e) {
+            console.error('[ERROR] Error al parsear plantillaSS:', e);
+          }
+        } else {
+          plantillaSS = col.plantillaSS;
+        }
+
+        let estadoColor = 'No definido';
+        let estadoTexto = 'No definido';
+
+        const tieneARL = col.documento_arl !== null && col.documento_arl !== '';
+        const tieneSSVigente = plantillaSS && 
+          new Date(plantillaSS.fecha_fin.split('/').reverse().join('-')) >= new Date();
+
+        if (tieneARL && tieneSSVigente) {
+          estadoColor = 'Vigente';
+          estadoTexto = 'Vigente';
+        } else if (tieneARL && !tieneSSVigente) {
+          estadoColor = 'Vencido';
+          estadoTexto = 'Vencido';
+        }
+
+        return {
+          ...col,
+          estado: Boolean(col.estado),
+          plantillaSS: plantillaSS,
+          capacitacion: col.capacitacion,
+          estadoColor,
+          estadoTexto
+        };
+      }),
+      vehiculos: vehiculos.map(v => ({
+        ...v,
+        estado_soat: v.estado_soat || 'No definido',
+        estado_tecnicomecanica: v.estado_tecnicomecanica || 'No definido',
+        estado_licencia_conduccion: v.estado_licencia_conduccion || 'No definido',
+        estado_licencia_transito: v.estado_licencia_transito || 'No definido'
+      }))
     };
 
+    console.log('[DEBUG] Datos procesados correctamente');
     res.json(data);
   } catch (error) {
-    console.error('[RUTA] Error al obtener los detalles de la solicitud:', error);
-    res.status(500).send('Error al obtener los detalles de la solicitud');
+    console.error('[ERROR] Error al obtener los detalles de la solicitud:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener los detalles de la solicitud',
+      message: error.message 
+    });
   }
 };
 
@@ -1216,7 +1248,7 @@ controller.obtenerTodosColaboradores = async (req, res) => {
       }
 
       // Determinar el estado según ARL y seguridad social
-      let estadoColor = '⚫'; // Por defecto gris (no definido)
+      let estadoColor = 'No definido'; // Por defecto no definido
       let estadoTexto = 'No definido';
 
       // Verificar si tiene documento ARL
@@ -1227,10 +1259,10 @@ controller.obtenerTodosColaboradores = async (req, res) => {
         new Date(plantillaSS.fecha_fin) >= new Date();
 
       if (tieneARL && tieneSSVigente) {
-        estadoColor = '🟢';
+        estadoColor = 'Vigente';
         estadoTexto = 'Vigente';
       } else if (tieneARL && !tieneSSVigente) {
-        estadoColor = '🔴';
+        estadoColor = 'Vencido';
         estadoTexto = 'Vencido';
       }
 
