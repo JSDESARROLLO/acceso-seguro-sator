@@ -274,30 +274,46 @@ async function deleteSSTDocuments(solicitudId) {
 router.use(authMiddleware);
 
 // Ruta para generar solicitud
-router.post('/generar-solicitud', upload.any(), async (req, res) => {
-  const conn = await connection.getConnection();
-  try {
-    logInfo('Iniciando generación de solicitud', { body: req.body });
+router.post('/generar-solicitud', upload.fields([
+    { name: 'arl', maxCount: 1 },
+    { name: 'pasocial', maxCount: 1 },
+    { name: 'foto[]', maxCount: 10 },
+    { name: 'documento_arl[]', maxCount: 10 },
+    { name: 'foto_vehiculo[]', maxCount: 10 },
+    { name: 'tecnomecanica[]', maxCount: 10 },
+    { name: 'soat[]', maxCount: 10 },
+    { name: 'licencia_conduccion[]', maxCount: 10 },
+    { name: 'licencia_transito[]', maxCount: 10 }
+  ]), async (req, res) => {
+    let conn = await connection.getConnection();
+    try {
     await conn.beginTransaction();
-
-    const uploadedFiles = req.files || {};
-    logInfo('Archivos recibidos:', { 
-      fileCount: Object.keys(uploadedFiles || {}).reduce((acc, key) => acc + uploadedFiles[key].length, 0) 
-    });
-
-    const fileMap = {};
-    uploadedFiles.forEach(file => {
-      fileMap[file.fieldname] = fileMap[file.fieldname] || [];
-      fileMap[file.fieldname].push(file);
-    });
-
+      // Generar URLs de archivos para S3/Spaces
+      const fileMap = req.files;
     const fileNames = {
-      foto: [],
-      documento_arl: [],
       arl: null,
       pasocial: null,
-      vehiculos: []
-    };
+        foto: [],
+        documento_arl: [],
+        foto_vehiculo: [],
+        tecnomecanica: [],
+        soat: [],
+        licencia_conduccion: [],
+        licencia_transito: []
+      };
+      
+      logInfo('Archivos recibidos en generar solicitud:', { 
+        tiposArchivos: Object.keys(fileMap),
+        arl: fileMap.arl?.length || 0,
+        pasocial: fileMap.pasocial?.length || 0,
+        foto: fileMap['foto[]']?.length || 0,
+        documento_arl: fileMap['documento_arl[]']?.length || 0,
+        foto_vehiculo: fileMap['foto_vehiculo[]']?.length || 0,
+        tecnomecanica: fileMap['tecnomecanica[]']?.length || 0,
+        soat: fileMap['soat[]']?.length || 0,
+        licencia_conduccion: fileMap['licencia_conduccion[]']?.length || 0,
+        licencia_transito: fileMap['licencia_transito[]']?.length || 0
+      });
 
     // Procesar documentos principales
     if (fileMap['arl']?.[0]) {
@@ -309,79 +325,256 @@ router.post('/generar-solicitud', upload.any(), async (req, res) => {
 
     // Procesar fotos y documentos ARL
     if (fileMap['foto[]']) {
+        logInfo('Procesando fotos de colaboradores:', {cantidad: fileMap['foto[]'].length});
       for (const file of fileMap['foto[]']) {
-        fileNames.foto.push(await uploadToSpacesFromDisk(file.path, file.originalname));
+          logInfo(`  Procesando foto: ${file.originalname} (${file.size} bytes, path: ${file.path})`);
+          const url = await uploadToSpacesFromDisk(file.path, file.originalname);
+          fileNames.foto.push(url);
+          logInfo(`  URL generada: ${url}`);
       }
     }
     if (fileMap['documento_arl[]']) {
+        logInfo('Procesando documentos ARL de colaboradores:', {cantidad: fileMap['documento_arl[]'].length});
       for (const file of fileMap['documento_arl[]']) {
-        fileNames.documento_arl.push(await uploadToSpacesFromDisk(file.path, file.originalname));
+          logInfo(`  Procesando documento ARL: ${file.originalname} (${file.size} bytes, path: ${file.path})`);
+          const url = await uploadToSpacesFromDisk(file.path, file.originalname);
+          fileNames.documento_arl.push(url);
+          logInfo(`  URL generada: ${url}`);
+        }
       }
-    }
 
-    const { empresa, nit, lugar, labor, interventor_id, cedula, nombre, inicio_obra, fin_obra, dias_trabajo, matricula } = req.body;
-    const token = req.cookies.token;
-    if (!token) return res.status(401).json({ error: 'No se encontró el token' });
+      // Procesar documentos de vehículos
+      const vehiculoArchivosMap = {
+        fotos: {},
+        tecnomecanicas: {},
+        soats: {},
+        licencias_conduccion: {},
+        licencias_transito: {}
+      };
+      
+      // Mapear cada tipo de archivo por su índice
+      if (fileMap['foto_vehiculo[]']) {
+        logInfo('Archivos de fotos de vehículos recibidos:', { 
+          cantidad: fileMap['foto_vehiculo[]'].length,
+          archivos: fileMap['foto_vehiculo[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+        });
+        fileMap['foto_vehiculo[]'].forEach((file, index) => {
+          vehiculoArchivosMap.fotos[index] = file;
+          logInfo(`Mapeando foto para vehículo posición ${index}:`, { 
+            nombre: file.originalname, 
+            path: file.path 
+          });
+        });
+      } else {
+        logInfo('⚠️ No se encontraron archivos de fotos de vehículos.');
+      }
+      
+      if (fileMap['tecnomecanica[]']) {
+        logInfo('Archivos de tecnomecánica recibidos:', { 
+          cantidad: fileMap['tecnomecanica[]'].length,
+          archivos: fileMap['tecnomecanica[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+        });
+        fileMap['tecnomecanica[]'].forEach((file, index) => {
+          vehiculoArchivosMap.tecnomecanicas[index] = file;
+          logInfo(`Mapeando tecnomecánica para vehículo posición ${index}:`, { 
+            nombre: file.originalname, 
+            path: file.path 
+          });
+        });
+      } else {
+        logInfo('⚠️ No se encontraron archivos de tecnomecánica.');
+      }
+      
+      if (fileMap['soat[]']) {
+        logInfo('Archivos de SOAT recibidos:', { 
+          cantidad: fileMap['soat[]'].length,
+          archivos: fileMap['soat[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+        });
+        fileMap['soat[]'].forEach((file, index) => {
+          vehiculoArchivosMap.soats[index] = file;
+          logInfo(`Mapeando SOAT para vehículo posición ${index}:`, { 
+            nombre: file.originalname, 
+            path: file.path 
+          });
+        });
+      } else {
+        logInfo('⚠️ No se encontraron archivos de SOAT.');
+      }
+      
+      if (fileMap['licencia_conduccion[]']) {
+        logInfo('Archivos de licencia de conducción recibidos:', { 
+          cantidad: fileMap['licencia_conduccion[]'].length,
+          archivos: fileMap['licencia_conduccion[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+        });
+        fileMap['licencia_conduccion[]'].forEach((file, index) => {
+          vehiculoArchivosMap.licencias_conduccion[index] = file;
+          logInfo(`Mapeando licencia de conducción para vehículo posición ${index}:`, { 
+            nombre: file.originalname, 
+            path: file.path 
+          });
+        });
+      } else {
+        logInfo('⚠️ No se encontraron archivos de licencia de conducción.');
+      }
+      
+      if (fileMap['licencia_transito[]']) {
+        logInfo('Archivos de licencia de tránsito recibidos:', { 
+          cantidad: fileMap['licencia_transito[]'].length,
+          archivos: fileMap['licencia_transito[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+        });
+        fileMap['licencia_transito[]'].forEach((file, index) => {
+          vehiculoArchivosMap.licencias_transito[index] = file;
+          logInfo(`Mapeando licencia de tránsito para vehículo posición ${index}:`, { 
+            nombre: file.originalname, 
+            path: file.path 
+          });
+        });
+      } else {
+        logInfo('⚠️ No se encontraron archivos de licencia de tránsito.');
+      }
 
+      // Extraer datos restantes
+      const { inicio_obra, fin_obra, dias_trabajo, lugar, labor } = req.body;
+      
+      // Obtener datos del usuario desde el token
+      const token = req.cookies.token;
+      if (!token) {
+        return res.status(401).json({ success: false, message: 'No se encontró el token' });
+      }
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secreto');
-    const { id } = decoded;
-
-    const query = `
-      INSERT INTO solicitudes (usuario_id, empresa, nit, inicio_obra, fin_obra, dias_trabajo, lugar, labor, interventor_id, arl_documento, pasocial_documento)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    `;
-    const [result] = await conn.execute(query, [
-      id, empresa, nit, inicio_obra, fin_obra, dias_trabajo, lugar, labor, interventor_id,
-      fileNames.arl || null, fileNames.pasocial || null
-    ]);
-
-    for (let i = 0; i < cedula.length; i++) {
-      await conn.execute(
-        'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, documento_arl) VALUES (?, ?, ?, ?, ?)',
-        [result.insertId, cedula[i], nombre[i], fileNames.foto[i] || null, fileNames.documento_arl[i] || null]
+      const userId = decoded.id;
+      
+      // Insertar datos en tablas
+      // 1. Insertar solicitud
+      const [solicitudResult] = await conn.execute(
+        'INSERT INTO solicitudes (usuario_id, empresa, nit, inicio_obra, fin_obra, dias_trabajo, arl_documento, pasocial_documento, estado, lugar, labor, interventor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          userId, 
+          req.body.empresa || null, 
+          req.body.nit || null, 
+          inicio_obra || null, 
+          fin_obra || null, 
+          dias_trabajo || null, 
+          fileNames.arl || null, 
+          fileNames.pasocial || null, 
+          'pendiente', 
+          lugar || null, 
+          labor || null, 
+          req.body.interventor_id || null
+        ]
       );
-    }
+      const solicitudId = solicitudResult.insertId;
 
-    if (matricula && matricula.length) {
-      const matriculas = Array.isArray(matricula) ? matricula : [matricula];
-      for (let i = 0; i < matriculas.length; i++) {
-        const vehiculo = {
-          matricula: matriculas[i],
-          foto: fileMap['foto_vehiculo[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['foto_vehiculo[]'][i].path, fileMap['foto_vehiculo[]'][i].originalname) : null,
-          tecnomecanica: fileMap['tecnomecanica[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['tecnomecanica[]'][i].path, fileMap['tecnomecanica[]'][i].originalname) : null,
-          soat: fileMap['soat[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['soat[]'][i].path, fileMap['soat[]'][i].originalname) : null,
-          licencia_conduccion: fileMap['licencia_conduccion[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['licencia_conduccion[]'][i].path, fileMap['licencia_conduccion[]'][i].originalname) : null,
-          licencia_transito: fileMap['licencia_transito[]']?.[i] ? await uploadToSpacesFromDisk(fileMap['licencia_transito[]'][i].path, fileMap['licencia_transito[]'][i].originalname) : null
-        };
-        await conn.execute(
-          'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [result.insertId, vehiculo.matricula, vehiculo.foto, vehiculo.tecnomecanica, vehiculo.soat, vehiculo.licencia_conduccion, vehiculo.licencia_transito]
+      // 2. Insertar colaboradores
+      const cedula = req.body.cedula && !Array.isArray(req.body.cedula) ? [req.body.cedula] : req.body.cedula;
+      const nombre = req.body.nombre && !Array.isArray(req.body.nombre) ? [req.body.nombre] : req.body.nombre;
+
+      logInfo('Datos de colaboradores recibidos:', {
+        cedulas: cedula,
+        nombres: nombre,
+        fotosLength: fileNames.foto.length,
+        arlsLength: fileNames.documento_arl.length
+      });
+
+      // Insertar colaboradores con manejo mejorado de fotos y documentos
+    for (let i = 0; i < cedula.length; i++) {
+        // Comprobar si hay fotos y documentos ARL antes de insertar
+        const fotoUrl = i < fileNames.foto.length ? fileNames.foto[i] : null;
+        const documentoArlUrl = i < fileNames.documento_arl.length ? fileNames.documento_arl[i] : null;
+        
+        logInfo(`Insertando colaborador #${i+1}:`, {
+          cedula: cedula[i],
+          nombre: nombre[i],
+          foto: fotoUrl || 'No proporcionada',
+          documento_arl: documentoArlUrl || 'No proporcionado'
+        });
+        
+      await conn.execute(
+          'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, documento_arl, estado) VALUES (?, ?, ?, ?, ?, true)',
+          [solicitudId, cedula[i] || null, nombre[i] || null, fotoUrl || null, documentoArlUrl || null]
         );
       }
+
+      // 3. Insertar vehículos
+      if (req.body.matricula) {
+        const matricula = !Array.isArray(req.body.matricula) ? [req.body.matricula] : req.body.matricula;
+        
+        logInfo('Datos de vehículos recibidos:', {
+          matriculas: matricula,
+          cantidad: matricula.length
+        });
+        
+        for (let i = 0; i < matricula.length; i++) {
+          logInfo(`Procesando vehículo #${i+1}:`, { matricula: matricula[i] });
+          
+          // Preparar archivos de este vehículo
+          const vehiculoArchivos = {
+            foto: vehiculoArchivosMap.fotos[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.fotos[i].path, vehiculoArchivosMap.fotos[i].originalname) : null,
+            tecnomecanica: vehiculoArchivosMap.tecnomecanicas[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.tecnomecanicas[i].path, vehiculoArchivosMap.tecnomecanicas[i].originalname) : null,
+            soat: vehiculoArchivosMap.soats[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.soats[i].path, vehiculoArchivosMap.soats[i].originalname) : null,
+            licencia_conduccion: vehiculoArchivosMap.licencias_conduccion[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_conduccion[i].path, vehiculoArchivosMap.licencias_conduccion[i].originalname) : null,
+            licencia_transito: vehiculoArchivosMap.licencias_transito[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_transito[i].path, vehiculoArchivosMap.licencias_transito[i].originalname) : null
+          };
+          
+          // Log detallado de los resultados de la subida
+          logInfo(`Resultados de la subida para vehículo ${matricula[i]}:`, {
+            foto: vehiculoArchivos.foto || 'No subida',
+            tecnomecanica: vehiculoArchivos.tecnomecanica || 'No subida',
+            soat: vehiculoArchivos.soat || 'No subida',
+            licencia_conduccion: vehiculoArchivos.licencia_conduccion || 'No subida',
+            licencia_transito: vehiculoArchivos.licencia_transito || 'No subida'
+          });
+          
+        await conn.execute(
+            'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito, estado) VALUES (?, ?, ?, ?, ?, ?, ?, true)',
+            [
+              solicitudId, 
+              matricula[i] || null, 
+              vehiculoArchivos.foto || null, 
+              vehiculoArchivos.tecnomecanica || null, 
+              vehiculoArchivos.soat || null, 
+              vehiculoArchivos.licencia_conduccion || null, 
+              vehiculoArchivos.licencia_transito || null
+            ]
+        );
+          
+          logInfo(`Vehículo ${matricula[i]} insertado correctamente con ID de solicitud ${solicitudId}`);
+      }
     }
 
-    const [resultUser] = await conn.execute('SELECT username FROM users WHERE id = ?', [interventor_id]);
+      // Verificar y notificar al interventor si es COA
+      const [resultUser] = await conn.execute('SELECT username FROM users WHERE id = ?', [req.body.interventor_id]);
     if (resultUser[0]?.username === "COA") {
-      await conn.execute('UPDATE solicitudes SET estado = "aprobada" WHERE id = ?', [result.insertId]);
-      await conn.execute('INSERT INTO acciones (solicitud_id, usuario_id, accion) VALUES (?, ?, "pendiente")', [result.insertId, id]);
+        await conn.execute('UPDATE solicitudes SET estado = "aprobada" WHERE id = ?', [solicitudId]);
+        await conn.execute('INSERT INTO acciones (solicitud_id, usuario_id, accion) VALUES (?, ?, "pendiente")', [solicitudId, userId]);
     }
 
     await conn.commit();
     logInfo('Solicitud generada exitosamente');
-    res.status(200).json({ message: 'Solicitud creada correctamente' });
+      return res.status(200).json({ success: true, message: 'Solicitud creada exitosamente', solicitudId });
   } catch (error) {
-    await conn.rollback();
+      // Revertir cambios en la base de datos
+      if (conn) await conn.rollback();
+      console.error('Error en generar solicitud:', error);
     logError(error, '/generar-solicitud');
+      
     // Limpiar archivos temporales en caso de error
-    await cleanupAllTempFiles(req.files);
-    res.status(500).json({ 
-      error: 'Error al crear la solicitud',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+      if (req.files) {
+        for (const fieldname in req.files) {
+          await cleanupAllTempFiles(req.files[fieldname]);
+        }
+      }
+      
+      return res.status(500).json({ success: false, message: 'Error al generar la solicitud: ' + error.message });
   } finally {
     // Limpiar archivos temporales después de procesar la solicitud
-    await cleanupAllTempFiles(req.files);
-    conn.release();
+      if (req.files) {
+        for (const fieldname in req.files) {
+          await cleanupAllTempFiles(req.files[fieldname]);
+        }
+      }
+      
+      if (conn) conn.release();
   }
 });
 
@@ -568,40 +761,203 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
   
         // Procesar colaboradores
         if (cambiosDetectados?.colaboradores?.nuevos?.length > 0) {
-          const fotos = uploadedFiles['foto[]'] || [];
-          const documentosArl = uploadedFiles['documento_arl[]'] || [];
+          logInfo('Procesando colaboradores nuevos:', { 
+            cantidad: cambiosDetectados.colaboradores.nuevos.length, 
+            detalle: cambiosDetectados.colaboradores.nuevos
+          });
+          
+          // Construir mapas de archivos indexados por posición
+          const fotosMap = {};
+          const documentosArlMap = {};
+          
+          // Mapear archivos por su índice en el array
+          if (fileMap['foto[]']) {
+            logInfo('Archivos foto[] encontrados:', { 
+              cantidad: fileMap['foto[]'].length,
+              archivos: fileMap['foto[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['foto[]'].forEach((file, index) => {
+              fotosMap[index] = file;
+              logInfo(`Mapeando foto para colaborador posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos foto[] para los colaboradores nuevos');
+          }
+          
+          if (fileMap['documento_arl[]']) {
+            logInfo('Archivos documento_arl[] encontrados:', { 
+              cantidad: fileMap['documento_arl[]'].length,
+              archivos: fileMap['documento_arl[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['documento_arl[]'].forEach((file, index) => {
+              documentosArlMap[index] = file;
+              logInfo(`Mapeando documento ARL para colaborador posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos documento_arl[] para los colaboradores nuevos');
+          }
           
           for (let i = 0; i < cambiosDetectados.colaboradores.nuevos.length; i++) {
             const colaborador = cambiosDetectados.colaboradores.nuevos[i];
-            const fotoFile = fotos[i];
-            const documentoArlFile = documentosArl[i];
+            logInfo(`Procesando colaborador nuevo #${i+1}:`, { 
+              cedula: colaborador.cedula, 
+              nombre: colaborador.nombre,
+              tieneFoto: fotosMap[i] ? true : false,
+              tieneDocArl: documentosArlMap[i] ? true : false
+            });
+            
+            const fotoFile = fotosMap[i];
+            const documentoArlFile = documentosArlMap[i];
             
             const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
             const documentoArlUrl = documentoArlFile ? await uploadToSpacesFromDisk(documentoArlFile.path, documentoArlFile.originalname) : null;
             
+            logInfo(`Resultados de subida para colaborador ${colaborador.nombre}:`, {
+              fotoUrl: fotoUrl || 'No subida',
+              documentoArlUrl: documentoArlUrl || 'No subido'
+            });
+            
             await conn.execute(
               'INSERT INTO colaboradores (solicitud_id, cedula, nombre, foto, documento_arl, estado) VALUES (?, ?, ?, ?, ?, true)',
-              [solicitudId, colaborador.cedula, colaborador.nombre, fotoUrl, documentoArlUrl]
+              [solicitudId, colaborador.cedula || null, colaborador.nombre || null, fotoUrl || null, documentoArlUrl || null]
             );
+            
+            logInfo(`Colaborador ${colaborador.nombre} insertado con éxito en solicitud ${solicitudId}`);
           }
         }
   
         // Procesar vehículos
         if (cambiosDetectados?.vehiculos?.nuevos?.length > 0) {
+          // Construir mapas de archivos indexados por posición
+          const vehiculoArchivosMap = {
+            fotos: {},
+            tecnomecanicas: {},
+            soats: {},
+            licencias_conduccion: {},
+            licencias_transito: {}
+          };
+          
+          // Mapear cada tipo de archivo por su índice
+          if (fileMap['foto_vehiculo[]']) {
+            logInfo('Archivos de fotos de vehículos recibidos:', { 
+              cantidad: fileMap['foto_vehiculo[]'].length,
+              archivos: fileMap['foto_vehiculo[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['foto_vehiculo[]'].forEach((file, index) => {
+              vehiculoArchivosMap.fotos[index] = file;
+              logInfo(`Mapeando foto para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de fotos de vehículos.');
+          }
+          
+          if (fileMap['tecnomecanica[]']) {
+            logInfo('Archivos de tecnomecánica recibidos:', { 
+              cantidad: fileMap['tecnomecanica[]'].length,
+              archivos: fileMap['tecnomecanica[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['tecnomecanica[]'].forEach((file, index) => {
+              vehiculoArchivosMap.tecnomecanicas[index] = file;
+              logInfo(`Mapeando tecnomecánica para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de tecnomecánica.');
+          }
+          
+          if (fileMap['soat[]']) {
+            logInfo('Archivos de SOAT recibidos:', { 
+              cantidad: fileMap['soat[]'].length,
+              archivos: fileMap['soat[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['soat[]'].forEach((file, index) => {
+              vehiculoArchivosMap.soats[index] = file;
+              logInfo(`Mapeando SOAT para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de SOAT.');
+          }
+          
+          if (fileMap['licencia_conduccion[]']) {
+            logInfo('Archivos de licencia de conducción recibidos:', { 
+              cantidad: fileMap['licencia_conduccion[]'].length,
+              archivos: fileMap['licencia_conduccion[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['licencia_conduccion[]'].forEach((file, index) => {
+              vehiculoArchivosMap.licencias_conduccion[index] = file;
+              logInfo(`Mapeando licencia de conducción para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de licencia de conducción.');
+          }
+          
+          if (fileMap['licencia_transito[]']) {
+            logInfo('Archivos de licencia de tránsito recibidos:', { 
+              cantidad: fileMap['licencia_transito[]'].length,
+              archivos: fileMap['licencia_transito[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['licencia_transito[]'].forEach((file, index) => {
+              vehiculoArchivosMap.licencias_transito[index] = file;
+              logInfo(`Mapeando licencia de tránsito para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de licencia de tránsito.');
+          }
+
           for (let i = 0; i < cambiosDetectados.vehiculos.nuevos.length; i++) {
             const vehiculo = cambiosDetectados.vehiculos.nuevos[i];
+            logInfo(`Procesando vehículo nuevo #${i+1}:`, { matricula: vehiculo.matricula });
+            
             const vehiculoArchivos = {
-              foto: uploadedFiles['foto_vehiculo[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['foto_vehiculo[]'][i].path, uploadedFiles['foto_vehiculo[]'][i].originalname) : null,
-              tecnomecanica: uploadedFiles['tecnomecanica[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['tecnomecanica[]'][i].path, uploadedFiles['tecnomecanica[]'][i].originalname) : null,
-              soat: uploadedFiles['soat[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['soat[]'][i].path, uploadedFiles['soat[]'][i].originalname) : null,
-              licencia_conduccion: uploadedFiles['licencia_conduccion[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['licencia_conduccion[]'][i].path, uploadedFiles['licencia_conduccion[]'][i].originalname) : null,
-              licencia_transito: uploadedFiles['licencia_transito[]']?.[i] ? await uploadToSpacesFromDisk(uploadedFiles['licencia_transito[]'][i].path, uploadedFiles['licencia_transito[]'][i].originalname) : null
+              foto: vehiculoArchivosMap.fotos[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.fotos[i].path, vehiculoArchivosMap.fotos[i].originalname) : null,
+              tecnomecanica: vehiculoArchivosMap.tecnomecanicas[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.tecnomecanicas[i].path, vehiculoArchivosMap.tecnomecanicas[i].originalname) : null,
+              soat: vehiculoArchivosMap.soats[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.soats[i].path, vehiculoArchivosMap.soats[i].originalname) : null,
+              licencia_conduccion: vehiculoArchivosMap.licencias_conduccion[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_conduccion[i].path, vehiculoArchivosMap.licencias_conduccion[i].originalname) : null,
+              licencia_transito: vehiculoArchivosMap.licencias_transito[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_transito[i].path, vehiculoArchivosMap.licencias_transito[i].originalname) : null
             };
+            
+            // Log detallado de los resultados de la subida
+            logInfo(`Resultados de la subida para vehículo ${vehiculo.matricula}:`, {
+              foto: vehiculoArchivos.foto || 'No subida',
+              tecnomecanica: vehiculoArchivos.tecnomecanica || 'No subida',
+              soat: vehiculoArchivos.soat || 'No subida',
+              licencia_conduccion: vehiculoArchivos.licencia_conduccion || 'No subida',
+              licencia_transito: vehiculoArchivos.licencia_transito || 'No subida'
+            });
   
             await conn.execute(
               'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito, estado) VALUES (?, ?, ?, ?, ?, ?, ?, true)',
-              [solicitudId, vehiculo.matricula, vehiculoArchivos.foto, vehiculoArchivos.tecnomecanica, vehiculoArchivos.soat, vehiculoArchivos.licencia_conduccion, vehiculoArchivos.licencia_transito]
+              [
+                solicitudId, 
+                vehiculo.matricula || null, 
+                vehiculoArchivos.foto || null, 
+                vehiculoArchivos.tecnomecanica || null, 
+                vehiculoArchivos.soat || null, 
+                vehiculoArchivos.licencia_conduccion || null, 
+                vehiculoArchivos.licencia_transito || null
+              ]
             );
+            logInfo(`Vehículo ${vehiculo.matricula} insertado correctamente con ID de solicitud ${solicitudId}`);
           }
         }
   
@@ -635,9 +991,9 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
             detallesHtml += `
               <h4>Vehículos:</h4>
               <ul>
-                ${cambiosDetectados.vehiculos.nuevos.map(veh => `
-                  <li>${veh.matricula}</li>
-                `).join('')}
+                ${cambiosDetectados.vehiculos.nuevos
+                  .map((veh) => `<li>${veh.matricula}</li>`)
+                  .join('')}
               </ul>
             `;
           }
@@ -753,18 +1109,33 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
   
         // Agregar nuevos colaboradores
         if (cambiosDetectados?.colaboradores.nuevos.length > 0) {
-          const fotos = fileMap['foto[]'] || [];
-          const documentosArl = fileMap['documento_arl[]'] || [];
+          // Construir mapas de archivos indexados por posición
+          const fotosMap = {};
+          const documentosArlMap = {};
           
-          for (const nuevoColaborador of cambiosDetectados.colaboradores.nuevos) {
+          // Mapear archivos por su índice en el array
+          if (fileMap['foto[]']) {
+            fileMap['foto[]'].forEach((file, index) => {
+              fotosMap[index] = file;
+            });
+          }
+          
+          if (fileMap['documento_arl[]']) {
+            fileMap['documento_arl[]'].forEach((file, index) => {
+              documentosArlMap[index] = file;
+            });
+          }
+          
+          for (let i = 0; i < cambiosDetectados.colaboradores.nuevos.length; i++) {
+            const nuevoColaborador = cambiosDetectados.colaboradores.nuevos[i];
             const [existingColaborador] = await conn.execute(
               'SELECT id FROM colaboradores WHERE solicitud_id = ? AND cedula = ?',
               [solicitudId, nuevoColaborador.cedula]
             );
   
             if (!existingColaborador.length) {
-              const fotoFile = fotos.shift();
-              const documentoArlFile = documentosArl.shift();
+              const fotoFile = fotosMap[i];
+              const documentoArlFile = documentosArlMap[i];
               const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
               const documentoArlUrl = documentoArlFile ? await uploadToSpacesFromDisk(documentoArlFile.path, documentoArlFile.originalname) : null;
               await conn.execute(
@@ -800,26 +1171,130 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
   
         // Agregar nuevos vehículos
         if (cambiosDetectados?.vehiculos.nuevos.length > 0) {
-          for (const nuevoVehiculo of cambiosDetectados.vehiculos.nuevos) {
-            const [existing] = await conn.execute(
-              'SELECT id FROM vehiculos WHERE solicitud_id = ? AND matricula = ? AND estado = 1',
-              [solicitudId, nuevoVehiculo.matricula]
-            );
+          // Construir mapas de archivos indexados por posición
+          const vehiculoArchivosMap = {
+            fotos: {},
+            tecnomecanicas: {},
+            soats: {},
+            licencias_conduccion: {},
+            licencias_transito: {}
+          };
+          
+          // Mapear cada tipo de archivo por su índice
+          if (fileMap['foto_vehiculo[]']) {
+            logInfo('Archivos de fotos de vehículos recibidos:', { 
+              cantidad: fileMap['foto_vehiculo[]'].length,
+              archivos: fileMap['foto_vehiculo[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['foto_vehiculo[]'].forEach((file, index) => {
+              vehiculoArchivosMap.fotos[index] = file;
+              logInfo(`Mapeando foto para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de fotos de vehículos.');
+          }
+          
+          if (fileMap['tecnomecanica[]']) {
+            logInfo('Archivos de tecnomecánica recibidos:', { 
+              cantidad: fileMap['tecnomecanica[]'].length,
+              archivos: fileMap['tecnomecanica[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['tecnomecanica[]'].forEach((file, index) => {
+              vehiculoArchivosMap.tecnomecanicas[index] = file;
+              logInfo(`Mapeando tecnomecánica para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de tecnomecánica.');
+          }
+          
+          if (fileMap['soat[]']) {
+            logInfo('Archivos de SOAT recibidos:', { 
+              cantidad: fileMap['soat[]'].length,
+              archivos: fileMap['soat[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['soat[]'].forEach((file, index) => {
+              vehiculoArchivosMap.soats[index] = file;
+              logInfo(`Mapeando SOAT para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de SOAT.');
+          }
+          
+          if (fileMap['licencia_conduccion[]']) {
+            logInfo('Archivos de licencia de conducción recibidos:', { 
+              cantidad: fileMap['licencia_conduccion[]'].length,
+              archivos: fileMap['licencia_conduccion[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['licencia_conduccion[]'].forEach((file, index) => {
+              vehiculoArchivosMap.licencias_conduccion[index] = file;
+              logInfo(`Mapeando licencia de conducción para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de licencia de conducción.');
+          }
+          
+          if (fileMap['licencia_transito[]']) {
+            logInfo('Archivos de licencia de tránsito recibidos:', { 
+              cantidad: fileMap['licencia_transito[]'].length,
+              archivos: fileMap['licencia_transito[]'].map(f => ({nombre: f.originalname, tamaño: f.size, path: f.path}))
+            });
+            fileMap['licencia_transito[]'].forEach((file, index) => {
+              vehiculoArchivosMap.licencias_transito[index] = file;
+              logInfo(`Mapeando licencia de tránsito para vehículo posición ${index}:`, { 
+                nombre: file.originalname, 
+                path: file.path 
+              });
+            });
+          } else {
+            logInfo('⚠️ No se encontraron archivos de licencia de tránsito.');
+          }
+
+          for (let i = 0; i < cambiosDetectados.vehiculos.nuevos.length; i++) {
+            const vehiculo = cambiosDetectados.vehiculos.nuevos[i];
+            logInfo(`Procesando vehículo nuevo #${i+1}:`, { matricula: vehiculo.matricula });
             
-            if (!existing.length) {
-              const vehiculo = {
-                matricula: nuevoVehiculo.matricula,
-                foto: fileMap['foto_vehiculo[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['foto_vehiculo[]'][0].path, fileMap['foto_vehiculo[]'][0].originalname) : null,
-                tecnomecanica: fileMap['tecnomecanica[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['tecnomecanica[]'][0].path, fileMap['tecnomecanica[]'][0].originalname) : null,
-                soat: fileMap['soat[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['soat[]'][0].path, fileMap['soat[]'][0].originalname) : null,
-                licencia_conduccion: fileMap['licencia_conduccion[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['licencia_conduccion[]'][0].path, fileMap['licencia_conduccion[]'][0].originalname) : null,
-                licencia_transito: fileMap['licencia_transito[]']?.[0] ? await uploadToSpacesFromDisk(fileMap['licencia_transito[]'][0].path, fileMap['licencia_transito[]'][0].originalname) : null
-              };
+            const vehiculoArchivos = {
+              foto: vehiculoArchivosMap.fotos[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.fotos[i].path, vehiculoArchivosMap.fotos[i].originalname) : null,
+              tecnomecanica: vehiculoArchivosMap.tecnomecanicas[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.tecnomecanicas[i].path, vehiculoArchivosMap.tecnomecanicas[i].originalname) : null,
+              soat: vehiculoArchivosMap.soats[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.soats[i].path, vehiculoArchivosMap.soats[i].originalname) : null,
+              licencia_conduccion: vehiculoArchivosMap.licencias_conduccion[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_conduccion[i].path, vehiculoArchivosMap.licencias_conduccion[i].originalname) : null,
+              licencia_transito: vehiculoArchivosMap.licencias_transito[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_transito[i].path, vehiculoArchivosMap.licencias_transito[i].originalname) : null
+            };
+            
+            // Log detallado de los resultados de la subida
+            logInfo(`Resultados de la subida para vehículo ${vehiculo.matricula}:`, {
+              foto: vehiculoArchivos.foto || 'No subida',
+              tecnomecanica: vehiculoArchivos.tecnomecanica || 'No subida',
+              soat: vehiculoArchivos.soat || 'No subida',
+              licencia_conduccion: vehiculoArchivos.licencia_conduccion || 'No subida',
+              licencia_transito: vehiculoArchivos.licencia_transito || 'No subida'
+            });
+
               await conn.execute(
-                'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [solicitudId, vehiculo.matricula, vehiculo.foto, vehiculo.tecnomecanica, vehiculo.soat, vehiculo.licencia_conduccion, vehiculo.licencia_transito]
+              'INSERT INTO vehiculos (solicitud_id, matricula, foto, tecnomecanica, soat, licencia_conduccion, licencia_transito, estado) VALUES (?, ?, ?, ?, ?, ?, ?, true)',
+              [
+                solicitudId, 
+                vehiculo.matricula || null, 
+                vehiculoArchivos.foto || null, 
+                vehiculoArchivos.tecnomecanica || null, 
+                vehiculoArchivos.soat || null, 
+                vehiculoArchivos.licencia_conduccion || null, 
+                vehiculoArchivos.licencia_transito || null
+              ]
               );
-            }
+            logInfo(`Vehículo ${vehiculo.matricula} insertado correctamente con ID de solicitud ${solicitudId}`);
           }
         }
   

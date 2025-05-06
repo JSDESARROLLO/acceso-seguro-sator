@@ -1232,9 +1232,24 @@ form.addEventListener('submit', async (e) => {
                 });
             }
         } else {
+            // Obtener los inputs de archivos para nuevos colaboradores
+            const cedulaValue = grupo.querySelector('input[name="cedula[]"]').value.trim();
+            const nombreValue = grupo.querySelector('input[name="nombre[]"]').value.trim();
+            
+            // Verificar que la foto del colaborador exista en el formulario
+            const fotoFile = grupo.querySelector('input[name="foto[]"]');
+            const docArlFile = grupo.querySelector('input[name="documento_arl[]"]');
+            
+            // Registrar información para depuración
+            console.log(`Colaborador nuevo - Cédula: ${cedulaValue}, Nombre: ${nombreValue}`);
+            console.log(`Archivos - Foto: ${fotoFile?.files.length > 0 ? 'Presente' : 'Ausente'}, Doc ARL: ${docArlFile?.files.length > 0 ? 'Presente' : 'Ausente'}`);
+            
+            // Añadir información a los cambios
             cambios.colaboradores.nuevos.push({
-                cedula: grupo.querySelector('input[name="cedula[]"]').value.trim(),
-                nombre: grupo.querySelector('input[name="nombre[]"]').value.trim()
+                cedula: cedulaValue,
+                nombre: nombreValue,
+                tieneFoto: fotoFile?.files.length > 0, // Indicar al backend que se adjuntó una foto
+                tieneDocArl: docArlFile?.files.length > 0 // Indicar al backend que se adjuntó un documento ARL
             });
         }
     });
@@ -1361,30 +1376,202 @@ form.addEventListener('submit', async (e) => {
                 }
             }
         }
+        
+        // Procesar vehículos nuevos en renovación
+        if (cambios.vehiculos.nuevos.length > 0) {
+            console.log('🚗 Procesando vehículos nuevos en renovación:', cambios.vehiculos.nuevos);
+            
+            // Encontrar todos los vehículos nuevos en el DOM (los que no tienen ID de vehículo)
+            const vehiculoGroups = document.querySelectorAll('.vehiculo-group:not([data-vehiculo-id])');
+            console.log(`Encontrados ${vehiculoGroups.length} grupos de vehículos nuevos en el DOM`);
+            
+            vehiculoGroups.forEach((grupo, index) => {
+                const matriculaInput = grupo.querySelector('input[name="matricula[]"]');
+                const matricula = matriculaInput ? matriculaInput.value : 'Sin matrícula';
+                
+                console.log(`Procesando vehículo nuevo #${index + 1}: ${matricula}`);
+                
+                // Procesar los archivos exactamente igual que en solicitudes nuevas
+                const fotoInput = grupo.querySelector('input[name="foto_vehiculo[]"]');
+                const tecnoInput = grupo.querySelector('input[name="tecnomecanica[]"]');
+                const soatInput = grupo.querySelector('input[name="soat[]"]');
+                const licCondInput = grupo.querySelector('input[name="licencia_conduccion[]"]');
+                const licTransInput = grupo.querySelector('input[name="licencia_transito[]"]');
+                
+                if (fotoInput && fotoInput.files.length > 0) {
+                    const file = fotoInput.files[0];
+                    console.log(`  ✓ Foto: ${file.name}, Tipo: ${file.type}, Tamaño: ${file.size}`);
+                    formData.append('foto_vehiculo[]', file, file.name);
+                } else {
+                    console.warn(`  ⚠️ No se encontró archivo de foto para el vehículo ${matricula}`);
+                }
+                
+                if (tecnoInput && tecnoInput.files.length > 0) {
+                    const file = tecnoInput.files[0];
+                    console.log(`  ✓ Tecnomecánica: ${file.name}`);
+                    formData.append('tecnomecanica[]', file, file.name);
+                } else {
+                    console.warn(`  ⚠️ No se encontró archivo de tecnomecánica para el vehículo ${index + 1}`);
+                }
+                
+                if (soatInput && soatInput.files.length > 0) {
+                    const file = soatInput.files[0];
+                    console.log(`  ✓ SOAT: ${file.name}`);
+                    formData.append('soat[]', file, file.name);
+                } else {
+                    console.warn(`  ⚠️ No se encontró archivo de SOAT para el vehículo ${index + 1}`);
+                }
+                
+                if (licCondInput && licCondInput.files.length > 0) {
+                    const file = licCondInput.files[0];
+                    console.log(`  ✓ Licencia de conducción: ${file.name}`);
+                    formData.append('licencia_conduccion[]', file, file.name);
+                } else {
+                    console.warn(`  ⚠️ No se encontró archivo de licencia de conducción para el vehículo ${index + 1}`);
+                }
+                
+                if (licTransInput && licTransInput.files.length > 0) {
+                    const file = licTransInput.files[0];
+                    console.log(`  ✓ Licencia de tránsito: ${file.name}`);
+                    formData.append('licencia_transito[]', file, file.name);
+                } else {
+                    console.warn(`  ⚠️ No se encontró archivo de licencia de tránsito para el vehículo ${index + 1}`);
+                }
+            });
+        }
+        
+        // Procesar colaboradores nuevos en renovación
+        if (cambios.colaboradores.nuevos.length > 0) {
+            console.log('👥 Procesando colaboradores nuevos en renovación:', cambios.colaboradores.nuevos);
+            
+            // Buscar todos los colaboradores nuevos en el DOM (los que no tienen ID de colaborador)
+            const colaboradorGroups = document.querySelectorAll('.person-group:not([data-colaborador-id])');
+            console.log(`Encontrados ${colaboradorGroups.length} grupos de colaboradores nuevos en el DOM`);
+            
+            colaboradorGroups.forEach((grupo, index) => {
+                const nombreInput = grupo.querySelector('input[name="nombre[]"]');
+                const cedulaInput = grupo.querySelector('input[name="cedula[]"]');
+                const nombre = nombreInput ? nombreInput.value : 'Sin nombre';
+                const cedula = cedulaInput ? cedulaInput.value : 'Sin cédula';
+                
+                console.log(`Procesando colaborador nuevo #${index + 1}: ${nombre} (${cedula})`);
+                
+                // Buscar los archivos del colaborador
+                const fotoInput = grupo.querySelector('input[name="foto[]"]');
+                const docArlInput = grupo.querySelector('input[name="documento_arl[]"]');
+                
+                if (fotoInput && fotoInput.files.length > 0) {
+                    const file = fotoInput.files[0];
+                    console.log(`  ✓ Foto: ${file.name}, Tipo: ${file.type}, Tamaño: ${file.size} bytes`);
+                    formData.append('foto[]', file, file.name);
+                } else {
+                    console.warn(`  ⚠️ No se encontró archivo de foto para el colaborador ${nombre}`);
+                }
+                
+                if (docArlInput && docArlInput.files.length > 0) {
+                    const file = docArlInput.files[0];
+                    console.log(`  ✓ Documento ARL: ${file.name}, Tipo: ${file.type}, Tamaño: ${file.size} bytes`);
+                    formData.append('documento_arl[]', file, file.name);
+                } else {
+                    console.log(`  ℹ️ No se proporcionó documento ARL para el colaborador ${nombre}`);
+                }
+            });
+        }
     } else {
         console.log('📝 Procesando nueva solicitud');
-        // Si es una nueva solicitud, procesar todos los archivos
-        const fileInputs = form.querySelectorAll('input[type="file"]');
-        fileInputs.forEach(async (input) => {
-            console.log(`Procesando campo: ${input.name}`);
-            if (input.files.length > 0) {
-                for (const file of Array.from(input.files)) {
-                    console.log(`  Archivo: ${file.name}, Tipo: ${file.type}`);
-                    if (file.type.startsWith('image/')) {
-                        try {
-                            const webpFile = await convertImageToWebP(file);
-                            console.log(`  Convertido a WebP: ${webpFile.name}`);
-                            formData.append(input.name, webpFile, webpFile.name);
-                        } catch (error) {
-                            console.error(`  Error al convertir ${file.name}:`, error);
-                            formData.append(input.name, file, file.name);
-                        }
+        // Si es una nueva solicitud, procesar los archivos de colaboradores primero
+        document.querySelectorAll('.person-group').forEach((grupo, index) => {
+            const fotoInput = grupo.querySelector('input[name="foto[]"]');
+            const docArlInput = grupo.querySelector('input[name="documento_arl[]"]');
+            
+            console.log(`Procesando archivos para colaborador ${index + 1}`);
+            
+            if (fotoInput && fotoInput.files.length > 0) {
+                const fotoFile = fotoInput.files[0];
+                console.log(`  Foto: ${fotoFile.name}, Tipo: ${fotoFile.type}, Tamaño: ${fotoFile.size} bytes`);
+                formData.append('foto[]', fotoFile, fotoFile.name);
+            } else {
+                console.warn(`  ⚠️ No se encontró archivo de foto para el colaborador ${index + 1}`);
+            }
+            
+            if (docArlInput && docArlInput.files.length > 0) {
+                const docArlFile = docArlInput.files[0];
+                console.log(`  Doc ARL: ${docArlFile.name}, Tipo: ${docArlFile.type}, Tamaño: ${docArlFile.size} bytes`);
+                formData.append('documento_arl[]', docArlFile, docArlFile.name);
                     } else {
-                        formData.append(input.name, file, file.name);
-                    }
-                }
+                console.log(`  Doc ARL: No proporcionado para el colaborador ${index + 1}`);
             }
         });
+        
+        // Procesar los archivos de vehículos de manera más explícita
+        const vehiculoGroups = document.querySelectorAll('.vehiculo-group');
+        console.log(`Procesando archivos para ${vehiculoGroups.length} vehículos`);
+        
+        vehiculoGroups.forEach((grupo, index) => {
+            const matriculaInput = grupo.querySelector('input[name="matricula[]"]');
+            const fotoInput = grupo.querySelector('input[name="foto_vehiculo[]"]');
+            const tecnoInput = grupo.querySelector('input[name="tecnomecanica[]"]');
+            const soatInput = grupo.querySelector('input[name="soat[]"]');
+            const licCondInput = grupo.querySelector('input[name="licencia_conduccion[]"]');
+            const licTransInput = grupo.querySelector('input[name="licencia_transito[]"]');
+            
+            const matricula = matriculaInput ? matriculaInput.value : 'Sin matrícula';
+            console.log(`Vehículo ${index + 1} (${matricula}):`);
+            
+            if (fotoInput && fotoInput.files.length > 0) {
+                const file = fotoInput.files[0];
+                console.log(`  ✓ Foto: ${file.name}, Tipo: ${file.type}, Tamaño: ${file.size}`);
+                formData.append('foto_vehiculo[]', file, file.name);
+            } else {
+                console.warn(`  ⚠️ No se encontró archivo de foto para el vehículo ${index + 1}`);
+            }
+            
+            if (tecnoInput && tecnoInput.files.length > 0) {
+                const file = tecnoInput.files[0];
+                console.log(`  ✓ Tecnomecánica: ${file.name}`);
+                formData.append('tecnomecanica[]', file, file.name);
+            } else {
+                console.warn(`  ⚠️ No se encontró archivo de tecnomecánica para el vehículo ${index + 1}`);
+            }
+            
+            if (soatInput && soatInput.files.length > 0) {
+                const file = soatInput.files[0];
+                console.log(`  ✓ SOAT: ${file.name}`);
+                formData.append('soat[]', file, file.name);
+            } else {
+                console.warn(`  ⚠️ No se encontró archivo de SOAT para el vehículo ${index + 1}`);
+            }
+            
+            if (licCondInput && licCondInput.files.length > 0) {
+                const file = licCondInput.files[0];
+                console.log(`  ✓ Licencia de conducción: ${file.name}`);
+                formData.append('licencia_conduccion[]', file, file.name);
+            } else {
+                console.warn(`  ⚠️ No se encontró archivo de licencia de conducción para el vehículo ${index + 1}`);
+            }
+            
+            if (licTransInput && licTransInput.files.length > 0) {
+                const file = licTransInput.files[0];
+                console.log(`  ✓ Licencia de tránsito: ${file.name}`);
+                formData.append('licencia_transito[]', file, file.name);
+            } else {
+                console.warn(`  ⚠️ No se encontró archivo de licencia de tránsito para el vehículo ${index + 1}`);
+            }
+        });
+        
+        // Procesar documentos principales (ARL y Pasocial)
+        const arlInput = document.getElementById('arl');
+        const pasocialInput = document.getElementById('pasocial');
+        
+        if (arlInput && arlInput.files.length > 0) {
+            formData.append('arl', arlInput.files[0], arlInput.files[0].name);
+            console.log(`Documento ARL principal: ${arlInput.files[0].name}`);
+        }
+        
+        if (pasocialInput && pasocialInput.files.length > 0) {
+            formData.append('pasocial', pasocialInput.files[0], pasocialInput.files[0].name);
+            console.log(`Documento Pasocial principal: ${pasocialInput.files[0].name}`);
+        }
     }
 
     // Agregar otros campos del formulario
