@@ -815,8 +815,71 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
             const fotoFile = fotosMap[i];
             const documentoArlFile = documentosArlMap[i];
             
-            const fotoUrl = fotoFile ? await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname) : null;
-            const documentoArlUrl = documentoArlFile ? await uploadToSpacesFromDisk(documentoArlFile.path, documentoArlFile.originalname) : null;
+            // Verificación mejorada para documentos ARL
+            let documentoArlUrl = null;
+            if (documentoArlFile) {
+              logInfo(`Procesando documento ARL para ${colaborador.nombre}:`, { 
+                nombre: documentoArlFile.originalname, 
+                size: documentoArlFile.size
+              });
+              try {
+                documentoArlUrl = await uploadToSpacesFromDisk(documentoArlFile.path, documentoArlFile.originalname);
+                logInfo(`✅ Documento ARL subido correctamente para ${colaborador.nombre}:`, { url: documentoArlUrl });
+              } catch (arlError) {
+                logError(arlError, 'uploadDocumentoArl');
+                logInfo(`⚠️ Error al subir documento ARL para ${colaborador.nombre}: ${arlError.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró documentoArlFile para colaborador ${colaborador.nombre}`);
+              
+              // Búsqueda alternativa de documentos ARL - recorrer todos los archivos por si acaso
+              const todosDocumentos = Object.keys(fileMap).filter(key => key.includes('documento_arl') || key.includes('arl_') || key.includes('ARL'));
+              logInfo(`Buscando documentos ARL alternativos. Claves encontradas:`, todosDocumentos);
+              
+              // Buscar un documento específico para este colaborador por nombre o por patrón
+              for (const key of todosDocumentos) {
+                // Si ya encontramos un documento, salir del bucle
+                if (documentoArlUrl) break;
+                
+                const files = fileMap[key];
+                if (Array.isArray(files) && files.length > 0) {
+                  for (const file of files) {
+                    if (file.originalname.toLowerCase().includes(colaborador.nombre.toLowerCase()) || 
+                        file.originalname.toLowerCase().includes(colaborador.cedula.toLowerCase())) {
+                      logInfo(`🔍 Encontrado posible documento ARL alternativo para ${colaborador.nombre}:`, { 
+                        key, 
+                        archivo: file.originalname
+                      });
+                      try {
+                        documentoArlUrl = await uploadToSpacesFromDisk(file.path, file.originalname);
+                        logInfo(`✅ Documento ARL alternativo subido exitosamente: ${documentoArlUrl}`);
+                        break;
+                      } catch (err) {
+                        logError(err, 'uploadDocumentoArlAlternativo');
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Verificación mejorada para fotos
+            let fotoUrl = null;
+            if (fotoFile) {
+              logInfo(`Procesando foto para ${colaborador.nombre}:`, { 
+                nombre: fotoFile.originalname, 
+                size: fotoFile.size
+              });
+              try {
+                fotoUrl = await uploadToSpacesFromDisk(fotoFile.path, fotoFile.originalname);
+                logInfo(`✅ Foto subida correctamente para ${colaborador.nombre}:`, { url: fotoUrl });
+              } catch (fotoError) {
+                logError(fotoError, 'uploadFoto');
+                logInfo(`⚠️ Error al subir foto para ${colaborador.nombre}: ${fotoError.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró fotoFile para colaborador ${colaborador.nombre}`);
+            }
             
             logInfo(`Resultados de subida para colaborador ${colaborador.nombre}:`, {
               fotoUrl: fotoUrl || 'No subida',
@@ -928,13 +991,157 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
             const vehiculo = cambiosDetectados.vehiculos.nuevos[i];
             logInfo(`Procesando vehículo nuevo #${i+1}:`, { matricula: vehiculo.matricula });
             
+            // Procesar cada tipo de documento de vehículo con mejor manejo de errores
             const vehiculoArchivos = {
-              foto: vehiculoArchivosMap.fotos[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.fotos[i].path, vehiculoArchivosMap.fotos[i].originalname) : null,
-              tecnomecanica: vehiculoArchivosMap.tecnomecanicas[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.tecnomecanicas[i].path, vehiculoArchivosMap.tecnomecanicas[i].originalname) : null,
-              soat: vehiculoArchivosMap.soats[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.soats[i].path, vehiculoArchivosMap.soats[i].originalname) : null,
-              licencia_conduccion: vehiculoArchivosMap.licencias_conduccion[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_conduccion[i].path, vehiculoArchivosMap.licencias_conduccion[i].originalname) : null,
-              licencia_transito: vehiculoArchivosMap.licencias_transito[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_transito[i].path, vehiculoArchivosMap.licencias_transito[i].originalname) : null
+              foto: null,
+              tecnomecanica: null,
+              soat: null,
+              licencia_conduccion: null,
+              licencia_transito: null
             };
+            
+            // Procesar foto del vehículo
+            if (vehiculoArchivosMap.fotos[i]) {
+              const file = vehiculoArchivosMap.fotos[i];
+              logInfo(`Procesando foto para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.foto = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Foto subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.foto });
+              } catch (error) {
+                logError(error, 'uploadFotoVehiculo');
+                logInfo(`⚠️ Error al subir foto para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró foto para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar tecnomecánica
+            if (vehiculoArchivosMap.tecnomecanicas[i]) {
+              const file = vehiculoArchivosMap.tecnomecanicas[i];
+              logInfo(`Procesando tecnomecánica para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.tecnomecanica = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Tecnomecánica subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.tecnomecanica });
+              } catch (error) {
+                logError(error, 'uploadTecnomecanicaVehiculo');
+                logInfo(`⚠️ Error al subir tecnomecánica para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró tecnomecánica para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar SOAT
+            if (vehiculoArchivosMap.soats[i]) {
+              const file = vehiculoArchivosMap.soats[i];
+              logInfo(`Procesando SOAT para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.soat = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ SOAT subido correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.soat });
+              } catch (error) {
+                logError(error, 'uploadSoatVehiculo');
+                logInfo(`⚠️ Error al subir SOAT para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró SOAT para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar licencia de conducción
+            if (vehiculoArchivosMap.licencias_conduccion[i]) {
+              const file = vehiculoArchivosMap.licencias_conduccion[i];
+              logInfo(`Procesando licencia de conducción para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.licencia_conduccion = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Licencia de conducción subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.licencia_conduccion });
+              } catch (error) {
+                logError(error, 'uploadLicenciaConduccionVehiculo');
+                logInfo(`⚠️ Error al subir licencia de conducción para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró licencia de conducción para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar licencia de tránsito
+            if (vehiculoArchivosMap.licencias_transito[i]) {
+              const file = vehiculoArchivosMap.licencias_transito[i];
+              logInfo(`Procesando licencia de tránsito para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.licencia_transito = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Licencia de tránsito subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.licencia_transito });
+              } catch (error) {
+                logError(error, 'uploadLicenciaTransitoVehiculo');
+                logInfo(`⚠️ Error al subir licencia de tránsito para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró licencia de tránsito para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Búsqueda alternativa para los documentos que faltan
+            if (!vehiculoArchivos.foto || !vehiculoArchivos.tecnomecanica || !vehiculoArchivos.soat || 
+                !vehiculoArchivos.licencia_conduccion || !vehiculoArchivos.licencia_transito) {
+              
+              logInfo(`🔍 Realizando búsqueda alternativa de documentos para vehículo ${vehiculo.matricula}`);
+              
+              // Buscar en todas las claves por algún documento que pueda corresponder a este vehículo
+              const placaSinEspacios = vehiculo.matricula.replace(/\s+/g, '').toLowerCase();
+              
+              Object.keys(fileMap).forEach(key => {
+                if (Array.isArray(fileMap[key])) {
+                  fileMap[key].forEach(file => {
+                    const filenameLower = file.originalname.toLowerCase();
+                    
+                    // Verificar si el nombre del archivo contiene la placa
+                    if (filenameLower.includes(placaSinEspacios)) {
+                      logInfo(`🔍 Encontrado posible documento para vehículo ${vehiculo.matricula} en ${key}:`, {
+                        archivo: file.originalname
+                      });
+                      
+                      // Asignar al tipo de documento correcto según el nombre de campo o contenido
+                      const asignarSegunContenido = async () => {
+                        try {
+                          const url = await uploadToSpacesFromDisk(file.path, file.originalname);
+                          
+                          if (!vehiculoArchivos.foto && (key.includes('foto') || filenameLower.includes('foto'))) {
+                            vehiculoArchivos.foto = url;
+                            logInfo(`🔄 Asignada foto alternativa para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.tecnomecanica && (key.includes('tecno') || filenameLower.includes('tecno'))) {
+                            vehiculoArchivos.tecnomecanica = url;
+                            logInfo(`🔄 Asignada tecnomecánica alternativa para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.soat && (key.includes('soat') || filenameLower.includes('soat'))) {
+                            vehiculoArchivos.soat = url;
+                            logInfo(`🔄 Asignado SOAT alternativo para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.licencia_conduccion && (key.includes('conduccion') || filenameLower.includes('conduccion'))) {
+                            vehiculoArchivos.licencia_conduccion = url;
+                            logInfo(`🔄 Asignada licencia de conducción alternativa para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.licencia_transito && (key.includes('transito') || filenameLower.includes('transito'))) {
+                            vehiculoArchivos.licencia_transito = url;
+                            logInfo(`🔄 Asignada licencia de tránsito alternativa para vehículo ${vehiculo.matricula}`);
+                          }
+                        } catch (error) {
+                          logError(error, 'asignarDocumentoAlternativoVehiculo');
+                        }
+                      };
+                      
+                      asignarSegunContenido();
+                    }
+                  });
+                }
+              });
+            }
             
             // Log detallado de los resultados de la subida
             logInfo(`Resultados de la subida para vehículo ${vehiculo.matricula}:`, {
@@ -1265,13 +1472,157 @@ router.post('/actualizar-solicitud/:id', upload.any(), async (req, res) => {
             const vehiculo = cambiosDetectados.vehiculos.nuevos[i];
             logInfo(`Procesando vehículo nuevo #${i+1}:`, { matricula: vehiculo.matricula });
             
+            // Procesar cada tipo de documento de vehículo con mejor manejo de errores
             const vehiculoArchivos = {
-              foto: vehiculoArchivosMap.fotos[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.fotos[i].path, vehiculoArchivosMap.fotos[i].originalname) : null,
-              tecnomecanica: vehiculoArchivosMap.tecnomecanicas[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.tecnomecanicas[i].path, vehiculoArchivosMap.tecnomecanicas[i].originalname) : null,
-              soat: vehiculoArchivosMap.soats[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.soats[i].path, vehiculoArchivosMap.soats[i].originalname) : null,
-              licencia_conduccion: vehiculoArchivosMap.licencias_conduccion[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_conduccion[i].path, vehiculoArchivosMap.licencias_conduccion[i].originalname) : null,
-              licencia_transito: vehiculoArchivosMap.licencias_transito[i] ? await uploadToSpacesFromDisk(vehiculoArchivosMap.licencias_transito[i].path, vehiculoArchivosMap.licencias_transito[i].originalname) : null
+              foto: null,
+              tecnomecanica: null,
+              soat: null,
+              licencia_conduccion: null,
+              licencia_transito: null
             };
+            
+            // Procesar foto del vehículo
+            if (vehiculoArchivosMap.fotos[i]) {
+              const file = vehiculoArchivosMap.fotos[i];
+              logInfo(`Procesando foto para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.foto = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Foto subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.foto });
+              } catch (error) {
+                logError(error, 'uploadFotoVehiculo');
+                logInfo(`⚠️ Error al subir foto para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró foto para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar tecnomecánica
+            if (vehiculoArchivosMap.tecnomecanicas[i]) {
+              const file = vehiculoArchivosMap.tecnomecanicas[i];
+              logInfo(`Procesando tecnomecánica para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.tecnomecanica = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Tecnomecánica subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.tecnomecanica });
+              } catch (error) {
+                logError(error, 'uploadTecnomecanicaVehiculo');
+                logInfo(`⚠️ Error al subir tecnomecánica para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró tecnomecánica para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar SOAT
+            if (vehiculoArchivosMap.soats[i]) {
+              const file = vehiculoArchivosMap.soats[i];
+              logInfo(`Procesando SOAT para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.soat = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ SOAT subido correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.soat });
+              } catch (error) {
+                logError(error, 'uploadSoatVehiculo');
+                logInfo(`⚠️ Error al subir SOAT para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró SOAT para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar licencia de conducción
+            if (vehiculoArchivosMap.licencias_conduccion[i]) {
+              const file = vehiculoArchivosMap.licencias_conduccion[i];
+              logInfo(`Procesando licencia de conducción para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.licencia_conduccion = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Licencia de conducción subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.licencia_conduccion });
+              } catch (error) {
+                logError(error, 'uploadLicenciaConduccionVehiculo');
+                logInfo(`⚠️ Error al subir licencia de conducción para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró licencia de conducción para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Procesar licencia de tránsito
+            if (vehiculoArchivosMap.licencias_transito[i]) {
+              const file = vehiculoArchivosMap.licencias_transito[i];
+              logInfo(`Procesando licencia de tránsito para vehículo ${vehiculo.matricula}:`, { 
+                nombre: file.originalname, 
+                size: file.size
+              });
+              try {
+                vehiculoArchivos.licencia_transito = await uploadToSpacesFromDisk(file.path, file.originalname);
+                logInfo(`✅ Licencia de tránsito subida correctamente para vehículo ${vehiculo.matricula}:`, { url: vehiculoArchivos.licencia_transito });
+              } catch (error) {
+                logError(error, 'uploadLicenciaTransitoVehiculo');
+                logInfo(`⚠️ Error al subir licencia de tránsito para vehículo ${vehiculo.matricula}: ${error.message}`);
+              }
+            } else {
+              logInfo(`⚠️ No se encontró licencia de tránsito para vehículo ${vehiculo.matricula}`);
+            }
+            
+            // Búsqueda alternativa para los documentos que faltan
+            if (!vehiculoArchivos.foto || !vehiculoArchivos.tecnomecanica || !vehiculoArchivos.soat || 
+                !vehiculoArchivos.licencia_conduccion || !vehiculoArchivos.licencia_transito) {
+              
+              logInfo(`🔍 Realizando búsqueda alternativa de documentos para vehículo ${vehiculo.matricula}`);
+              
+              // Buscar en todas las claves por algún documento que pueda corresponder a este vehículo
+              const placaSinEspacios = vehiculo.matricula.replace(/\s+/g, '').toLowerCase();
+              
+              Object.keys(fileMap).forEach(key => {
+                if (Array.isArray(fileMap[key])) {
+                  fileMap[key].forEach(file => {
+                    const filenameLower = file.originalname.toLowerCase();
+                    
+                    // Verificar si el nombre del archivo contiene la placa
+                    if (filenameLower.includes(placaSinEspacios)) {
+                      logInfo(`🔍 Encontrado posible documento para vehículo ${vehiculo.matricula} en ${key}:`, {
+                        archivo: file.originalname
+                      });
+                      
+                      // Asignar al tipo de documento correcto según el nombre de campo o contenido
+                      const asignarSegunContenido = async () => {
+                        try {
+                          const url = await uploadToSpacesFromDisk(file.path, file.originalname);
+                          
+                          if (!vehiculoArchivos.foto && (key.includes('foto') || filenameLower.includes('foto'))) {
+                            vehiculoArchivos.foto = url;
+                            logInfo(`🔄 Asignada foto alternativa para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.tecnomecanica && (key.includes('tecno') || filenameLower.includes('tecno'))) {
+                            vehiculoArchivos.tecnomecanica = url;
+                            logInfo(`🔄 Asignada tecnomecánica alternativa para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.soat && (key.includes('soat') || filenameLower.includes('soat'))) {
+                            vehiculoArchivos.soat = url;
+                            logInfo(`🔄 Asignado SOAT alternativo para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.licencia_conduccion && (key.includes('conduccion') || filenameLower.includes('conduccion'))) {
+                            vehiculoArchivos.licencia_conduccion = url;
+                            logInfo(`🔄 Asignada licencia de conducción alternativa para vehículo ${vehiculo.matricula}`);
+                          } else if (!vehiculoArchivos.licencia_transito && (key.includes('transito') || filenameLower.includes('transito'))) {
+                            vehiculoArchivos.licencia_transito = url;
+                            logInfo(`🔄 Asignada licencia de tránsito alternativa para vehículo ${vehiculo.matricula}`);
+                          }
+                        } catch (error) {
+                          logError(error, 'asignarDocumentoAlternativoVehiculo');
+                        }
+                      };
+                      
+                      asignarSegunContenido();
+                    }
+                  });
+                }
+              });
+            }
             
             // Log detallado de los resultados de la subida
             logInfo(`Resultados de la subida para vehículo ${vehiculo.matricula}:`, {

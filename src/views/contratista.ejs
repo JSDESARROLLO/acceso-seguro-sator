@@ -1456,9 +1456,13 @@ form.addEventListener('submit', async (e) => {
                 
                 console.log(`Procesando colaborador nuevo #${index + 1}: ${nombre} (${cedula})`);
                 
-                // Buscar los archivos del colaborador
+                // Buscar los archivos del colaborador con mejor depuración
+                console.log(`Buscando archivos para colaborador ${nombre}`);
+                
+                // Búsqueda y procesamiento mejorado de foto
                 const fotoInput = grupo.querySelector('input[name="foto[]"]');
-                const docArlInput = grupo.querySelector('input[name="documento_arl[]"]');
+                console.log(`Resultado búsqueda foto: ${fotoInput ? 'Encontrado' : 'No encontrado'}`);
+                console.log(`  Input foto: ${fotoInput?.name}, Tipo: ${fotoInput?.type}, Files: ${fotoInput?.files?.length || 0}`);
                 
                 if (fotoInput && fotoInput.files.length > 0) {
                     const file = fotoInput.files[0];
@@ -1468,12 +1472,37 @@ form.addEventListener('submit', async (e) => {
                     console.warn(`  ⚠️ No se encontró archivo de foto para el colaborador ${nombre}`);
                 }
                 
+                // Búsqueda y procesamiento mejorado de documento ARL
+                const docArlInput = grupo.querySelector('input[name="documento_arl[]"]');
+                console.log(`Resultado búsqueda documento ARL: ${docArlInput ? 'Encontrado' : 'No encontrado'}`);
+                console.log(`  Input doc ARL: ${docArlInput?.name}, Tipo: ${docArlInput?.type}, Files: ${docArlInput?.files?.length || 0}`);
+                
                 if (docArlInput && docArlInput.files.length > 0) {
                     const file = docArlInput.files[0];
                     console.log(`  ✓ Documento ARL: ${file.name}, Tipo: ${file.type}, Tamaño: ${file.size} bytes`);
                     formData.append('documento_arl[]', file, file.name);
                 } else {
-                    console.log(`  ℹ️ No se proporcionó documento ARL para el colaborador ${nombre}`);
+                    // Si no hay documento ARL, revisar todas las entradas de archivos en el grupo por si acaso
+                    console.log(`  ⚠️ Buscando alternativas para documento ARL`);
+                    const allInputs = grupo.querySelectorAll('input[type="file"]');
+                    let arlAlternativoEncontrado = false;
+                    
+                    allInputs.forEach((input) => {
+                        console.log(`    Examinando input: ${input.name}, files: ${input.files.length}`);
+                        // Si el input ya no es el de foto y tiene un archivo, podría ser el de ARL
+                        if (input !== fotoInput && input.files.length > 0 && 
+                            (input.name.includes('documento') || input.name.includes('arl') || input.name.includes('ARL'))) {
+                            console.log(`    ✓ Encontrado posible documento ARL alternativo: ${input.name}`);
+                            const file = input.files[0];
+                            console.log(`      Archivo: ${file.name}, Tipo: ${file.type}, Tamaño: ${file.size} bytes`);
+                            formData.append('documento_arl[]', file, file.name);
+                            arlAlternativoEncontrado = true;
+                        }
+                    });
+                    
+                    if (!arlAlternativoEncontrado) {
+                        console.warn(`  ⚠️ No se encontró documento ARL para el colaborador ${nombre}`);
+                    }
                 }
             });
         }
