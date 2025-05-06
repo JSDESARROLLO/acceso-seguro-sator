@@ -1282,36 +1282,143 @@ form.addEventListener('submit', async (e) => {
         solicitudActualId === null;
 
     // Preparar datos para enviar
-    const formData = new FormData(form);
-    
-    // Procesar archivos antes de enviarlos
-    const fileInputs = form.querySelectorAll('input[type="file"]');
-    for (const input of fileInputs) {
-        if (input.files.length > 0) {
-            const files = Array.from(input.files);
-            for (const file of files) {
-                if (file.type.startsWith('image/')) {
-                    try {
-                        const webpFile = await convertImageToWebP(file);
-                        formData.append(input.name, webpFile);
-                    } catch (error) {
-                        console.error('Error al procesar archivo:', file.name, error);
-                        formData.append(input.name, file); // Mantener el archivo original si falla la conversión
+    const formData = new FormData();
+
+    // Función de depuración para mostrar el contenido del FormData
+    const debugFormData = (formData) => {
+        console.log('🔍 Depuración del FormData:');
+        for (let [key, value] of formData.entries()) {
+            if (value instanceof File) {
+                console.log(`Campo: ${key}, Tipo: File, Nombre: ${value.name}, Tamaño: ${value.size} bytes`);
+            } else {
+                console.log(`Campo: ${key}, Valor: ${value}`);
+            }
+        }
+    };
+
+    // Solo agregar los archivos que han cambiado
+    if (esRenovacion) {
+        console.log('🔄 Procesando renovación de solicitud');
+        console.log('📝 Cambios detectados:', cambios);
+
+        // Para colaboradores modificados
+        if (cambios.colaboradores.modificados.length > 0) {
+            console.log('👥 Procesando colaboradores modificados:', cambios.colaboradores.modificados);
+            cambios.colaboradores.modificados.forEach(col => {
+                console.log(`  Procesando colaborador ID: ${col.id}`);
+                const fotoInput = document.querySelector(`input[name="foto_${col.id}"]`);
+                const arlInput = document.querySelector(`input[name="documento_arl_${col.id}"]`);
+                
+                if (fotoInput?.files.length > 0) {
+                    console.log(`    Agregando foto para colaborador ${col.id}:`, fotoInput.files[0].name);
+                    formData.append(`foto_${col.id}`, fotoInput.files[0], fotoInput.files[0].name);
+                }
+                if (arlInput?.files.length > 0) {
+                    console.log(`    Agregando ARL para colaborador ${col.id}:`, arlInput.files[0].name);
+                    formData.append(`documento_arl_${col.id}`, arlInput.files[0], arlInput.files[0].name);
+                }
+            });
+        }
+
+        // Para vehículos modificados
+        if (cambios.vehiculos.modificados.length > 0) {
+            console.log('🚗 Procesando vehículos modificados:', cambios.vehiculos.modificados);
+            cambios.vehiculos.modificados.forEach(veh => {
+                console.log(`  Procesando vehículo ID: ${veh.id}`);
+                const inputs = [
+                    { name: `foto_vehiculo_${veh.id}`, key: 'foto' },
+                    { name: `tecnomecanica_${veh.id}`, key: 'tecnomecanica' },
+                    { name: `soat_${veh.id}`, key: 'soat' },
+                    { name: `licencia_conduccion_${veh.id}`, key: 'licencia_conduccion' },
+                    { name: `licencia_transito_${veh.id}`, key: 'licencia_transito' }
+                ];
+
+                inputs.forEach(({ name, key }) => {
+                    const input = document.querySelector(`input[name="${name}"]`);
+                    if (input?.files.length > 0 && veh.cambios[key]) {
+                        console.log(`    Agregando ${key} para vehículo ${veh.id}:`, input.files[0].name);
+                        formData.append(name, input.files[0], input.files[0].name);
                     }
-                } else {
-                    formData.append(input.name, file);
+                });
+            });
+        }
+
+        // Para documentos generales modificados
+        if (cambios.documentos.arl || cambios.documentos.pasocial) {
+            console.log('📄 Procesando documentos generales');
+            if (cambios.documentos.arl) {
+                const arlInput = document.getElementById('arl');
+                if (arlInput?.files.length > 0) {
+                    console.log('  Agregando ARL general:', arlInput.files[0].name);
+                    formData.append('arl', arlInput.files[0], arlInput.files[0].name);
+                }
+            }
+            if (cambios.documentos.pasocial) {
+                const pasocialInput = document.getElementById('pasocial');
+                if (pasocialInput?.files.length > 0) {
+                    console.log('  Agregando Pasocial:', pasocialInput.files[0].name);
+                    formData.append('pasocial', pasocialInput.files[0], pasocialInput.files[0].name);
                 }
             }
         }
+    } else {
+        console.log('📝 Procesando nueva solicitud');
+        // Si es una nueva solicitud, procesar todos los archivos
+        const fileInputs = form.querySelectorAll('input[type="file"]');
+        fileInputs.forEach(async (input) => {
+            console.log(`Procesando campo: ${input.name}`);
+            if (input.files.length > 0) {
+                for (const file of Array.from(input.files)) {
+                    console.log(`  Archivo: ${file.name}, Tipo: ${file.type}`);
+                    if (file.type.startsWith('image/')) {
+                        try {
+                            const webpFile = await convertImageToWebP(file);
+                            console.log(`  Convertido a WebP: ${webpFile.name}`);
+                            formData.append(input.name, webpFile, webpFile.name);
+                        } catch (error) {
+                            console.error(`  Error al convertir ${file.name}:`, error);
+                            formData.append(input.name, file, file.name);
+                        }
+                    } else {
+                        formData.append(input.name, file, file.name);
+                    }
+                }
+            }
+        });
     }
-    
+
+    // Agregar otros campos del formulario
+    console.log('📝 Agregando campos adicionales del formulario');
+    const formFields = form.querySelectorAll('input:not([type="file"]), select, textarea');
+    formFields.forEach(field => {
+        if (field.name) {
+            if (field.type === 'checkbox') {
+                console.log(`  Campo checkbox: ${field.name} = ${field.checked}`);
+                formData.append(field.name, field.checked);
+            } else if (field.value) {
+                console.log(`  Campo: ${field.name} = ${field.value}`);
+                formData.append(field.name, field.value);
+            }
+        }
+    });
+
+    // Agregar campos adicionales necesarios
+    console.log('📝 Agregando campos de control');
     formData.append('cambios', JSON.stringify(cambios));
     formData.append('renovacion', esRenovacion ? 'true' : 'false');
+    if (solicitudActualId) {
+        formData.append('solicitudId', solicitudActualId);
+    }
 
-    // Determinar la URL y método según si es nueva o actualización
-    const isNewRequest = solicitudActualId === null;
-    const url = isNewRequest ? '/generar-solicitud' : `/actualizar-solicitud/${solicitudActualId}`;
-    const method = 'POST';
+    // Mostrar resumen final del FormData
+    console.log('📦 Resumen final del FormData:');
+    debugFormData(formData);
+
+    // Mostrar headers de la petición
+    const headers = {
+        'Accept': 'application/json',
+    };
+    console.log('📤 Headers de la petición:', headers);
 
     try {
         // Mostrar loading hasta que termine el proceso
@@ -1322,7 +1429,7 @@ form.addEventListener('submit', async (e) => {
             showConfirmButton: false // Evitar que aparezca un botón mientras carga
         });
         // Si no hay cambios en una solicitud existente, mostrar alerta temporal
-        if (!isNewRequest && !hayCambios) {
+        if (!esRenovacion && !hayCambios) {
             Swal.close(); // Cerrar el loader
 
             await Swal.fire({
@@ -1339,24 +1446,34 @@ form.addEventListener('submit', async (e) => {
         }
 
         // Enviar solicitud al backend
+        const url = esRenovacion ? `/actualizar-solicitud/${solicitudActualId}` : '/generar-solicitud';
+        console.log(`URL de la petición: ${url}`);
+
         const response = await fetch(url, {
-            method: method,
+            method: 'POST',
             body: formData
+        });
+
+        console.log('📥 Respuesta del servidor:', {
+            status: response.status,
+            statusText: response.statusText
         });
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('❌ Error del servidor:', errorData);
             throw new Error(errorData.message || 'Error al procesar la solicitud');
         }
 
         const result = await response.json();
+        console.log('✅ Respuesta exitosa:', result);
 
         // Cerrar el loader y mostrar mensaje de éxito
         Swal.close();
         await Swal.fire({
             icon: 'success',
             title: 'Éxito',
-            text: isNewRequest ? 'Solicitud creada correctamente' : 'Solicitud actualizada correctamente',
+            text: esRenovacion ? 'Solicitud actualizada correctamente' : 'Solicitud creada correctamente',
             timer: 1500,
             showConfirmButton: false
         });
