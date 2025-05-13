@@ -3239,6 +3239,7 @@ document.addEventListener('DOMContentLoaded', function() {
               <table class="table">
                 <thead>
                   <tr>
+                    <th>ID Vehículo</th>
                     <th>Matrícula</th>
                     <th>Foto</th>
                     <th>SOAT</th>
@@ -3251,6 +3252,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   ${detalles.vehiculos && detalles.vehiculos.length > 0 ? 
                     detalles.vehiculos.map(vehiculo => `
                       <tr>
+                        <td>VH-${vehiculo.id || '❌'}</td>
                         <td>${vehiculo.matricula || '❌'}</td>
                         <td>
                           ${vehiculo.foto ? 
