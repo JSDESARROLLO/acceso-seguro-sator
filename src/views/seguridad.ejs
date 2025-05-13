@@ -2151,6 +2151,23 @@
                 vehiculosContainer.style.display = 'flex';
                 vehiculosTitle.style.display = 'block';
                 
+                // Definir funciones auxiliares fuera del bucle para evitar errores de linter
+                const estadoDocumento = (fechaFin, textoVigente = 'Vigente', textoVencido = 'Vencido', textoNoDefinido = 'No definido') => {
+                    if (fechaFin) {
+                        const fin = new Date(fechaFin);
+                        if (fin >= new Date()) {
+                            return `<span class='badge bg-success'>${textoVigente}</span>`;
+                        } else {
+                            return `<span class='badge bg-danger'>${textoVencido}</span>`;
+                        }
+                    } else {
+                        return `<span class='badge bg-warning'>${textoNoDefinido}</span>`;
+                    }
+                };
+                const enlaceDocumento = (url, texto) => {
+                    return url ? `<a href='${url}' target='_blank' class='btn btn-info btn-sm ml-2'>${texto}</a>` : '';
+                };
+                
                 data.vehiculos.forEach(vehiculo => {
                     const vehDiv = document.createElement('div');
                     vehDiv.classList.add('col-md-4', 'mb-3', 'highlight-card');
@@ -2159,8 +2176,17 @@
                             <img src="${vehiculo.foto || '/default.jpg'}" class="card-img-top" alt="Foto del vehículo ${vehiculo.matricula}">
                             <div class="card-body">
                                 <h6 class="card-title">Matrícula: ${vehiculo.matricula}</h6>
-                                <p class="card-text">SOAT: ${vehiculo.estado_soat || 'No definido'}</p>
-                                <p class="card-text">Tecnomecánica: ${vehiculo.estado_tecnomecanica || 'No definida'}</p>
+                                <p class="card-text">
+                                    SOAT: 
+                                    ${estadoDocumento(vehiculo.soat_fin, 'Vigente', 'Vencido', 'No definido')}
+                                    ${enlaceDocumento(vehiculo.soat, 'Ver SOAT')}
+                                </p>
+                                <p class="card-text">
+                                    Tecnomecánica: 
+                                    ${estadoDocumento(vehiculo.tecnomecanica_fin, 'Vigente', 'Vencida', 'No definida')}
+                                    ${enlaceDocumento(vehiculo.tecnomecanica, 'Ver Técnico')}
+                                </p>
+                                
                                 ${vehiculo.estado === 0 ? '<p class="card-text text-danger">Ingreso cancelado</p>' : '<input type="checkbox" class="vehiculo-checkbox" value="VH-' + vehiculo.id + '" checked>'}
                             </div>
                         </div>
