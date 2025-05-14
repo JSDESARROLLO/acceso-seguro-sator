@@ -100,7 +100,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024, files: 100 } // 10MB máximo, 100 archivos
+  limits: { fileSize: 300 * 1024 * 1024, files: 100 } // 300MB máximo, 100 archivos
 });
 
 // Función para limpiar archivos temporales
