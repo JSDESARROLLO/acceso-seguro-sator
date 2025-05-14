@@ -18,6 +18,14 @@
       --accent-color: #3498db;
     }
     
+    /* Agregar estilos para el modal de historial */
+    #historialModal {
+      z-index: 1060 !important;
+    }
+    .modal-backdrop {
+      z-index: 1050 !important;
+    }
+    
     body {
       background-color: #f8f9fa;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1204,11 +1212,10 @@
   fetch(`/obtener-historial/${solicitudId}`)
     .then(response => response.json())
     .then(data => {
-      console.log('Historial Data:', data); // Debug the response
+      console.log('Historial Data:', data);
       const tableBody = document.getElementById('historialTableBody');
       tableBody.innerHTML = '';
       
-      // Mostrar mensaje cuando no hay datos
       if (!data || data.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="10" class="text-center">No hay registros para mostrar.</td></tr>';
       } else {
@@ -1230,13 +1237,19 @@
         });
       }
 
-      // Mostrar el modal independientemente de si hay datos o no
-      const modal = document.getElementById('historialModal');
-      modal.dataset.solicitudId = solicitudId;
-      modal.removeAttribute('aria-hidden');
-      $('#historialModal').modal('show');
+      // Cerrar cualquier otro modal antes de abrir el de historial
+      $('.modal').modal('hide');
+      setTimeout(() => {
+        const modal = document.getElementById('historialModal');
+        modal.dataset.solicitudId = solicitudId;
+        modal.removeAttribute('aria-hidden');
+        $('#historialModal').modal('show');
+      }, 400);
 
+      // Eliminar el evento que abre el modal de colaboradores
+      $('#historialModal').off('hidden.bs.modal');
       $('#historialModal').on('hidden.bs.modal', () => {
+        const modal = document.getElementById('historialModal');
         modal.setAttribute('aria-hidden', 'true');
         btn.focus();
       });
@@ -1623,7 +1636,13 @@
           $('#modalColaboradores').modal('hide');
           $('#historialModal').modal('show');
   
-          $('#historialModal').on('hidden.bs.modal', () => $('#modalColaboradores').modal('show'));
+          // Eliminar el evento que abre el modal de colaboradores
+          $('#historialModal').off('hidden.bs.modal');
+          $('#historialModal').on('hidden.bs.modal', () => {
+            const modal = document.getElementById('historialModal');
+            modal.setAttribute('aria-hidden', 'true');
+            btn.focus();
+          });
         })
         .catch(error => {
           console.error('[ERROR] Error al obtener historial:', error);
