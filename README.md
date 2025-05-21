@@ -1,4 +1,4 @@
-# Sistema de Control para Fortox
+# Sistema Acceso Seguro Sator
 
 Sistema de control y gestión para Fortox, desarrollado con Node.js y Express.
 
