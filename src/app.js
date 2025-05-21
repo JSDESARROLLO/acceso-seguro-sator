@@ -19,7 +19,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: [
-        "'self'", "'unsafe-inline'", "'unsafe-eval'",
+        "'self'", "'unsafe-inline'",
         "https://code.jquery.com",
         "https://cdn.tailwindcss.com",
         "https://cdn.jsdelivr.net",
@@ -28,8 +28,8 @@ app.use(helmet({
         "https://cdnjs.cloudflare.com"
       ],
       scriptSrcAttr: ["'unsafe-inline'"],
-      scriptSrcElem: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
+      scriptSrcElem: ["'self'", "'unsafe-inline'", "https:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
       imgSrc: ["'self'", "data:", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
       mediaSrc: ["'self'", "https://gestion-contratistas-os.nyc3.digitaloceanspaces.com", "https://gestion-contratistas-os.nyc3.cdn.digitaloceanspaces.com"],
       connectSrc: ["'self'", "https:", "wss:", "ws:"],
