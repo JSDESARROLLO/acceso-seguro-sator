@@ -155,5 +155,5 @@ El proyecto implementa varias medidas de seguridad:
 
 ## 👨‍💻 Autores
 
-Carlos Muñoz 
-Jose Florez
+# Carlos Muñoz 
+# Jose Florez
