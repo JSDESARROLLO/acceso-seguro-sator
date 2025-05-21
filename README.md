@@ -52,7 +52,7 @@ Sistema de control y gestión para Fortox, desarrollado con Node.js y Express.
 
 ## 📋 Prerrequisitos
 
-- Node.js >= 14.0.0
+- Node.js >= 20.0.0
 - MySQL
 - Cuenta en DigitalOcean Spaces (para almacenamiento de archivos)
 
