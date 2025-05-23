@@ -364,9 +364,13 @@ INSERT INTO users (username,password,role_id,empresa,nit,email) VALUES
 	 ('soporte','$2b$10$1o7MSnOJbfn/RciWj4IkMOlvw1jeaKgk1i1EdR5K4vVjUZE33Iqpq',6,'FORTOX','860046201-2','jcdesarrollo25@gmail.com');
 
 
+INSERT INTO capacitaciones (nombre,preguntas,puntos_por_pregunta,puntaje_maximo,puntaje_minimo_aprobacion,vigencia_meses,creador_id,codigo_seguridad,created_at,updated_at) VALUES
+	 ('Capacitación SATOR','[{"texto": "SI O NO", "opciones": ["SI", "NO"], "respuesta_correcta": 0}, {"texto": "SI O NO", "opciones": ["SI", "NO"], "respuesta_correcta": 0}]',5,10,5,12,5,'49FB','2025-05-23 19:24:09','2025-05-23 19:24:09');
+
+
 -- =============================================
 -- IMPORTANTE: Este script borrará todos los datos
--- de las tablas excepto users, roles y lugares
+-- de las tablas excepto capacitaciones, users, roles y lugares
 -- =============================================
 
 -- Desactivar restricciones de clave foránea para permitir el truncado
@@ -387,7 +391,6 @@ INSERT INTO users (username,password,role_id,empresa,nit,email) VALUES
 -- TRUNCATE TABLE sst_documentos;
 -- TRUNCATE TABLE colaboradores;
 -- TRUNCATE TABLE vehiculos;
--- TRUNCATE TABLE capacitaciones;
 -- TRUNCATE TABLE solicitudes;
 -- TRUNCATE TABLE politicas_aceptadas;
 -- TRUNCATE TABLE plantilla_documentos_vehiculos;
