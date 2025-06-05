@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
-    "nodemon": "^2.0.22",
+    "nodemon": "^3.1.10",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.0.17"
   },
